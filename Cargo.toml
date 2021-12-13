@@ -1,0 +1,69 @@
+[package]
+name = "fuzzysearch-owo"
+version = "0.1.0"
+edition = "2021"
+authors = ["Syfaro <syfaro@huefox.com>"]
+
+[features]
+env = ["dotenv"]
+
+[dependencies]
+tracing = "0.1"
+anyhow = "1"
+clap = { version = "3.0.0-rc.4", features = ["derive", "env", "cargo", "wrap_help"] }
+dotenv = { version = "0.15", optional = true }
+
+uuid = { version = "0.8", features = ["v4", "serde"] }
+
+futures = "0.3"
+tokio = { version = "1", features = ["full"] }
+tempfile = "3"
+bytes = "1"
+
+actix = "0.12"
+actix-web = "=4.0.0-beta.13"
+actix-web-actors = "=4.0.0-beta.7"
+actix-http = "=3.0.0-beta.14"
+actix-multipart = "=0.4.0-beta.9"
+tracing-actix-web = { version = "=0.5.0-beta.4", features = ["opentelemetry_0_16"] }
+actix-session = "=0.5.0-beta.4"
+actix-files = "=0.6.0-beta.9"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+
+askama = { version = "0.10", features = ["serde-json", "humansize"] }
+argonautica = "0.2"
+zxcvbn = "2"
+sha2 = "0.10"
+hex = "0.4"
+image = "0.23"
+
+reqwest = { version = "0.11", features = ["json"] }
+scraper = "0.12"
+
+rusoto_core = "0.47"
+rusoto_credential = "0.47"
+rusoto_s3 = "0.47"
+
+redis = { version = "0.21", features = ["tokio-comp", "aio", "connection-manager"] }
+faktory = "0.11"
+
+furaffinity-rs = { git = "https://github.com/Syfaro/furaffinity-rs.git" }
+fuzzysearch = { git = "https://github.com/Syfaro/fuzzysearch-rs.git", features = ["trace", "local_hash"] }
+
+fuzzysearch-common = { git = "https://github.com/Syfaro/fuzzysearch.git", features = ["queue"] }
+
+[dependencies.sqlx]
+version = "0.5"
+features = [
+    "runtime-tokio-native-tls",
+    "postgres",
+    "macros",
+    "migrate",
+    "uuid",
+    "json",
+    "offline",
+    "chrono"
+]

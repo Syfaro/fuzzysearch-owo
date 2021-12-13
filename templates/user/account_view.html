@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="section" data-account-id="{{ account.id }}">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-one-third">
+        <h1 class="title has-text-centered">FuzzySearch OwO</h1>
+
+        <h2 class="subtitle has-text-centered">
+          {{ account.source_site.to_string() }} &mdash;
+          <strong>{{ account.username }}</strong>
+        </h2>
+      </div>
+    </div>
+
+    <div class="columns is-centered">
+      <div class="column">
+        <nav class="level">
+          <div class="level-item has-text-centered">
+            <div>
+              <p class="heading">Status</p>
+              <p class="title" id="account-loading-state">{{ account.loading_state() }}</p>
+            </div>
+          </div>
+
+          <div class="level-item has-text-centered">
+            <div>
+              <p class="heading">Items</p>
+              <p class="title">{{ item_count }}</p>
+            </div>
+          </div>
+
+          <div class="level-item has-text-centered">
+            <div>
+              <p class="heading">Content Size</p>
+              <p class="title">{{ total_content_size|filesizeformat }}</p>
+            </div>
+          </div>
+        </nav>
+      </div>
+    </div>
+
+    <div class="columns is-centered">
+      <div class="column is-one-third">
+        <div class="block">
+          <form method="POST" action="/user/account/remove">
+            <input type="hidden" name="account_id" value="{{ account.id }}">
+            <div class="field is-grouped">
+              <div class="control">
+                <a href="/user/home" class="button is-outlined is-info">Home</a>
+              </div>
+              <div class="control">
+                <button class="button is-danger">Remove Account</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

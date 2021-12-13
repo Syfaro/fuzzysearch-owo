@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="section" data-media-id="{{ media.id }}">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-one-third">
+        <h1 class="title has-text-centered">FuzzySearch OwO</h1>
+        {% match media.title %}
+        {% when Some with (title) %}
+        <h2 class="subtitle has-text-centered">{{ title }}</h2>
+        {% else %}
+        <h2 class="subtitle has-text-centered">Media Item</h2>
+        {% endmatch %}
+
+        <div class="block">
+          {% match media.content_url %}
+          {% when Some with (content_url) %}
+          <figure class="image is-align-self-center">
+            <img src="{{ content_url }}" alt="{{ media.alt_text() }}">
+          </figure>
+          {% else %}
+          <p>No image found.</p>
+          {% endmatch %}
+        </div>
+
+        {% if !recent_events.is_empty() %}
+      </div>
+    </div>
+
+    <div class="columns is-centered">
+      <div class="column">
+        <h2 class="subtitle has-text-centered">Recent Events</h2>
+
+        <div class="content">
+          <ul>
+            {% for event in recent_events %}
+            <li>{{ event.display() }} <span class="pl-3 has-text-weight-light has-text-grey relative-time"
+                data-timestamp="{{ event.created_at.timestamp() }}" title="{{ event.created_at.to_rfc2822() }}">
+                {{ event.created_at }}
+              </span></li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="columns is-centered">
+      <div class="column is-one-third">
+        {% endif %}
+
+        <hr>
+
+        <div class="block">
+          <form method="POST" action="/user/media/remove">
+            <input type="hidden" name="media_id" value="{{ media.id }}">
+            <div class="field is-grouped">
+              <div class="control is-flex-grow-1">
+                <a href="/user/home" class="button is-fullwidth is-outlined is-info">Home</a>
+              </div>
+              {% match media.link %}
+              {% when Some with (link) %}
+              <div class="control is-flex-grow-1">
+                <a href="{{ link }}" target="_blank" class="button is-fullwidth is-primary">View</a>
+              </div>
+              {% else %}
+              {% endmatch %}
+              <div class="control is-flex-grow-1">
+                <button class="button is-fullwidth is-danger">Remove Media</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

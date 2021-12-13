@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="section">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-one-third">
+        <h1 class="title has-text-centered">FuzzySearch OwO</h1>
+        <h2 class="subtitle has-text-centered">Create Account</h2>
+
+        {% match error_messages %}
+        {% when Some with (messages) %}
+        <div class="notification is-danger">
+          <ul>
+            {% for item in messages %}
+            <li>{{ item }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% else %}
+        {% endmatch %}
+
+        <form method="POST" action="/auth/register">
+          <div class="field">
+            <div class="control">
+              <input class="input" type="text" placeholder="Username" name="username" autocomplete="username"
+                minlength="5" required>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="control">
+              <input class="input" type="password" placeholder="Password" name="password" minlength="8"
+                autocomplete="new-password" required>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="control">
+              <input class="input" type="password" placeholder="Confirm password" name="password_confirm" minlength="8"
+                autocomplete="new-password" required>
+            </div>
+          </div>
+
+          <div class="control">
+            <button class="button is-link is-fullwidth">Create Account</button>
+          </div>
+
+          <hr>
+
+          <div class="control">
+            <a href="/auth/login" class="button is-primary is-fullwidth">Sign In</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

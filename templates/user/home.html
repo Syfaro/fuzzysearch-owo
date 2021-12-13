@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="section">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-one-third">
+        <h1 class="title has-text-centered">FuzzySearch OwO</h1>
+        <h2 class="subtitle has-text-centered">
+          Welcome, {{ user.username }}!
+        </h2>
+
+        <nav class="level">
+          <div class="level-item has-text-centered">
+            <div>
+              <p class="heading">Items</p>
+              <p class="title">{{ item_count }}</p>
+            </div>
+          </div>
+
+          <div class="level-item has-text-centered">
+            <div>
+              <p class="heading">Content Size</p>
+              <p class="title">{{ total_content_size|filesizeformat }}</p>
+            </div>
+          </div>
+        </nav>
+
+        <div class="block has-text-centered">
+          <h3 class="subtitle is-4">Monitored Accounts</h3>
+
+          {% if monitored_accounts.is_empty() %}
+          <a href="/user/account/link" class="button is-primary is-large">Link First Account</a>
+          {% else %}
+          <div class="block">
+            <ul>
+              {% for account in monitored_accounts %}
+              <li>
+                <a href="/user/account/{{ account.id.to_string() }}">
+                  {{ account.source_site.to_string() }} &mdash; {{ account.username }}
+                </a>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+
+          <div class="block">
+            <a href="/user/account/link" class="button is-info is-outlined">Link Another Account</a>
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="block has-text-centered">
+          <h3 class="subtitle is-4">Manual Upload</h3>
+
+          <form method="POST" action="/user/single" enctype="multipart/form-data">
+            <div class="field">
+              <div class="file is-boxed is-centered has-name">
+                <label class="file-label">
+                  <input class="file-input" type="file" name="image" accept="image/png, image/jpeg"
+                    data-file-name-label="#upload-single-label">
+                  <span class="file-cta">
+                    <span class="file-label">Select Photo</span>
+                  </span>
+                  <span class="file-name" id="upload-single-label">No File Selected</span>
+                </label>
+              </div>
+
+              <p class="help">
+                Upload files you want to be notified about, one at a time.
+              </p>
+            </div>
+
+            <div class="control">
+              <button class="button is-link is-fullwidth is-outlined">Upload</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    {% if !recent_media.is_empty() %}
+    <div class="columns is-centered">
+      <div class="column has-text-centered">
+        <h2 class="subtitle is-4">Recent Media</h2>
+
+        {% for item in recent_media %}
+        {% match item.thumb_url %}
+        {% when Some with (thumb_url) %}
+        <figure class="image is-128x128 is-inline-block">
+          <a href="/user/media/{{ item.id }}">
+            {% match item.content_url %}
+            {% when Some with (content_url) %}
+            <img src="{{ thumb_url }}" alt="{{ item.alt_text() }}">
+            {% else %}
+            <img src="{{ thumb_url }}" alt="{{ item.alt_text() }}">
+            {% endmatch %}
+          </a>
+        </figure>
+        {% else %}
+        {% endmatch %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="columns is-centered">
+      <div class="column is-one-third">
+        <hr>
+
+        <div class="block">
+          <form method="POST" action="/auth/logout">
+            <div class="control">
+              <button class="button is-danger is-outlined">Sign Out</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  [...document.querySelectorAll('input[type=file]')].forEach((input) => {
+    input.addEventListener('change', () => {
+      if (input.files.length === 0) {
+        return;
+      }
+
+      const fileName = document.querySelector(input.dataset.fileNameLabel);
+
+      if (fileName) {
+        fileName.textContent = input.files[0].name;
+      }
+    });
+  });
+</script>
+{% endblock %}

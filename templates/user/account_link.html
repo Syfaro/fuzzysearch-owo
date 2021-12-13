@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="section">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-one-third">
+        <h1 class="title has-text-centered">FuzzySearch OwO</h1>
+        <h2 class="subtitle has-text-centered">Link Account</h2>
+
+        <div class="block">
+          <form method="POST" action="/user/account/link">
+            <div class="field">
+              <label class="label">Site</label>
+              <div class="control">
+                <div class="select is-fullwidth">
+                  <select name="site">
+                    <option value="FurAffinity">FurAffinity</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="label">Username</label>
+              <div class="control">
+                <input class="input" type="text" placeholder="Username" name="username" autocomplete="off">
+              </div>
+            </div>
+
+            <div class="control">
+              <button class="button is-primary is-fullwidth">Begin Linking</button>
+            </div>
+          </form>
+
+          <hr>
+
+          <a href="/user/home" class="button is-danger has-text-centered">Cancel</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
