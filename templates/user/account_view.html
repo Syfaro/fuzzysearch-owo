@@ -21,6 +21,10 @@
             <div>
               <p class="heading">Status</p>
               <p class="title" id="account-loading-state">{{ account.loading_state() }}</p>
+
+              {% if account.is_loading() %}
+                <progress id="account-import-progress" class="progress is-small is-primary mt-2" max="100">Unknown</progress>
+              {% endif %}
             </div>
           </div>
 

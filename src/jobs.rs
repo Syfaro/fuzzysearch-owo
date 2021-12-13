@@ -85,6 +85,7 @@ pub struct JobContext {
 pub async fn start_job_processing(ctx: JobContext) {
     let mut client = faktory::ConsumerBuilder::default();
     client.labels(vec!["rust".to_string(), "fuzzysearch-owo".to_string()]);
+    client.workers(ctx.config.worker_threads);
 
     let handle = tokio::runtime::Handle::current();
 
@@ -152,15 +153,32 @@ pub async fn start_job_processing(ctx: JobContext) {
 
                 if was_import {
                     let mut redis = ctx.redis.clone();
-                    let key = format!("account-import-ids:{}", account_id);
+                    let loading_key = format!("account-import-ids:loading:{}", account_id);
+                    let completed_key = format!("account-import-ids:completed:{}", account_id);
 
-                    redis.srem::<_, _, ()>(&key, sub_id).await?;
+                    redis
+                        .smove::<_, _, ()>(&loading_key, &completed_key, sub_id)
+                        .await?;
 
-                    let remaining: i64 = redis.scard(key).await?;
+                    redis
+                        .expire::<_, ()>(&loading_key, 60 * 60 * 24 * 7)
+                        .await?;
+                    redis
+                        .expire::<_, ()>(&completed_key, 60 * 60 * 24 * 7)
+                        .await?;
+
+                    let (remaining, completed): (i32, i32) = redis::pipe()
+                        .atomic()
+                        .scard(loading_key)
+                        .scard(completed_key)
+                        .query_async(&mut redis)
+                        .await?;
+
                     tracing::debug!(
                         "submission was part of import, {} items remaining",
                         remaining
                     );
+
                     if remaining == 0 {
                         tracing::info!("marking account import complete");
                         models::LinkedAccount::update_loading_state(
@@ -172,6 +190,17 @@ pub async fn start_job_processing(ctx: JobContext) {
                         )
                         .await?;
                     }
+
+                    redis
+                        .publish(
+                            format!("user-events:{}", user_id.to_string()),
+                            serde_json::to_string(&crate::api::EventMessage::LoadingProgress {
+                                account_id,
+                                loaded: completed,
+                                total: remaining + completed,
+                            })?,
+                        )
+                        .await?;
                 }
 
                 tracing::debug!("enqueuing check for previous items");
@@ -287,7 +316,7 @@ pub async fn start_job_processing(ctx: JobContext) {
                     let known = ids.len() as i32;
 
                     let mut redis = ctx.redis.clone();
-                    let key = format!("account-import-ids:{}", account_id);
+                    let key = format!("account-import-ids:loading:{}", account_id);
                     redis.sadd::<_, _, ()>(&key, &ids).await?;
                     redis.expire::<_, ()>(key, 60 * 60 * 24 * 7).await?;
 

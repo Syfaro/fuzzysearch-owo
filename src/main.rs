@@ -53,6 +53,9 @@ pub struct Config {
     /// Faktory host, in the format `tcp://host`.
     #[clap(long, env("FAKTORY_HOST"))]
     pub faktory_host: String,
+    /// Number of workers for background jobs.
+    #[clap(long, env("WORKER_THREADS"), default_value = "2")]
+    pub worker_threads: usize,
 
     /// Private key to sign and encrypt cookies, in hexadecimal. Must be at
     /// least 32 bytes.

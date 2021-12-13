@@ -28,6 +28,11 @@ pub enum EventMessage {
         account_id: Uuid,
         loading_state: String,
     },
+    LoadingProgress {
+        account_id: Uuid,
+        loaded: i32,
+        total: i32,
+    },
     SimilarImage {
         media_id: Uuid,
         link: String,

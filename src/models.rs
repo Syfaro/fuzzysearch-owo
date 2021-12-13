@@ -490,6 +490,15 @@ impl LinkedAccount {
             .message()
     }
 
+    pub fn is_loading(&self) -> bool {
+        !matches!(
+            self.loading_state
+                .as_ref()
+                .unwrap_or(&LoadingState::Unknown),
+            LoadingState::Complete
+        )
+    }
+
     pub async fn update_loading_state(
         conn: &sqlx::Pool<sqlx::Postgres>,
         redis: &redis::aio::ConnectionManager,
@@ -550,7 +559,7 @@ impl LinkedAccount {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "PascalCase")]
 pub enum Site {
     FurAffinity,
     #[serde(rename = "e621")]

@@ -16,6 +16,8 @@ function subscribeToEvents() {
     const payload = JSON.parse(evt.data);
     const eventType = payload['event'];
 
+    const accountID = payload['account_id'];
+
     switch (eventType) {
       case 'simple_message':
         bulmaToast.toast({
@@ -26,14 +28,13 @@ function subscribeToEvents() {
         break;
 
       case 'loading_state_change':
-        const accountID = payload['account_id'];
         const loadingState = payload['loading_state'];
 
-        const stateElem = document.querySelector(`section[data-account-id="${accountID}"] #account-loading-state`);
-        if (stateElem && loadingState === 'Loading Complete') {
+        const accountLoadingState = document.querySelector(`section[data-account-id="${accountID}"] #account-loading-state`);
+        if (accountLoadingState && loadingState === 'Loading Complete') {
           window.location.reload();
-        } else if (stateElem) {
-          stateElem.textContent = loadingState;
+        } else if (accountLoadingState) {
+          accountLoadingState.textContent = loadingState;
         }
 
         break;
@@ -63,6 +64,17 @@ function subscribeToEvents() {
           closeOnClick: false,
           pauseOnHover: true,
         });
+
+        break;
+
+      case 'loading_progress':
+        const accountLoadingProgress = document.querySelector(`section[data-account-id="${accountID}"] #account-import-progress`);
+        if (!accountLoadingProgress) {
+          return;
+        }
+
+        accountLoadingProgress.value = payload['loaded'];
+        accountLoadingProgress.max = payload['total'];
 
         break;
     }
