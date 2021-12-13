@@ -1,4 +1,4 @@
-use actix_web::{get, post, services, web, Error, HttpResponse, Scope};
+use actix_web::{get, post, services, web, HttpResponse, Scope};
 use actix_web::{HttpRequest, Responder};
 use askama::Template;
 use futures::TryStreamExt;
@@ -7,8 +7,7 @@ use sha2::Digest;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use uuid::Uuid;
 
-use crate::routes::*;
-use crate::{jobs, models};
+use crate::{jobs, models, routes::*, Error};
 
 #[derive(Template)]
 #[template(path = "user/home.html")]
@@ -27,15 +26,10 @@ async fn home(
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
-    let (item_count, total_content_size) = models::OwnedMediaItem::user_item_count(&conn, user.id)
-        .await
-        .unwrap();
-    let recent_media = models::OwnedMediaItem::recent_media(&conn, user.id)
-        .await
-        .unwrap();
-    let monitored_accounts = models::LinkedAccount::owned_by_user(&conn, user.id)
-        .await
-        .unwrap();
+    let (item_count, total_content_size) =
+        models::OwnedMediaItem::user_item_count(&conn, user.id).await?;
+    let recent_media = models::OwnedMediaItem::recent_media(&conn, user.id).await?;
+    let monitored_accounts = models::LinkedAccount::owned_by_user(&conn, user.id).await?;
 
     let body = Home {
         user,
@@ -44,8 +38,7 @@ async fn home(
         recent_media,
         monitored_accounts,
     }
-    .render()
-    .unwrap();
+    .render()?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -56,9 +49,7 @@ async fn events(
     user: models::User,
     req: HttpRequest,
 ) -> Result<HttpResponse, Error> {
-    let events = models::UserEvent::recent_events(&conn, user.id)
-        .await
-        .unwrap();
+    let events = models::UserEvent::recent_events(&conn, user.id).await?;
 
     Ok(web::Json(events).respond_to(&req))
 }
@@ -80,20 +71,20 @@ async fn single(
             continue;
         }
 
-        let mut file = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
-            let file = tempfile::tempfile()?;
+        let mut file = tokio::task::spawn_blocking(move || -> Result<_, String> {
+            let file = tempfile::tempfile().map_err(|err| err.to_string())?;
             Ok(tokio::fs::File::from_std(file))
         })
         .await
-        .unwrap()
-        .unwrap();
+        .map_err(Error::from_displayable)?
+        .map_err(|err| Error::UnknownMessage(err.into()))?;
 
         let mut hasher = sha2::Sha256::default();
 
         let mut size = 0;
         while let Ok(Some(chunk)) = field.try_next().await {
             if size > 10_000_000 {
-                panic!("file too large");
+                return Err(Error::TooLarge(size));
             }
 
             file.write_all(&chunk).await?;
@@ -109,7 +100,10 @@ async fn single(
                 .finish());
         }
 
-        let sha256_hash: [u8; 32] = hasher.finalize().try_into().unwrap();
+        let sha256_hash: [u8; 32] = hasher
+            .finalize()
+            .try_into()
+            .expect("sha256 hash was wrong size");
         let hash_str = hex::encode(&sha256_hash);
 
         tracing::info!(size, hash = ?hash_str, "completed uploading file");
@@ -117,21 +111,24 @@ async fn single(
         file.seek(std::io::SeekFrom::Start(0)).await?;
 
         let file = file.into_std().await;
-        let (perceptual_hash, im) = tokio::task::spawn_blocking(move || {
-            let reader = std::io::BufReader::new(file);
-            let reader = image::io::Reader::new(reader)
-                .with_guessed_format()
-                .unwrap();
-            let im = reader.decode().unwrap();
+        let (perceptual_hash, im) = tokio::task::spawn_blocking(
+            move || -> Result<([u8; 8], image::DynamicImage), image::ImageError> {
+                let reader = std::io::BufReader::new(file);
+                let reader = image::io::Reader::new(reader).with_guessed_format()?;
+                let im = reader.decode()?;
 
-            let hasher = fuzzysearch_common::get_hasher();
-            let hash = hasher.hash_image(&im);
-            let hash: [u8; 8] = hash.as_bytes().try_into().unwrap();
+                let hasher = fuzzysearch_common::get_hasher();
+                let hash = hasher.hash_image(&im);
+                let hash: [u8; 8] = hash
+                    .as_bytes()
+                    .try_into()
+                    .expect("perceptual hash returned wrong bytes");
 
-            (hash, im)
-        })
+                Ok((hash, im))
+            },
+        )
         .await
-        .unwrap();
+        .map_err(|_err| Error::UnknownMessage("join error".into()))??;
 
         let id = models::OwnedMediaItem::add_manual_item(
             &conn,
@@ -139,30 +136,22 @@ async fn single(
             i64::from_be_bytes(perceptual_hash),
             sha256_hash,
         )
-        .await
-        .unwrap();
+        .await?;
 
-        models::OwnedMediaItem::update_media(&conn, &s3, &config, id, im)
-            .await
-            .unwrap();
+        models::OwnedMediaItem::update_media(&conn, &s3, &config, id, im).await?;
 
-        models::UserEvent::notify(&conn, &redis, user.id, "Uploaded image.")
-            .await
-            .unwrap();
+        models::UserEvent::notify(&conn, &redis, user.id, "Uploaded image.").await?;
 
         faktory
             .enqueue(
                 faktory::Job::new(
                     "search_existing_submissions",
-                    vec![
-                        serde_json::to_value(user.id).unwrap(),
-                        serde_json::to_value(id).unwrap(),
-                    ],
+                    vec![serde_json::to_value(user.id)?, serde_json::to_value(id)?],
                 )
                 .on_queue(crate::jobs::FUZZYSEARCH_OWO_QUEUE),
             )
             .await
-            .unwrap();
+            .map_err(Error::from_displayable)?;
     }
 
     Ok(HttpResponse::Found()
@@ -175,14 +164,14 @@ async fn single(
 struct AccountLink;
 
 #[get("/link")]
-async fn account_link_get() -> HttpResponse {
-    let body = AccountLink.render().unwrap();
-    HttpResponse::Ok().content_type("text/html").body(body)
+async fn account_link_get() -> Result<HttpResponse, Error> {
+    let body = AccountLink.render()?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
 #[derive(Deserialize)]
 struct AccountLinkForm {
-    site: String,
+    site: models::Site,
     username: String,
 }
 
@@ -192,24 +181,21 @@ async fn account_link_post(
     faktory: web::Data<fuzzysearch_common::faktory::FaktoryClient>,
     user: models::User,
     form: web::Form<AccountLinkForm>,
-) -> HttpResponse {
-    let site: models::SourceSite = form.site.parse().unwrap();
-
-    let account_id = models::LinkedAccount::create(&conn, user.id, site, &form.username, None)
-        .await
-        .unwrap();
+) -> Result<HttpResponse, Error> {
+    let account_id =
+        models::LinkedAccount::create(&conn, user.id, form.site, &form.username, None).await?;
 
     faktory
-        .enqueue(jobs::add_account_job(user.id, account_id))
+        .enqueue(jobs::add_account_job(user.id, account_id)?)
         .await
-        .unwrap();
+        .map_err(Error::from_displayable)?;
 
-    HttpResponse::Found()
+    Ok(HttpResponse::Found()
         .insert_header((
             "Location",
             format!("/user/account/{}", account_id.to_string()),
         ))
-        .finish()
+        .finish())
 }
 
 #[derive(Deserialize)]
@@ -222,14 +208,12 @@ async fn account_remove(
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
     user: models::User,
     form: web::Form<AccountRemoveForm>,
-) -> HttpResponse {
-    models::LinkedAccount::remove(&conn, user.id, form.account_id)
-        .await
-        .unwrap();
+) -> Result<HttpResponse, Error> {
+    models::LinkedAccount::remove(&conn, user.id, form.account_id).await?;
 
-    HttpResponse::Found()
+    Ok(HttpResponse::Found()
         .insert_header(("Location", USER_HOME))
-        .finish()
+        .finish())
 }
 
 #[derive(Template)]
@@ -246,24 +230,21 @@ async fn account_view(
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
     path: web::Path<(Uuid,)>,
     user: models::User,
-) -> HttpResponse {
+) -> Result<HttpResponse, Error> {
     let account_id: Uuid = path.into_inner().0;
     let account = models::LinkedAccount::lookup_by_id(&conn, account_id, user.id)
-        .await
-        .unwrap()
-        .unwrap();
-    let (item_count, total_content_size) = models::LinkedAccount::items(&conn, user.id, account_id)
-        .await
-        .unwrap();
+        .await?
+        .ok_or(Error::Missing)?;
+    let (item_count, total_content_size) =
+        models::LinkedAccount::items(&conn, user.id, account_id).await?;
 
     let body = AccountView {
         account,
         item_count,
         total_content_size,
     }
-    .render()
-    .unwrap();
-    HttpResponse::Ok().content_type("text/html").body(body)
+    .render()?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
 #[derive(Template)]
@@ -278,23 +259,20 @@ async fn media_view(
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
     path: web::Path<(Uuid,)>,
     user: models::User,
-) -> HttpResponse {
+) -> Result<HttpResponse, Error> {
     let media = models::OwnedMediaItem::get_by_id(&conn, path.0, user.id)
-        .await
-        .unwrap()
-        .unwrap();
+        .await?
+        .ok_or(Error::Missing)?;
 
-    let recent_events = models::UserEvent::recent_events_for_media(&conn, user.id, media.id)
-        .await
-        .unwrap();
+    let recent_events =
+        models::UserEvent::recent_events_for_media(&conn, user.id, media.id).await?;
 
     let body = MediaView {
         media,
         recent_events,
     }
-    .render()
-    .unwrap();
-    HttpResponse::Ok().content_type("text/html").body(body)
+    .render()?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
 #[derive(Deserialize)]
@@ -307,14 +285,12 @@ async fn media_remove(
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
     user: models::User,
     form: web::Form<MediaRemoveForm>,
-) -> HttpResponse {
-    models::OwnedMediaItem::remove(&conn, user.id, form.media_id)
-        .await
-        .unwrap();
+) -> Result<HttpResponse, Error> {
+    models::OwnedMediaItem::remove(&conn, user.id, form.media_id).await?;
 
-    HttpResponse::Found()
+    Ok(HttpResponse::Found()
         .insert_header(("Location", USER_HOME))
-        .finish()
+        .finish())
 }
 
 pub fn service() -> Scope {

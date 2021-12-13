@@ -2,16 +2,15 @@ use std::future::Future;
 use std::pin::Pin;
 
 use actix_session::Session;
-use actix_web::error::{ErrorInternalServerError, ErrorUnauthorized};
-use actix_web::FromRequest;
-use actix_web::{get, post, services, web, Error, HttpResponse, Scope};
+use actix_web::{
+    error::ErrorUnauthorized, get, post, services, web, FromRequest, HttpResponse, Scope,
+};
 use askama::Template;
 use serde::Deserialize;
 use uuid::Uuid;
 use zxcvbn::zxcvbn;
 
-use crate::models;
-use crate::routes::*;
+use crate::{models, routes::*, Error};
 
 #[derive(Template)]
 #[template(path = "auth/register.html")]
@@ -24,8 +23,7 @@ async fn register_get() -> Result<HttpResponse, Error> {
     let body = Register {
         error_messages: None,
     }
-    .render()
-    .unwrap();
+    .render()?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -49,10 +47,7 @@ async fn register_post(
         error_messages.push("Username must be 5 characters or greater.");
     }
 
-    if models::User::username_exists(&pool, &form.username)
-        .await
-        .unwrap()
-    {
+    if models::User::username_exists(&pool, &form.username).await? {
         error_messages.push("Username already in use.");
     }
 
@@ -60,7 +55,7 @@ async fn register_post(
         error_messages.push("Passwords do not match.");
     }
 
-    let estimate = zxcvbn(&form.password, &[&form.username]).unwrap();
+    let estimate = zxcvbn(&form.password, &[&form.username]).map_err(Error::from_displayable)?;
     if estimate.score() < 3 {
         error_messages.push("Password must be longer or contain more special symbols.");
     }
@@ -69,15 +64,12 @@ async fn register_post(
         let body = Register {
             error_messages: Some(error_messages),
         }
-        .render()
-        .unwrap();
+        .render()?;
 
         return Ok(HttpResponse::Ok().content_type("text/html").body(body));
     }
 
-    let user_id = models::User::create(&pool, &form.username, &form.password)
-        .await
-        .unwrap();
+    let user_id = models::User::create(&pool, &form.username, &form.password).await?;
 
     session.insert("user-id", user_id)?;
 
@@ -103,8 +95,7 @@ async fn login_get(session: Session) -> Result<HttpResponse, Error> {
     let body = Login {
         error_message: None,
     }
-    .render()
-    .unwrap();
+    .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
@@ -120,9 +111,7 @@ async fn login_post(
     pool: web::Data<sqlx::Pool<sqlx::Postgres>>,
     form: web::Form<LoginFormData>,
 ) -> Result<HttpResponse, Error> {
-    let user = models::User::lookup_by_login(&pool, &form.username, &form.password)
-        .await
-        .unwrap();
+    let user = models::User::lookup_by_login(&pool, &form.username, &form.password).await?;
 
     if let Some(user) = user {
         session.insert("user-id", user.id)?;
@@ -134,8 +123,7 @@ async fn login_post(
         let body = Login {
             error_message: Some("Unknown username or password."),
         }
-        .render()
-        .unwrap();
+        .render()?;
 
         Ok(HttpResponse::Ok().content_type("text/html").body(body))
     }
@@ -171,28 +159,25 @@ impl FromRequest for models::User {
         let session = Session::from_request(req, payload);
         let db = req
             .app_data::<web::Data<sqlx::Pool<sqlx::Postgres>>>()
-            .unwrap()
+            .expect("app was missing database connection")
             .clone();
 
         Box::pin(async move {
-            let session = match session.await {
-                Ok(session) => session,
-                Err(err) => return Err(ErrorInternalServerError(err)),
-            };
+            let session = session.await.map_err(Error::from)?;
 
             let user_id = match session.get::<Uuid>("user-id") {
                 Ok(Some(user_id)) => user_id,
-                Ok(None) => return Err(ErrorUnauthorized("user not authenticated")),
-                Err(err) => return Err(ErrorInternalServerError(err)),
+                Ok(None) => return Err(ErrorUnauthorized("user not authenticated").into()),
+                Err(err) => return Err(err.into()),
             };
 
             match models::User::lookup_by_id(&db, user_id).await {
                 Ok(Some(user)) => Ok(user),
                 Ok(None) => {
                     session.purge();
-                    Err(ErrorUnauthorized("user not authenticated"))
+                    Err(ErrorUnauthorized("user not authenticated").into())
                 }
-                Err(err) => Err(ErrorInternalServerError(err)),
+                Err(err) => Err(err),
             }
         })
     }

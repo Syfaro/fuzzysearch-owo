@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="section">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-one-third">
+        <h1 class="title">FuzzySearch OwO</h1>
+
+        <article class="message is-danger is-large">
+          <div class="message-header">
+            <p>Server Error: {{ status_code }}</p>
+          </div>
+
+          <div class="message-body">{{ error_message }}</div>
+        </article>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

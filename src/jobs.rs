@@ -1,17 +1,17 @@
 use redis::AsyncCommands;
 use uuid::Uuid;
 
-use crate::models;
+use crate::{models, Error};
 
 pub const FUZZYSEARCH_OWO_QUEUE: &str = "fuzzysearch-owo";
 
-pub fn add_account_job(user_id: Uuid, account_id: Uuid) -> faktory::Job {
+pub fn add_account_job(user_id: Uuid, account_id: Uuid) -> Result<faktory::Job, Error> {
     let args = vec![
-        serde_json::to_value(user_id).unwrap(),
-        serde_json::to_value(account_id).unwrap(),
+        serde_json::to_value(user_id)?,
+        serde_json::to_value(account_id)?,
     ];
 
-    faktory::Job::new("add_account", args).on_queue(FUZZYSEARCH_OWO_QUEUE)
+    Ok(faktory::Job::new("add_account", args).on_queue(FUZZYSEARCH_OWO_QUEUE))
 }
 
 pub fn add_furaffinity_submission(
@@ -19,15 +19,57 @@ pub fn add_furaffinity_submission(
     account_id: Uuid,
     submission_id: i32,
     import: bool,
-) -> faktory::Job {
+) -> Result<faktory::Job, Error> {
     let args = vec![
-        serde_json::to_value(user_id).unwrap(),
-        serde_json::to_value(account_id).unwrap(),
-        serde_json::to_value(submission_id).unwrap(),
-        serde_json::to_value(import).unwrap(),
+        serde_json::to_value(user_id)?,
+        serde_json::to_value(account_id)?,
+        serde_json::to_value(submission_id)?,
+        serde_json::to_value(import)?,
     ];
 
-    faktory::Job::new("add_submission_furaffinity", args).on_queue(FUZZYSEARCH_OWO_QUEUE)
+    Ok(faktory::Job::new("add_submission_furaffinity", args).on_queue(FUZZYSEARCH_OWO_QUEUE))
+}
+
+fn get_arg_opt<T: serde::de::DeserializeOwned>(
+    args: &mut core::slice::Iter<serde_json::Value>,
+) -> Result<Option<T>, Error> {
+    let arg = match args.next() {
+        Some(arg) => arg,
+        None => return Ok(None),
+    };
+
+    let data = serde_json::from_value(arg.to_owned())?;
+    Ok(Some(data))
+}
+
+fn get_arg<T: serde::de::DeserializeOwned>(
+    args: &mut core::slice::Iter<serde_json::Value>,
+) -> Result<T, Error> {
+    get_arg_opt(args)?.ok_or(Error::Missing)
+}
+
+macro_rules! extract_args {
+    ($args:expr, $($x:ty),*) => {
+        {
+            (
+                $(
+                    get_arg::<$x>(&mut $args)?,
+                )*
+            )
+        }
+    }
+}
+
+macro_rules! serialize_args {
+    ($($x:expr),*) => {
+        {
+            vec![
+            $(
+                serde_json::to_value($x)?,
+            )*
+            ]
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -50,17 +92,16 @@ pub async fn start_job_processing(ctx: JobContext) {
     let handle_clone = handle.clone();
     client.register(
         "add_submission_furaffinity",
-        move |job| -> std::io::Result<()> {
+        move |job| -> Result<(), Error> {
             let ctx = ctx_clone.clone();
 
             handle_clone.block_on(async move {
                 tracing::info!("wanting to load fa submission: {:?}", job.args());
 
                 let mut args = job.args().iter();
-                let user_id: Uuid = args.next().unwrap().as_str().unwrap().parse().unwrap();
-                let account_id: Uuid = args.next().unwrap().as_str().unwrap().parse().unwrap();
-                let sub_id = args.next().unwrap().as_i64().unwrap() as i32;
-                let was_import = args.next().and_then(|val| val.as_bool()).unwrap_or(false);
+
+                let (user_id, account_id, sub_id) = extract_args!(args, Uuid, Uuid, i32);
+                let was_import: bool = get_arg_opt(&mut args)?.unwrap_or(false);
 
                 let fa = furaffinity_rs::FurAffinity::new(
                     ctx.config.furaffinity_cookie_a.clone(),
@@ -69,10 +110,28 @@ pub async fn start_job_processing(ctx: JobContext) {
                     None,
                 );
 
-                let sub = fa.get_submission(sub_id).await.unwrap().unwrap();
-                let sub = fa.calc_image_hash(sub).await.unwrap();
+                let sub = fa
+                    .get_submission(sub_id)
+                    .await
+                    .map_err(|_err| {
+                        Error::LoadingError(format!(
+                            "Could not load FurAffinity submission {}",
+                            sub_id
+                        ))
+                    })?
+                    .ok_or(Error::Missing)?;
+                let sub = fa.calc_image_hash(sub).await.map_err(|_err| {
+                    Error::LoadingError(format!(
+                        "Could not load FurAffinity submission content {}",
+                        sub_id
+                    ))
+                })?;
 
-                let sha256_hash: [u8; 32] = sub.file_sha256.unwrap().try_into().unwrap();
+                let sha256_hash: [u8; 32] = sub
+                    .file_sha256
+                    .ok_or(Error::Missing)?
+                    .try_into()
+                    .expect("sha256 hash was wrong length");
 
                 let item_id = models::OwnedMediaItem::add_item(
                     &ctx.conn,
@@ -85,21 +144,19 @@ pub async fn start_job_processing(ctx: JobContext) {
                     Some(sub.title),
                     Some(sub.posted_at),
                 )
-                .await
-                .unwrap();
+                .await?;
 
-                let im = image::load_from_memory(&sub.file.unwrap()).unwrap();
+                let im = image::load_from_memory(&sub.file.ok_or(Error::Missing)?)?;
                 models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im)
-                    .await
-                    .unwrap();
+                    .await?;
 
                 if was_import {
                     let mut redis = ctx.redis.clone();
                     let key = format!("account-import-ids:{}", account_id);
 
-                    redis.srem::<_, _, ()>(&key, sub_id).await.unwrap();
+                    redis.srem::<_, _, ()>(&key, sub_id).await?;
 
-                    let remaining: i64 = redis.scard(key).await.unwrap();
+                    let remaining: i64 = redis.scard(key).await?;
                     tracing::debug!(
                         "submission was part of import, {} items remaining",
                         remaining
@@ -113,8 +170,7 @@ pub async fn start_job_processing(ctx: JobContext) {
                             account_id,
                             models::LoadingState::Complete,
                         )
-                        .await
-                        .unwrap();
+                        .await?;
                     }
                 }
 
@@ -123,18 +179,15 @@ pub async fn start_job_processing(ctx: JobContext) {
                     .enqueue(
                         faktory::Job::new(
                             "search_existing_submissions",
-                            vec![
-                                serde_json::to_value(user_id).unwrap(),
-                                serde_json::to_value(item_id).unwrap(),
-                            ],
+                            serialize_args!(user_id, item_id),
                         )
                         .on_queue(FUZZYSEARCH_OWO_QUEUE),
                     )
                     .await
-                    .unwrap();
-            });
+                    .map_err(Error::from_displayable)?;
 
-            Ok(())
+                Ok(())
+            })
         },
     );
 
@@ -142,39 +195,41 @@ pub async fn start_job_processing(ctx: JobContext) {
     let handle_clone = handle.clone();
     client.register(
         "search_existing_submissions",
-        move |job| -> std::io::Result<()> {
+        move |job| -> Result<(), Error> {
             let ctx = ctx_clone.clone();
 
             handle_clone.block_on(async move {
                 let mut args = job.args().iter();
-                let user_id: Uuid = args.next().unwrap().as_str().unwrap().parse().unwrap();
-                let media_id: Uuid = args.next().unwrap().as_str().unwrap().parse().unwrap();
+
+                let (user_id, media_id) = extract_args!(args, Uuid, Uuid);
 
                 tracing::info!("performing lookup for previous matches");
 
                 let media = models::OwnedMediaItem::get_by_id(&ctx.conn, media_id, user_id)
-                    .await
-                    .unwrap()
-                    .unwrap();
+                    .await?
+                    .ok_or(Error::Missing)?;
 
                 let perceptual_hash = match media.perceptual_hash {
                     Some(hash) => hash,
                     None => {
                         tracing::warn!("got media item with no perceptual hash");
-                        return;
+                        return Ok(());
                     }
                 };
 
                 let similar_items = ctx
                     .fuzzysearch
                     .lookup_hashes(&[perceptual_hash], Some(3))
-                    .await
-                    .unwrap();
+                    .await?;
 
                 for similar_item in similar_items {
                     let similar_image = models::SimilarImage {
                         site: models::Site::from(
-                            similar_item.site_info.as_ref().unwrap().to_owned(),
+                            similar_item
+                                .site_info
+                                .as_ref()
+                                .ok_or(Error::Missing)?
+                                .to_owned(),
                         ),
                         posted_by: similar_item
                             .artists
@@ -192,34 +247,28 @@ pub async fn start_job_processing(ctx: JobContext) {
                         similar_image,
                         Some(similar_item.posted_at.unwrap_or_else(chrono::Utc::now)),
                     )
-                    .await
-                    .unwrap();
+                    .await?;
                 }
-            });
 
-            Ok(())
+                Ok(())
+            })
         },
     );
 
     let ctx_clone = ctx.clone();
     let handle_clone = handle.clone();
-    client.register("add_account", move |job| -> std::io::Result<()> {
+    client.register("add_account", move |job| -> Result<(), Error> {
         let ctx = ctx_clone.clone();
 
         handle_clone.block_on(async move {
-            let args = job.args();
-            let mut ids = args
-                .iter()
-                .filter_map(|arg| arg.as_str())
-                .filter_map(|arg| arg.parse::<Uuid>().ok());
-            let (user_id, account_id) = (ids.next().unwrap(), ids.next().unwrap());
+            let mut args = job.args().iter();
+            let (user_id, account_id) = extract_args!(args, Uuid, Uuid);
 
             tracing::info!("updating loading state of account {:?}", account_id);
 
             let account = models::LinkedAccount::lookup_by_id(&ctx.conn, account_id, user_id)
-                .await
-                .unwrap()
-                .unwrap();
+                .await?
+                .ok_or(Error::Missing)?;
 
             models::LinkedAccount::update_loading_state(
                 &ctx.conn,
@@ -228,26 +277,25 @@ pub async fn start_job_processing(ctx: JobContext) {
                 account_id,
                 models::LoadingState::DiscoveringItems,
             )
-            .await
-            .unwrap();
+            .await?;
 
             match account.source_site {
-                models::SourceSite::FurAffinity => {
+                models::Site::FurAffinity => {
                     let ids = discover_furaffinity_submissions(&account.username, &ctx.config)
                         .await
-                        .unwrap();
+                        .map_err(Error::from_displayable)?;
                     let known = ids.len() as i32;
 
                     let mut redis = ctx.redis.clone();
                     let key = format!("account-import-ids:{}", account_id);
-                    redis.sadd::<_, _, ()>(&key, &ids).await.unwrap();
-                    redis.expire::<_, ()>(key, 60 * 60 * 24 * 7).await.unwrap();
+                    redis.sadd::<_, _, ()>(&key, &ids).await?;
+                    redis.expire::<_, ()>(key, 60 * 60 * 24 * 7).await?;
 
                     for id in ids {
                         ctx.faktory
-                            .enqueue(add_furaffinity_submission(user_id, account_id, id, true))
+                            .enqueue(add_furaffinity_submission(user_id, account_id, id, true)?)
                             .await
-                            .unwrap();
+                            .map_err(Error::from_displayable)?;
                     }
 
                     models::LinkedAccount::update_loading_state(
@@ -257,35 +305,33 @@ pub async fn start_job_processing(ctx: JobContext) {
                         account_id,
                         models::LoadingState::LoadingItems { known },
                     )
-                    .await
-                    .unwrap();
+                    .await?;
                 }
+                _ => unimplemented!(),
             }
-        });
 
-        Ok(())
+            Ok(())
+        })
     });
 
     let ctx_clone = ctx.clone();
     let handle_clone = handle.clone();
-    client.register("new_submission", move |job| -> std::io::Result<()> {
+    client.register("new_submission", move |job| -> Result<(), Error> {
         let ctx = ctx_clone.clone();
 
         handle_clone.block_on(async move {
-            let data: fuzzysearch_common::faktory::WebHookData =
-                serde_json::from_value(job.args().iter().next().unwrap().to_owned()).unwrap();
+            let mut args = job.args().iter();
+            let (data,) = extract_args!(args, fuzzysearch_common::faktory::WebHookData);
 
             let hash = match data.hash {
                 Some(hash) => i64::from_be_bytes(hash),
                 None => {
                     tracing::info!("webhook data had no hash");
-                    return;
+                    return Ok(());
                 }
             };
 
-            let similar_items = models::OwnedMediaItem::find_similar(&ctx.conn, hash)
-                .await
-                .unwrap();
+            let similar_items = models::OwnedMediaItem::find_similar(&ctx.conn, hash).await?;
 
             let link = match &data.site {
                 fuzzysearch_common::types::Site::FurAffinity => {
@@ -321,16 +367,17 @@ pub async fn start_job_processing(ctx: JobContext) {
                     similar_image.clone(),
                     None,
                 )
-                .await
-                .unwrap();
+                .await?;
             }
-        });
 
-        Ok(())
+            Ok(())
+        })
     });
 
     tokio::task::spawn_blocking(move || {
-        let mut client = client.connect(Some(&ctx.config.faktory_host)).unwrap();
+        let mut client = client
+            .connect(Some(&ctx.config.faktory_host))
+            .expect("could not connect to faktory");
 
         if let Err(err) = client.run(&[FUZZYSEARCH_OWO_QUEUE]) {
             tracing::error!("worker failed: {:?}", err);
@@ -343,7 +390,8 @@ async fn discover_furaffinity_submissions(
     config: &crate::Config,
 ) -> anyhow::Result<Vec<i32>> {
     let client = reqwest::Client::default();
-    let id_selector = scraper::Selector::parse(".submission-list u a").unwrap();
+    let id_selector =
+        scraper::Selector::parse(".submission-list u a").expect("known good selector failed");
 
     let mut ids = Vec::new();
 

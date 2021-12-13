@@ -4,13 +4,13 @@ use actix::{
     fut::LocalBoxActorFuture, Actor, ActorContext, ActorFutureExt, ActorTryFutureExt, AsyncContext,
     Handler, Message, StreamHandler, WrapFuture,
 };
-use actix_web::{get, post, services, web, Error, HttpRequest, HttpResponse, Scope};
+use actix_web::{get, post, services, web, HttpRequest, HttpResponse, Scope};
 use actix_web_actors::ws;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{jobs, models};
+use crate::{jobs, models, Error};
 
 const HEARTHEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -168,7 +168,8 @@ impl StreamHandler<redis::Msg> for WsEventSession {
         tracing::debug!("got redis message for session");
 
         let payload = item.get_payload_bytes();
-        let event: EventMessage = serde_json::from_slice(payload).unwrap();
+        let event: EventMessage =
+            serde_json::from_slice(payload).expect("got invalid data from redis");
 
         ctx.notify(event);
     }
@@ -178,7 +179,7 @@ impl Handler<EventMessage> for WsEventSession {
     type Result = ();
 
     fn handle(&mut self, msg: EventMessage, ctx: &mut Self::Context) -> Self::Result {
-        let data = serde_json::to_string(&msg).unwrap();
+        let data = serde_json::to_string(&msg).expect("could not serialize essential data");
         ctx.text(data)
     }
 }
@@ -191,7 +192,8 @@ async fn events(
     redis: web::Data<redis::Client>,
 ) -> Result<HttpResponse, Error> {
     let session = WsEventSession::new(user.id, (*redis.into_inner()).clone()).await;
-    ws::start(session, &req, stream)
+
+    ws::start(session, &req, stream).map_err(Into::into)
 }
 
 #[derive(Deserialize)]
@@ -213,14 +215,11 @@ async fn fuzzysearch(
     tracing::info!("got webhook data: {:?}", data.0);
     faktory
         .enqueue(
-            faktory::Job::new(
-                "new_submission",
-                vec![serde_json::to_value(data.0).unwrap()],
-            )
-            .on_queue(jobs::FUZZYSEARCH_OWO_QUEUE),
+            faktory::Job::new("new_submission", vec![serde_json::to_value(data.0)?])
+                .on_queue(jobs::FUZZYSEARCH_OWO_QUEUE),
         )
         .await
-        .unwrap();
+        .map_err(Error::from_displayable)?;
 
     Ok(HttpResponse::Ok().body("OK"))
 }

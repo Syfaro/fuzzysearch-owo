@@ -4,23 +4,13 @@ use clap::Parser;
 
 mod api;
 mod auth;
+mod error;
 mod jobs;
 mod models;
 mod routes;
 mod user;
 
-#[actix_web::get("/")]
-async fn index(user: Option<models::User>) -> HttpResponse {
-    if user.is_some() {
-        HttpResponse::Found()
-            .insert_header(("Location", routes::USER_HOME))
-            .finish()
-    } else {
-        HttpResponse::Found()
-            .insert_header(("Location", routes::AUTH_LOGIN))
-            .finish()
-    }
-}
+pub use error::Error;
 
 #[derive(Clone, Parser)]
 #[clap(about, version, author)]
@@ -86,13 +76,26 @@ pub struct Config {
 
 #[cfg(feature = "env")]
 fn load_config() -> Config {
-    dotenv::dotenv().unwrap();
+    dotenv::dotenv().expect("running with env feature with no or invalid .env file");
     Config::parse()
 }
 
 #[cfg(not(feature = "env"))]
 fn load_config() -> Config {
     Config::parse()
+}
+
+#[actix_web::get("/")]
+async fn index(user: Option<models::User>) -> HttpResponse {
+    let location = if user.is_some() {
+        routes::USER_HOME
+    } else {
+        routes::AUTH_LOGIN
+    };
+
+    HttpResponse::Found()
+        .insert_header(("Location", location))
+        .finish()
 }
 
 #[tokio::main]
@@ -104,23 +107,27 @@ async fn main() {
 
     tracing::info!("starting fuzzysearch-owo on http://0.0.0.0:8095");
 
-    let pool = sqlx::PgPool::connect(&config.database_url).await.unwrap();
+    let pool = sqlx::PgPool::connect(&config.database_url)
+        .await
+        .expect("could not connect to database");
 
     let region = rusoto_core::Region::Custom {
         name: config.s3_region_name.clone(),
         endpoint: config.s3_region_endpoint.clone(),
     };
-    let client = rusoto_core::request::HttpClient::new().unwrap();
+    let client =
+        rusoto_core::request::HttpClient::new().expect("could not create rusoto http client");
     let provider = rusoto_credential::StaticProvider::new_minimal(
         config.s3_access_key.clone(),
         config.s3_secret_access_key.clone(),
     );
     let s3 = rusoto_s3::S3Client::new_with(client, provider, region);
 
-    let redis_client = redis::Client::open(config.redis_dsn.clone()).unwrap();
+    let redis_client =
+        redis::Client::open(config.redis_dsn.clone()).expect("could not create redis client");
     let redis_manager = redis::aio::ConnectionManager::new(redis_client.clone())
         .await
-        .unwrap();
+        .expect("could not create redis connection manager");
 
     let fuzzysearch = fuzzysearch::FuzzySearch::new_with_opts(fuzzysearch::FuzzySearchOpts {
         endpoint: Some(config.fuzzysearch_host.clone()),
@@ -130,7 +137,7 @@ async fn main() {
 
     let faktory = fuzzysearch_common::faktory::FaktoryClient::connect(config.faktory_host.clone())
         .await
-        .unwrap();
+        .expect("could not connect to faktory");
 
     jobs::start_job_processing(jobs::JobContext {
         faktory: faktory.clone(),
@@ -142,7 +149,8 @@ async fn main() {
     })
     .await;
 
-    let cookie_private_key = hex::decode(&config.cookie_private_key).unwrap();
+    let cookie_private_key =
+        hex::decode(&config.cookie_private_key).expect("cookie secret was not hex data");
     assert!(
         cookie_private_key.len() >= 32,
         "cookie private key must be greater than 32 bytes"
@@ -168,8 +176,8 @@ async fn main() {
     })
     .workers(4)
     .bind("0.0.0.0:8095")
-    .unwrap()
+    .expect("could not bind server")
     .run()
     .await
-    .unwrap();
+    .expect("server failed");
 }

@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use sha2::Digest;
 use uuid::Uuid;
 
-use crate::api;
+use crate::{api, Error};
 
 pub struct User {
     pub id: Uuid,
@@ -33,7 +33,7 @@ impl User {
     pub async fn lookup_by_id(
         conn: &sqlx::Pool<sqlx::Postgres>,
         id: Uuid,
-    ) -> anyhow::Result<Option<User>> {
+    ) -> Result<Option<User>, Error> {
         let user = sqlx::query_file_as!(User, "queries/auth/user_lookup_id.sql", id)
             .fetch_optional(conn)
             .await?;
@@ -45,7 +45,7 @@ impl User {
         conn: &sqlx::Pool<sqlx::Postgres>,
         username: &str,
         password: &str,
-    ) -> anyhow::Result<Option<User>> {
+    ) -> Result<Option<User>, Error> {
         let user = sqlx::query_file_as!(User, "queries/auth/user_lookup_login.sql", username)
             .fetch_optional(conn)
             .await?;
@@ -66,8 +66,8 @@ impl User {
         conn: &sqlx::Pool<sqlx::Postgres>,
         username: &str,
         password: &str,
-    ) -> anyhow::Result<Uuid> {
-        let password = Self::hash_password(password);
+    ) -> Result<Uuid, Error> {
+        let password = Self::hash_password(password)?;
 
         let id = sqlx::query_file_scalar!("queries/auth/user_create.sql", username, password)
             .fetch_one(conn)
@@ -79,7 +79,7 @@ impl User {
     pub async fn username_exists(
         conn: &sqlx::Pool<sqlx::Postgres>,
         username: &str,
-    ) -> anyhow::Result<bool> {
+    ) -> Result<bool, Error> {
         let exists = sqlx::query_file_scalar!("queries/auth/user_username_exists.sql", username)
             .fetch_one(conn)
             .await?;
@@ -97,39 +97,15 @@ impl User {
             .unwrap_or(false)
     }
 
-    fn hash_password(password: &str) -> String {
+    fn hash_password(password: &str) -> Result<String, Error> {
         let mut hasher = Hasher::default();
         hasher.opt_out_of_secret_key(true);
 
-        hasher.with_password(password).hash().unwrap()
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum SourceSite {
-    FurAffinity,
-}
-
-impl Display for SourceSite {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let display = match self {
-            Self::FurAffinity => "FurAffinity",
-        };
-
-        f.write_str(display)
-    }
-}
-
-impl FromStr for SourceSite {
-    type Err = &'static str;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        let site = match value {
-            "FurAffinity" => SourceSite::FurAffinity,
-            _ => return Err("unknown source site"),
-        };
-
-        Ok(site)
+        let hash = hasher
+            .with_password(password)
+            .hash()
+            .map_err(Error::from_displayable)?;
+        Ok(hash)
     }
 }
 
@@ -160,7 +136,7 @@ impl OwnedMediaItem {
         conn: &sqlx::Pool<sqlx::Postgres>,
         id: Uuid,
         user_id: Uuid,
-    ) -> anyhow::Result<Option<Self>> {
+    ) -> Result<Option<Self>, Error> {
         let item = sqlx::query_file!("queries/owned_media/media_lookup_id.sql", id, user_id)
             .map(|row| OwnedMediaItem {
                 id: row.id,
@@ -168,7 +144,10 @@ impl OwnedMediaItem {
                 account_id: row.account_id,
                 source_id: row.source_id,
                 perceptual_hash: row.perceptual_hash,
-                sha256_hash: row.sha256_hash.try_into().unwrap(),
+                sha256_hash: row
+                    .sha256_hash
+                    .try_into()
+                    .expect("sha256 data was not valid"),
                 link: row.link,
                 title: row.title,
                 posted_at: row.posted_at,
@@ -186,7 +165,7 @@ impl OwnedMediaItem {
     pub async fn user_item_count(
         conn: &sqlx::Pool<sqlx::Postgres>,
         user_id: Uuid,
-    ) -> anyhow::Result<(i64, i64)> {
+    ) -> Result<(i64, i64), Error> {
         let stats = sqlx::query_file!("queries/owned_media/media_count.sql", user_id)
             .fetch_one(conn)
             .await?;
@@ -199,7 +178,7 @@ impl OwnedMediaItem {
         user_id: Uuid,
         perceptual_hash: i64,
         sha256_hash: [u8; 32],
-    ) -> anyhow::Result<Uuid> {
+    ) -> Result<Uuid, Error> {
         let item_id = sqlx::query_file_scalar!(
             "queries/owned_media/manual_upload.sql",
             user_id,
@@ -222,7 +201,7 @@ impl OwnedMediaItem {
         link: Option<String>,
         title: Option<String>,
         posted_at: Option<chrono::DateTime<chrono::Utc>>,
-    ) -> anyhow::Result<Uuid> {
+    ) -> Result<Uuid, Error> {
         let item = sqlx::query_file_scalar!(
             "queries/owned_media/media_import.sql",
             user_id,
@@ -246,7 +225,7 @@ impl OwnedMediaItem {
         config: &crate::Config,
         id: Uuid,
         full_size: image::DynamicImage,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), Error> {
         let (width, height) = full_size.dimensions();
         let content = if width > 2000 || height > 2000 {
             tracing::trace!(width, height, "resizing content");
@@ -280,7 +259,7 @@ impl OwnedMediaItem {
     pub async fn recent_media(
         conn: &sqlx::Pool<sqlx::Postgres>,
         user_id: Uuid,
-    ) -> anyhow::Result<Vec<Self>> {
+    ) -> Result<Vec<Self>, Error> {
         let items = sqlx::query_file!("queries/owned_media/media_recent.sql", user_id)
             .map(|row| OwnedMediaItem {
                 id: row.id,
@@ -288,7 +267,10 @@ impl OwnedMediaItem {
                 account_id: row.account_id,
                 source_id: row.source_id,
                 perceptual_hash: row.perceptual_hash,
-                sha256_hash: row.sha256_hash.try_into().unwrap(),
+                sha256_hash: row
+                    .sha256_hash
+                    .try_into()
+                    .expect("sha256 data was not valid"),
                 link: row.link,
                 title: row.title,
                 posted_at: row.posted_at,
@@ -317,7 +299,7 @@ impl OwnedMediaItem {
     pub async fn find_similar(
         conn: &sqlx::Pool<sqlx::Postgres>,
         perceptual_hash: i64,
-    ) -> anyhow::Result<Vec<Self>> {
+    ) -> Result<Vec<Self>, Error> {
         let items = sqlx::query_file!(
             "queries/owned_media/media_similar_search.sql",
             perceptual_hash,
@@ -329,7 +311,10 @@ impl OwnedMediaItem {
             account_id: row.account_id,
             source_id: row.source_id,
             perceptual_hash: row.perceptual_hash,
-            sha256_hash: row.sha256_hash.try_into().unwrap(),
+            sha256_hash: row
+                .sha256_hash
+                .try_into()
+                .expect("sha256 data was not valid"),
             link: row.link,
             title: row.title,
             posted_at: row.posted_at,
@@ -348,7 +333,7 @@ impl OwnedMediaItem {
         conn: &sqlx::Pool<sqlx::Postgres>,
         user_id: Uuid,
         media_id: Uuid,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), Error> {
         sqlx::query_file!("queries/owned_media/media_remove.sql", user_id, media_id)
             .execute(conn)
             .await?;
@@ -361,7 +346,7 @@ async fn upload_image(
     s3: &rusoto_s3::S3Client,
     config: &crate::Config,
     im: image::DynamicImage,
-) -> anyhow::Result<(String, usize)> {
+) -> Result<(String, usize), Error> {
     tracing::debug!("uploading image to s3");
 
     let mut buf = Vec::new();
@@ -370,7 +355,10 @@ async fn upload_image(
 
     let mut hasher = sha2::Sha256::default();
     hasher.update(&buf);
-    let hash: [u8; 32] = hasher.finalize().try_into().unwrap();
+    let hash: [u8; 32] = hasher
+        .finalize()
+        .try_into()
+        .expect("sha256 hash had wrong length");
     let hash = hex::encode(hash);
     let path = format!("{}/{}/{}.jpg", &hash[0..2], &hash[2..4], &hash);
 
@@ -385,7 +373,9 @@ async fn upload_image(
         ..Default::default()
     };
 
-    s3.put_object(put).await?;
+    s3.put_object(put)
+        .await
+        .map_err(|err| Error::S3(err.to_string()))?;
 
     Ok((
         format!(
@@ -420,7 +410,7 @@ impl LoadingState {
 pub struct LinkedAccount {
     pub id: Uuid,
     pub owner_id: Uuid,
-    pub source_site: SourceSite,
+    pub source_site: Site,
     pub username: String,
     pub last_update: Option<chrono::DateTime<chrono::Utc>>,
     pub loading_state: Option<LoadingState>,
@@ -431,10 +421,10 @@ impl LinkedAccount {
     pub async fn create(
         conn: &sqlx::Pool<sqlx::Postgres>,
         user_id: Uuid,
-        source_site: SourceSite,
+        source_site: Site,
         username: &str,
         credentials: Option<serde_json::Value>,
-    ) -> anyhow::Result<Uuid> {
+    ) -> Result<Uuid, Error> {
         let id = sqlx::query_file_scalar!(
             "queries/account/account_link_create.sql",
             user_id,
@@ -452,12 +442,12 @@ impl LinkedAccount {
         conn: &sqlx::Pool<sqlx::Postgres>,
         id: Uuid,
         user_id: Uuid,
-    ) -> anyhow::Result<Option<Self>> {
+    ) -> Result<Option<Self>, Error> {
         let account = sqlx::query_file!("queries/account/account_link_lookup_id.sql", id, user_id)
             .map(|row| LinkedAccount {
                 id: row.id,
                 owner_id: row.owner_id,
-                source_site: row.source_site.parse().unwrap(),
+                source_site: row.source_site.parse().expect("unknown site in database"),
                 username: row.username,
                 last_update: row.last_update,
                 loading_state: row
@@ -474,12 +464,12 @@ impl LinkedAccount {
     pub async fn owned_by_user(
         conn: &sqlx::Pool<sqlx::Postgres>,
         user_id: Uuid,
-    ) -> anyhow::Result<Vec<Self>> {
+    ) -> Result<Vec<Self>, Error> {
         let accounts = sqlx::query_file!("queries/account/account_link_owned_by_user.sql", user_id)
             .map(|row| LinkedAccount {
                 id: row.id,
                 owner_id: row.owner_id,
-                source_site: row.source_site.parse().unwrap(),
+                source_site: row.source_site.parse().expect("unknown site in database"),
                 username: row.username,
                 last_update: row.last_update,
                 loading_state: row
@@ -506,12 +496,12 @@ impl LinkedAccount {
         user_id: Uuid,
         account_id: Uuid,
         loading_state: LoadingState,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), Error> {
         sqlx::query_file!(
             "queries/account/account_update_loading_state.sql",
             user_id,
             account_id,
-            serde_json::to_value(&loading_state).unwrap(),
+            serde_json::to_value(&loading_state)?,
         )
         .execute(conn)
         .await?;
@@ -523,8 +513,7 @@ impl LinkedAccount {
                 serde_json::to_string(&api::EventMessage::LoadingStateChange {
                     account_id,
                     loading_state: loading_state.message(),
-                })
-                .unwrap(),
+                })?,
             )
             .await?;
 
@@ -535,7 +524,7 @@ impl LinkedAccount {
         conn: &sqlx::Pool<sqlx::Postgres>,
         user_id: Uuid,
         account_id: Uuid,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), Error> {
         sqlx::query_file!("queries/account/account_remove.sql", user_id, account_id)
             .execute(conn)
             .await?;
@@ -547,7 +536,7 @@ impl LinkedAccount {
         conn: &sqlx::Pool<sqlx::Postgres>,
         user_id: Uuid,
         account_id: Uuid,
-    ) -> anyhow::Result<(i64, i64)> {
+    ) -> Result<(i64, i64), Error> {
         let stats = sqlx::query_file!(
             "queries/owned_media/account_media_count.sql",
             user_id,
@@ -560,7 +549,7 @@ impl LinkedAccount {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Site {
     FurAffinity,
@@ -578,6 +567,22 @@ impl Display for Site {
             Site::Weasyl => write!(f, "Weasyl"),
             Site::Twitter => write!(f, "Twitter"),
         }
+    }
+}
+
+impl FromStr for Site {
+    type Err = &'static str;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let site = match value {
+            "FurAffinity" => Site::FurAffinity,
+            "e621" => Site::E621,
+            "Weasyl" => Site::Weasyl,
+            "Twitter" => Site::Twitter,
+            _ => return Err("unknown source site"),
+        };
+
+        Ok(site)
     }
 }
 
@@ -656,7 +661,7 @@ impl UserEvent {
         redis: &redis::aio::ConnectionManager,
         user_id: Uuid,
         message: M,
-    ) -> anyhow::Result<Uuid> {
+    ) -> Result<Uuid, Error> {
         let notification_id = sqlx::query_file_scalar!(
             "queries/user_event/event_create.sql",
             user_id,
@@ -673,8 +678,7 @@ impl UserEvent {
                 serde_json::to_string(&api::EventMessage::SimpleMessage {
                     id: notification_id,
                     message: message.as_ref().to_string(),
-                })
-                .unwrap(),
+                })?,
             )
             .await?;
 
@@ -688,7 +692,7 @@ impl UserEvent {
         media_id: Uuid,
         similar_image: SimilarImage,
         created_at: Option<chrono::DateTime<chrono::Utc>>,
-    ) -> anyhow::Result<Uuid> {
+    ) -> Result<Uuid, Error> {
         let link = similar_image.best_link().to_owned();
         let data: UserEventData = similar_image.into();
 
@@ -698,7 +702,7 @@ impl UserEvent {
             media_id,
             format!("Found similar image: {}", link),
             data.event_name(),
-            serde_json::to_value(data).unwrap(),
+            serde_json::to_value(data)?,
             created_at,
         )
         .fetch_one(conn)
@@ -709,8 +713,7 @@ impl UserEvent {
             redis
                 .publish(
                     format!("user-events:{}", user_id.to_string()),
-                    serde_json::to_string(&api::EventMessage::SimilarImage { media_id, link })
-                        .unwrap(),
+                    serde_json::to_string(&api::EventMessage::SimilarImage { media_id, link })?,
                 )
                 .await?;
         }
@@ -721,7 +724,7 @@ impl UserEvent {
     pub async fn recent_events(
         conn: &sqlx::Pool<sqlx::Postgres>,
         user_id: Uuid,
-    ) -> anyhow::Result<Vec<Self>> {
+    ) -> Result<Vec<Self>, Error> {
         let events = sqlx::query_file!("queries/user_event/event_recent.sql", user_id)
             .map(|row| UserEvent {
                 id: row.id,
@@ -741,7 +744,7 @@ impl UserEvent {
         conn: &sqlx::Pool<sqlx::Postgres>,
         user_id: Uuid,
         media_id: Uuid,
-    ) -> anyhow::Result<Vec<Self>> {
+    ) -> Result<Vec<Self>, Error> {
         let events = sqlx::query_file!(
             "queries/user_event/event_recent_media.sql",
             user_id,
