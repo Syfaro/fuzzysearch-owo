@@ -556,6 +556,23 @@ impl LinkedAccount {
 
         Ok((stats.count, stats.total_content_size))
     }
+
+    pub async fn search_site_account(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        site_name: &str,
+        username: &str,
+    ) -> Result<Option<(Uuid, Uuid)>, Error> {
+        let account = sqlx::query_file!(
+            "queries/account/account_lookup_by_username.sql",
+            site_name,
+            username
+        )
+        .map(|row| (row.id, row.owner_id))
+        .fetch_optional(conn)
+        .await?;
+
+        Ok(account)
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -712,7 +729,7 @@ impl UserEvent {
             format!("Found similar image: {}", link),
             data.event_name(),
             serde_json::to_value(data)?,
-            created_at,
+            created_at.unwrap_or_else(|| chrono::Utc::now()),
         )
         .fetch_one(conn)
         .await?;

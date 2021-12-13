@@ -5,49 +5,6 @@ use crate::{models, Error};
 
 pub const FUZZYSEARCH_OWO_QUEUE: &str = "fuzzysearch-owo";
 
-pub fn add_account_job(user_id: Uuid, account_id: Uuid) -> Result<faktory::Job, Error> {
-    let args = vec![
-        serde_json::to_value(user_id)?,
-        serde_json::to_value(account_id)?,
-    ];
-
-    Ok(faktory::Job::new("add_account", args).on_queue(FUZZYSEARCH_OWO_QUEUE))
-}
-
-pub fn add_furaffinity_submission(
-    user_id: Uuid,
-    account_id: Uuid,
-    submission_id: i32,
-    import: bool,
-) -> Result<faktory::Job, Error> {
-    let args = vec![
-        serde_json::to_value(user_id)?,
-        serde_json::to_value(account_id)?,
-        serde_json::to_value(submission_id)?,
-        serde_json::to_value(import)?,
-    ];
-
-    Ok(faktory::Job::new("add_submission_furaffinity", args).on_queue(FUZZYSEARCH_OWO_QUEUE))
-}
-
-fn get_arg_opt<T: serde::de::DeserializeOwned>(
-    args: &mut core::slice::Iter<serde_json::Value>,
-) -> Result<Option<T>, Error> {
-    let arg = match args.next() {
-        Some(arg) => arg,
-        None => return Ok(None),
-    };
-
-    let data = serde_json::from_value(arg.to_owned())?;
-    Ok(Some(data))
-}
-
-fn get_arg<T: serde::de::DeserializeOwned>(
-    args: &mut core::slice::Iter<serde_json::Value>,
-) -> Result<T, Error> {
-    get_arg_opt(args)?.ok_or(Error::Missing)
-}
-
 macro_rules! extract_args {
     ($args:expr, $($x:ty),*) => {
         {
@@ -70,6 +27,41 @@ macro_rules! serialize_args {
             ]
         }
     }
+}
+
+pub fn add_account_job(user_id: Uuid, account_id: Uuid) -> Result<faktory::Job, Error> {
+    let args = serialize_args!(user_id, account_id);
+
+    Ok(faktory::Job::new("add_account", args).on_queue(FUZZYSEARCH_OWO_QUEUE))
+}
+
+pub fn add_furaffinity_submission(
+    user_id: Uuid,
+    account_id: Uuid,
+    submission_id: i32,
+    import: bool,
+) -> Result<faktory::Job, Error> {
+    let args = serialize_args!(user_id, account_id, submission_id, import);
+
+    Ok(faktory::Job::new("add_submission_furaffinity", args).on_queue(FUZZYSEARCH_OWO_QUEUE))
+}
+
+fn get_arg_opt<T: serde::de::DeserializeOwned>(
+    args: &mut core::slice::Iter<serde_json::Value>,
+) -> Result<Option<T>, Error> {
+    let arg = match args.next() {
+        Some(arg) => arg,
+        None => return Ok(None),
+    };
+
+    let data = serde_json::from_value(arg.to_owned())?;
+    Ok(Some(data))
+}
+
+fn get_arg<T: serde::de::DeserializeOwned>(
+    args: &mut core::slice::Iter<serde_json::Value>,
+) -> Result<T, Error> {
+    get_arg_opt(args)?.ok_or(Error::Missing)
 }
 
 #[derive(Clone)]
@@ -352,15 +344,7 @@ pub async fn start_job_processing(ctx: JobContext) {
             let mut args = job.args().iter();
             let (data,) = extract_args!(args, fuzzysearch_common::faktory::WebHookData);
 
-            let hash = match data.hash {
-                Some(hash) => i64::from_be_bytes(hash),
-                None => {
-                    tracing::info!("webhook data had no hash");
-                    return Ok(());
-                }
-            };
-
-            let similar_items = models::OwnedMediaItem::find_similar(&ctx.conn, hash).await?;
+            let site = models::Site::from(data.site);
 
             let link = match &data.site {
                 fuzzysearch_common::types::Site::FurAffinity => {
@@ -380,8 +364,60 @@ pub async fn start_job_processing(ctx: JobContext) {
                 }
             };
 
+            let hash = data.hash.map(i64::from_be_bytes);
+
+            if let Some((account_id, user_id)) = models::LinkedAccount::search_site_account(
+                &ctx.conn,
+                &site.to_string(),
+                &data.artist,
+            )
+            .await?
+            {
+                tracing::info!("new submission belongs to known account");
+
+                let sha256_hash: [u8; 32] = data
+                    .file_sha256
+                    .ok_or(Error::Missing)?
+                    .try_into()
+                    .expect("sha256 hash was wrong length");
+
+                let item = models::OwnedMediaItem::add_item(
+                    &ctx.conn,
+                    user_id,
+                    account_id,
+                    data.site_id,
+                    hash,
+                    sha256_hash,
+                    Some(link.clone()),
+                    None, // TODO: collect title
+                    None, // TODO: collect posted_at
+                )
+                .await?;
+
+                let data = reqwest::Client::default()
+                    .get(&data.file_url)
+                    .send()
+                    .await?
+                    .bytes()
+                    .await?;
+                let im = image::load_from_memory(&data)?;
+
+                models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item, im)
+                    .await?;
+            }
+
+            let hash = match hash {
+                Some(hash) => hash,
+                None => {
+                    tracing::info!("webhook data had no hash");
+                    return Ok(());
+                }
+            };
+
+            let similar_items = models::OwnedMediaItem::find_similar(&ctx.conn, hash).await?;
+
             let similar_image = models::SimilarImage {
-                site: models::Site::from(data.site),
+                site,
                 posted_by: Some(data.artist),
                 page_url: Some(link),
                 content_url: data.file_url,
