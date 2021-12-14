@@ -13,6 +13,11 @@ anyhow = "1"
 clap = { version = "3.0.0-rc.4", features = ["derive", "env", "cargo", "wrap_help"] }
 dotenv = { version = "0.15", optional = true }
 thiserror = "1"
+prometheus = { version = "0.13", features = ["process"] }
+lazy_static = "1"
+
+opentelemetry = "0.16"
+tracing-opentelemetry = "0.16"
 
 uuid = { version = "0.8", features = ["v4", "serde"] }
 

@@ -142,7 +142,7 @@ async fn main() {
     fuzzysearch_common::trace::configure_tracing("fuzzysearch-owo");
     fuzzysearch_common::trace::serve_metrics().await;
 
-    tracing::info!("starting fuzzysearch-owo on http://0.0.0.0:8095");
+    tracing::info!("starting fuzzysearch-owo on http://{}", config.http_host);
 
     let pool = sqlx::PgPool::connect(&config.database_url)
         .await
@@ -172,7 +172,7 @@ async fn main() {
         client: Default::default(),
     });
 
-    let faktory = fuzzysearch_common::faktory::FaktoryClient::connect(config.faktory_host.clone())
+    let faktory = jobs::FaktoryClient::connect(config.faktory_host.clone())
         .await
         .expect("could not connect to faktory");
 

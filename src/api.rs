@@ -240,7 +240,7 @@ struct FuzzySearchParams {
 async fn fuzzysearch(
     path: web::Path<FuzzySearchParams>,
     data: web::Json<fuzzysearch_common::faktory::WebHookData>,
-    faktory: web::Data<fuzzysearch_common::faktory::FaktoryClient>,
+    faktory: web::Data<jobs::FaktoryClient>,
     config: web::Data<crate::Config>,
 ) -> Result<HttpResponse, Error> {
     if path.secret != config.fuzzysearch_api_key {
@@ -249,12 +249,11 @@ async fn fuzzysearch(
 
     tracing::info!("got webhook data: {:?}", data.0);
     faktory
-        .enqueue(
-            faktory::Job::new("new_submission", vec![serde_json::to_value(data.0)?])
-                .on_queue(jobs::FUZZYSEARCH_OWO_QUEUE),
+        .enqueue_job(
+            jobs::JobInitiator::external("fuzzysearch"),
+            jobs::new_submission_job(data.0)?,
         )
-        .await
-        .map_err(Error::from_displayable)?;
+        .await?;
 
     Ok(HttpResponse::Ok().body("OK"))
 }

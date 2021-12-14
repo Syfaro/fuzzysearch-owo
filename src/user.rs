@@ -60,7 +60,7 @@ async fn single(
     redis: web::Data<redis::aio::ConnectionManager>,
     s3: web::Data<rusoto_s3::S3Client>,
     config: web::Data<crate::Config>,
-    faktory: web::Data<fuzzysearch_common::faktory::FaktoryClient>,
+    faktory: web::Data<jobs::FaktoryClient>,
     user: models::User,
     mut form: actix_multipart::Multipart,
 ) -> Result<HttpResponse, Error> {
@@ -106,7 +106,7 @@ async fn single(
             .expect("sha256 hash was wrong size");
         let hash_str = hex::encode(&sha256_hash);
 
-        tracing::info!(size, hash = ?hash_str, "completed uploading file");
+        tracing::info!(size, hash = ?hash_str, "received complete file from client");
 
         file.seek(std::io::SeekFrom::Start(0)).await?;
 
@@ -143,12 +143,9 @@ async fn single(
         models::UserEvent::notify(&conn, &redis, user.id, "Uploaded image.").await?;
 
         faktory
-            .enqueue(
-                faktory::Job::new(
-                    "search_existing_submissions",
-                    vec![serde_json::to_value(user.id)?, serde_json::to_value(id)?],
-                )
-                .on_queue(crate::jobs::FUZZYSEARCH_OWO_QUEUE),
+            .enqueue_job(
+                jobs::JobInitiator::user(user.id),
+                jobs::search_existing_submissions_job(user.id, id)?,
             )
             .await
             .map_err(Error::from_displayable)?;
@@ -184,7 +181,7 @@ struct AccountLinkForm {
 #[post("/link")]
 async fn account_link_post(
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
-    faktory: web::Data<fuzzysearch_common::faktory::FaktoryClient>,
+    faktory: web::Data<jobs::FaktoryClient>,
     user: models::User,
     form: web::Form<AccountLinkForm>,
 ) -> Result<HttpResponse, Error> {
@@ -198,7 +195,10 @@ async fn account_link_post(
         models::LinkedAccount::create(&conn, user.id, form.site, &form.username, None).await?;
 
     faktory
-        .enqueue(jobs::add_account_job(user.id, account_id)?)
+        .enqueue_job(
+            jobs::JobInitiator::user(user.id),
+            jobs::add_account_job(user.id, account_id)?,
+        )
         .await
         .map_err(Error::from_displayable)?;
 

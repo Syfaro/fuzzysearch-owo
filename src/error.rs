@@ -61,6 +61,17 @@ impl Error {
             _ => "An internal server error occured.".into(),
         }
     }
+
+    /// If we should retry this error when encountered in a job.
+    #[allow(clippy::match_like_matches_macro)]
+    pub fn should_retry(&self) -> bool {
+        match self {
+            Error::Missing => false,
+            Error::TooLarge(_) => false,
+            Error::EmailContent(_) => false,
+            _ => true,
+        }
+    }
 }
 
 impl Error {
