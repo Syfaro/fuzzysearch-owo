@@ -1,0 +1,924 @@
+{
+  "db": "PostgreSQL",
+  "0043a6b4fee5a3ca9b12c2e77d4c693c7e2a2b65e0f2b040390d77bd91676d54": {
+    "query": "INSERT INTO\n    user_account (username, hashed_password)\nVALUES\n    ($1, $2) RETURNING id;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
+  "01c7c249ded3d2620a52f0e1dae36f7495f5038f624a0cfed0b1c89a5c56dc5a": {
+    "query": "SELECT\n    coalesce(count(*), 0) \"count!\",\n    coalesce(sum(content_size)::bigint, 0) \"total_content_size!\"\nFROM\n    owned_media_item\nWHERE\n    owner_id = $1\n    AND account_id = $2;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "count!",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 1,
+          "name": "total_content_size!",
+          "type_info": "Int8"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        null,
+        null
+      ]
+    }
+  },
+  "02112718f91a47dc651bd0dee83be59b04afb8704651b863b717bf44f9b90ab0": {
+    "query": "SELECT\n    *\nFROM\n    user_account\nWHERE\n    id = $1;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "username",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "hashed_password",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "email",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "email_verifier",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        true,
+        true
+      ]
+    }
+  },
+  "062d84cc9d91b43796d0d7ebfe39dc4ac37aa1e0f3e9ce2228fa1e4fc66730a1": {
+    "query": "INSERT INTO\n    user_event (owner_id, message, event_name)\nVALUES\n    ($1, $2, $3) RETURNING id;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text",
+          "Text"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
+  "0ecc1b410ddc5352e1a406cd7ee42367eb5f30e4cbb1f82157415408352cb421": {
+    "query": "UPDATE\n    owned_media_item\nSET\n    content_url = $2,\n    content_size = $3,\n    thumb_url = $4\nWHERE\n    id = $1;\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text",
+          "Int8",
+          "Text"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "2dc224affa78594b67af913a2d4cdf143d6a1869bcd9d3e0bfa63cd2842d1458": {
+    "query": "UPDATE\n    user_account\nSET\n    email_verifier = null\nWHERE\n    id = $1\n    AND email_verifier = $2 RETURNING id;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
+  "32b153ec58c873eb22d8d442c2e33d59970c72ebf420cc5be7d352f86d66a18a": {
+    "query": "INSERT INTO\n    owned_media_item (\n        owner_id,\n        perceptual_hash,\n        sha256_hash,\n        posted_at,\n        last_modified\n    )\nVALUES\n    (\n        $1,\n        $2,\n        $3,\n        current_timestamp,\n        current_timestamp\n    ) RETURNING id;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Int8",
+          "Bytea"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
+  "4f6f6ef9bade4bc0c2e54649e095248a05839fae970ba198b54427788cb1e166": {
+    "query": "INSERT INTO\n    owned_media_item (\n        owner_id,\n        account_id,\n        source_id,\n        perceptual_hash,\n        sha256_hash,\n        link,\n        title,\n        posted_at,\n        last_modified\n    )\nVALUES\n    ($1, $2, $3, $4, $5, $6, $7, $8, current_timestamp) RETURNING id;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid",
+          "Text",
+          "Int8",
+          "Bytea",
+          "Text",
+          "Text",
+          "Timestamptz"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
+  "530670baabea0aade25a8c44559c04eaeeed20c4accedef1e502a2c87c4fd563": {
+    "query": "DELETE FROM\n    linked_account\nWHERE\n    owner_id = $1\n    AND id = $2;\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "56ffbb01633cc4e31edf84afa38aca7494d2e414715fa6856f47615560f869bb": {
+    "query": "SELECT\n    *\nFROM\n    user_event\nWHERE\n    owner_id = $1\nORDER BY\n    created_at DESC\nLIMIT\n    50;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "related_to_media_item_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 3,
+          "name": "created_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 4,
+          "name": "message",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 5,
+          "name": "event_name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 6,
+          "name": "data",
+          "type_info": "Jsonb"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        true,
+        false,
+        false,
+        true,
+        true
+      ]
+    }
+  },
+  "74f013efbe0119a615545ccf9833d805d5245158f9aba8063af00155ac98cae4": {
+    "query": "SELECT\n    *\nFROM\n    owned_media_item\nWHERE\n    perceptual_hash <@ ($1, $2);\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "account_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 3,
+          "name": "source_id",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "perceptual_hash",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 5,
+          "name": "sha256_hash",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 6,
+          "name": "link",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "title",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "posted_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 9,
+          "name": "last_modified",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 10,
+          "name": "content_url",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 11,
+          "name": "content_size",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 12,
+          "name": "thumb_url",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Int8",
+          "Int8"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  "751d48d0988dbf5948192377f4bf36b4b65afbb6c90ec23d12d45afffe182dd5": {
+    "query": "SELECT\n    *\nFROM\n    linked_account\nWHERE\n    owner_id = $1;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "source_site",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "username",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "last_update",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 5,
+          "name": "loading_state",
+          "type_info": "Jsonb"
+        },
+        {
+          "ordinal": 6,
+          "name": "credentials",
+          "type_info": "Jsonb"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  "7a8266a0cee6f8e80ca7a8ba314c0b7b282accef2f28e3d8675bf777930f00a7": {
+    "query": "INSERT INTO\n    user_event (\n        owner_id,\n        related_to_media_item_id,\n        message,\n        event_name,\n        data,\n        created_at\n    )\nVALUES\n    ($1, $2, $3, $4, $5, $6) RETURNING id;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid",
+          "Text",
+          "Text",
+          "Jsonb",
+          "Timestamptz"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
+  "85f24a97d2dd92c177c70bce3ec1920e873fea6a162d08e9ec9d37165c838076": {
+    "query": "SELECT\n    *\nFROM\n    linked_account\nWHERE\n    id = $1\n    AND owner_id = $2;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "source_site",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "username",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "last_update",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 5,
+          "name": "loading_state",
+          "type_info": "Jsonb"
+        },
+        {
+          "ordinal": 6,
+          "name": "credentials",
+          "type_info": "Jsonb"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  "90c93803db8af98fd8ad7d9ff14b66890504953e3f8d77e502827011885ee428": {
+    "query": "SELECT\n    *\nFROM\n    owned_media_item\nWHERE\n    owner_id = $1\nORDER BY\n    last_modified DESC\nLIMIT\n    30;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "account_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 3,
+          "name": "source_id",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "perceptual_hash",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 5,
+          "name": "sha256_hash",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 6,
+          "name": "link",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "title",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "posted_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 9,
+          "name": "last_modified",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 10,
+          "name": "content_url",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 11,
+          "name": "content_size",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 12,
+          "name": "thumb_url",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  "953533be7793b31662f170180386ca19a0e01a3e5d9f8698c7a934341aaf5870": {
+    "query": "SELECT\n    *\nFROM\n    user_event\nWHERE\n    owner_id = $1\n    AND related_to_media_item_id = $2\nORDER BY\n    created_at DESC\nLIMIT\n    50;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "related_to_media_item_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 3,
+          "name": "created_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 4,
+          "name": "message",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 5,
+          "name": "event_name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 6,
+          "name": "data",
+          "type_info": "Jsonb"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        true,
+        false,
+        false,
+        true,
+        true
+      ]
+    }
+  },
+  "9d27333f331ae7e2157ba4bb0654b9af300cb4b5d5db26ca2c538421e9ee612f": {
+    "query": "SELECT\n    exists(\n        SELECT\n            1\n        FROM\n            user_account\n        WHERE\n            lower(username) = lower($1)\n    ) \"exists!\";\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "exists!",
+          "type_info": "Bool"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        null
+      ]
+    }
+  },
+  "bd66237723c0579b1857b9e1070d0f35590aac656149f7d6c18500ca301158ed": {
+    "query": "INSERT INTO\n    linked_account (\n        owner_id,\n        source_site,\n        username,\n        credentials\n    )\nVALUES\n    ($1, $2, $3, $4) RETURNING id;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text",
+          "Text",
+          "Jsonb"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
+  "c5d2ab0824d09910f1e20bac7fefdcde7e309af236bb0856bc49c626f40221cb": {
+    "query": "DELETE FROM\n    owned_media_item\nWHERE\n    owner_id = $1\n    AND id = $2;\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "d323b8bbcee14a2712722f63fe7d5fbdcd9ee5589640eb1679779e8eeecd70ea": {
+    "query": "SELECT\n    coalesce(count(*), 0) \"count!\",\n    coalesce(sum(content_size)::bigint, 0) \"total_content_size!\"\nFROM\n    owned_media_item\nWHERE\n    owner_id = $1;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "count!",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 1,
+          "name": "total_content_size!",
+          "type_info": "Int8"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        null,
+        null
+      ]
+    }
+  },
+  "df3158b58b0f0d90b846b269e2e4a91eee02828ba9a7b5a27f2874c98a404dd6": {
+    "query": "SELECT\n    *\nFROM\n    user_account\nWHERE\n    lower($1) = lower(username);\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "username",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "hashed_password",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "email",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "email_verifier",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        true,
+        true
+      ]
+    }
+  },
+  "e64304a47a011c7a35c4fbbae7e1ed3c2e1525af383f94d0df3f4ce5c6f722fe": {
+    "query": "UPDATE\n    user_account\nSET\n    email = $2\nWHERE\n    id = $1;\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "eb02f3fc3b4d2427a0b2748b9ce2b586fd73fa2d5ace7ce30d63c6f773261a21": {
+    "query": "UPDATE\n    linked_account\nSET\n    loading_state = $3\nWHERE\n    owner_id = $1\n    AND id = $2;\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid",
+          "Jsonb"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "ecfb528e75568aa6dc46c23fc1c17fd6791a1b1ca2a0da423401f8fd243c429d": {
+    "query": "SELECT\n    *\nFROM\n    owned_media_item\nWHERE\n    id = $1\n    AND owner_id = $2;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "account_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 3,
+          "name": "source_id",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "perceptual_hash",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 5,
+          "name": "sha256_hash",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 6,
+          "name": "link",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "title",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "posted_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 9,
+          "name": "last_modified",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 10,
+          "name": "content_url",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 11,
+          "name": "content_size",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 12,
+          "name": "thumb_url",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  "f9ed81bc48afca376d8bab5df361fd73b27228ac81a79fffd82de26a47c1afc8": {
+    "query": "SELECT\n    id,\n    owner_id\nFROM\n    linked_account\nWHERE\n    source_site = $1\n    AND lower(username) = lower($2);\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false
+      ]
+    }
+  }
+}

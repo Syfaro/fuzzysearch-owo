@@ -1,0 +1,7 @@
+Hi {{ username }},
+
+A similar image to {{ source_link }} was found.
+
+It was posted to {{ site_name }} by {{ poster_name }}. You can see it here: {{ similar_link }}
+
+If you have any feedback or concerns about these results, please feel free to reply to this email.

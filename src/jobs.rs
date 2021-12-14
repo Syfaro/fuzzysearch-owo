@@ -74,6 +74,16 @@ pub struct JobContext {
     pub config: std::sync::Arc<crate::Config>,
 }
 
+#[derive(askama::Template)]
+#[template(path = "email/similar.txt")]
+struct SimilarTemplate<'a> {
+    username: &'a str,
+    source_link: &'a str,
+    site_name: &'a str,
+    poster_name: &'a str,
+    similar_link: &'a str,
+}
+
 pub async fn start_job_processing(ctx: JobContext) {
     let mut client = faktory::ConsumerBuilder::default();
     client.labels(vec!["rust".to_string(), "fuzzysearch-owo".to_string()]);
@@ -366,10 +376,18 @@ pub async fn start_job_processing(ctx: JobContext) {
 
             let hash = data.hash.map(i64::from_be_bytes);
 
+            // FurAffinity has some weird differences between how usernames are
+            // displayed and how they're used in URLs.
+            let artist = if matches!(data.site, fuzzysearch_common::types::Site::FurAffinity) {
+                data.artist.replace('_', "")
+            } else {
+                data.artist.clone()
+            };
+
             if let Some((account_id, user_id)) = models::LinkedAccount::search_site_account(
                 &ctx.conn,
                 &site.to_string(),
-                &data.artist,
+                &artist,
             )
             .await?
             {
@@ -418,8 +436,8 @@ pub async fn start_job_processing(ctx: JobContext) {
 
             let similar_image = models::SimilarImage {
                 site,
-                posted_by: Some(data.artist),
-                page_url: Some(link),
+                posted_by: Some(data.artist.clone()),
+                page_url: Some(link.clone()),
                 content_url: data.file_url,
             };
 
@@ -433,6 +451,49 @@ pub async fn start_job_processing(ctx: JobContext) {
                     None,
                 )
                 .await?;
+
+                if let Some(models::User {
+                    username,
+                    email: Some(email),
+                    ..
+                }) = models::User::lookup_by_id(&ctx.conn, item.owner_id).await?
+                {
+                    let body = askama::Template::render(&SimilarTemplate {
+                        username: &username,
+                        source_link: item
+                            .link
+                            .as_deref()
+                            .unwrap_or_else(|| item.content_url.as_deref().unwrap_or("unknown")),
+                        site_name: &data.site.to_string(),
+                        poster_name: &data.artist,
+                        similar_link: &link,
+                    })?;
+
+                    let email = lettre::Message::builder()
+                        .from(ctx.config.smtp_from.clone())
+                        .reply_to(ctx.config.smtp_reply_to.clone())
+                        .to(lettre::message::Mailbox::new(
+                            Some(username),
+                            email.parse().map_err(Error::from_displayable)?,
+                        ))
+                        .subject(format!("Similar image found on {}", data.site.to_string()))
+                        .body(body)?;
+
+                    let creds = lettre::transport::smtp::authentication::Credentials::new(
+                        ctx.config.smtp_username.clone(),
+                        ctx.config.smtp_password.clone(),
+                    );
+
+                    let mailer: lettre::AsyncSmtpTransport<lettre::Tokio1Executor> =
+                        lettre::AsyncSmtpTransport::<lettre::Tokio1Executor>::relay(
+                            &ctx.config.smtp_host,
+                        )
+                        .unwrap()
+                        .credentials(creds)
+                        .build();
+
+                    lettre::AsyncTransport::send(&mailer, email).await.unwrap();
+                }
             }
 
             Ok(())
