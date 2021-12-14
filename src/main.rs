@@ -97,14 +97,18 @@ pub struct Config {
     pub smtp_reply_to: lettre::message::Mailbox,
 
     /// Full URL to site, including https and excluding trailing slash.
-    #[clap(long, env("HTTP_HOST"))]
-    pub http_host: String,
+    #[clap(long, env("HOST_URL"))]
+    pub host_url: String,
     /// Number of worker threads for HTTP server.
     #[clap(long, env("HTTP_WORKERS"), default_value = "4")]
     pub http_workers: usize,
     /// Address to bind HTTP server to.
-    #[clap(long, env("HTTP_BIND"), default_value = "127.0.0.1:8080")]
-    pub http_bind: String,
+    #[clap(long, env("HTTP_HOST"), default_value = "127.0.0.1:8080")]
+    pub http_host: String,
+
+    /// Path to static files.
+    #[clap(long, env("ASSETS_DIR"), default_value = "./assets")]
+    pub assets_dir: String,
 }
 
 #[cfg(feature = "env")]
@@ -189,10 +193,11 @@ async fn main() {
         "cookie private key must be greater than 32 bytes"
     );
 
-    let (http_bind, http_workers) = (config.http_bind.clone(), config.http_workers);
+    let (http_bind, http_workers) = (config.http_host.clone(), config.http_workers);
 
     HttpServer::new(move || {
         let session = CookieSession::private(&cookie_private_key).secure(!config.cookie_insecure);
+        let files = actix_files::Files::new("/static", &config.assets_dir).prefer_utf8(true);
 
         App::new()
             .wrap(tracing_actix_web::TracingLogger::default())
@@ -206,7 +211,7 @@ async fn main() {
             .service(auth::service())
             .service(user::service())
             .service(api::service())
-            .service(actix_files::Files::new("/static", "assets").prefer_utf8(true))
+            .service(files)
             .service(index)
     })
     .workers(http_workers)

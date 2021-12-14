@@ -343,7 +343,7 @@ async fn email_add_post(
         username: "Syfaro",
         link: &format!(
             "{}/user/email/verify?u={}&v={}",
-            config.http_host,
+            config.host_url,
             user.id,
             user.email_verifier.unwrap_or_else(Uuid::new_v4)
         ),
