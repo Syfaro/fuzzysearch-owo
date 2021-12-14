@@ -5,6 +5,7 @@ function subscribeToEvents() {
   const endpoint = `${protocol}${window.location.host}/api/events`;
 
   const ws = new WebSocket(endpoint);
+  let isUnauthorized = false;
 
   ws.onopen = () => {
     console.debug('Opened socket');
@@ -19,6 +20,13 @@ function subscribeToEvents() {
     const accountID = payload['account_id'];
 
     switch (eventType) {
+      case 'unauthorized':
+        console.debug('User is not authenticated, disconnecting event stream');
+        isUnauthorized = true;
+        ws.close();
+
+        break;
+
       case 'simple_message':
         bulmaToast.toast({
           message: payload['message'],
@@ -82,7 +90,11 @@ function subscribeToEvents() {
 
   ws.onclose = () => {
     console.debug('Socket closed');
-    setTimeout(subscribeToEvents, 1000);
+    if (isUnauthorized) {
+      console.debug('Unauthorized, keeping closed');
+    } else {
+      setTimeout(subscribeToEvents, 1000);
+    }
   };
 
   ws.onerror = (err) => {

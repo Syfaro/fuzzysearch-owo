@@ -4,6 +4,7 @@ use actix::{
     fut::LocalBoxActorFuture, Actor, ActorContext, ActorFutureExt, ActorTryFutureExt, AsyncContext,
     Handler, Message, StreamHandler, WrapFuture,
 };
+use actix_http::ws::CloseCode;
 use actix_web::{get, post, services, web, HttpRequest, HttpResponse, Scope};
 use actix_web_actors::ws;
 use futures::StreamExt;
@@ -20,6 +21,9 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum EventMessage {
+    Unauthorized {
+        is_unauthorized: bool,
+    },
     SimpleMessage {
         id: Uuid,
         message: String,
@@ -37,6 +41,29 @@ pub enum EventMessage {
         media_id: Uuid,
         link: String,
     },
+}
+
+struct UnauthorizedWsEventSession;
+
+impl Actor for UnauthorizedWsEventSession {
+    type Context = ws::WebsocketContext<Self>;
+
+    fn started(&mut self, ctx: &mut Self::Context) {
+        ctx.text(
+            serde_json::to_string(&EventMessage::Unauthorized {
+                is_unauthorized: true,
+            })
+            .expect("could not encode unauthorized json"),
+        );
+
+        ctx.close(Some((CloseCode::Normal, "Unauthorized").into()));
+    }
+}
+
+impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for UnauthorizedWsEventSession {
+    fn handle(&mut self, _item: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
+        ctx.stop();
+    }
 }
 
 struct WsEventSession {
@@ -191,14 +218,17 @@ impl Handler<EventMessage> for WsEventSession {
 
 #[get("/events")]
 async fn events(
-    user: models::User,
+    user: Option<models::User>,
     req: HttpRequest,
     stream: web::Payload,
     redis: web::Data<redis::Client>,
 ) -> Result<HttpResponse, Error> {
-    let session = WsEventSession::new(user.id, (*redis.into_inner()).clone()).await;
-
-    ws::start(session, &req, stream).map_err(Into::into)
+    if let Some(user) = user {
+        let session = WsEventSession::new(user.id, (*redis.into_inner()).clone()).await;
+        ws::start(session, &req, stream).map_err(Into::into)
+    } else {
+        ws::start(UnauthorizedWsEventSession, &req, stream).map_err(Into::into)
+    }
 }
 
 #[derive(Deserialize)]
