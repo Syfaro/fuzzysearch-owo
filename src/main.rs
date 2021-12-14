@@ -148,6 +148,11 @@ async fn main() {
         .await
         .expect("could not connect to database");
 
+    sqlx::migrate!()
+        .run(&pool)
+        .await
+        .expect("database migrations failed");
+
     let region = rusoto_core::Region::Custom {
         name: config.s3_region_name.clone(),
         endpoint: config.s3_region_endpoint.clone(),
