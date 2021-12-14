@@ -39,7 +39,7 @@ pub struct Config {
     #[clap(long, env("REDIS_DSN"))]
     pub redis_dsn: String,
 
-    /// FuzzySearch API host, defaults to main instance.
+    /// FuzzySearch API host.
     #[clap(
         long,
         env("FUZZYSEARCH_HOST"),
@@ -54,8 +54,8 @@ pub struct Config {
     #[clap(long, env("FAKTORY_HOST"))]
     pub faktory_host: String,
     /// Number of workers for background jobs.
-    #[clap(long, env("WORKER_THREADS"), default_value = "2")]
-    pub worker_threads: usize,
+    #[clap(long, env("BACKGROUND_WORKERS"), default_value = "2")]
+    pub background_workers: usize,
 
     /// Private key to sign and encrypt cookies, in hexadecimal. Must be at
     /// least 32 bytes.

@@ -87,7 +87,7 @@ struct SimilarTemplate<'a> {
 pub async fn start_job_processing(ctx: JobContext) {
     let mut client = faktory::ConsumerBuilder::default();
     client.labels(vec!["rust".to_string(), "fuzzysearch-owo".to_string()]);
-    client.workers(ctx.config.worker_threads);
+    client.workers(ctx.config.background_workers);
 
     let handle = tokio::runtime::Handle::current();
 
