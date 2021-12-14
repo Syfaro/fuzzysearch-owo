@@ -730,8 +730,21 @@
       ]
     }
   },
-  "df3158b58b0f0d90b846b269e2e4a91eee02828ba9a7b5a27f2874c98a404dd6": {
-    "query": "SELECT\n    *\nFROM\n    user_account\nWHERE\n    lower($1) = lower(username);\n",
+  "e64304a47a011c7a35c4fbbae7e1ed3c2e1525af383f94d0df3f4ce5c6f722fe": {
+    "query": "UPDATE\n    user_account\nSET\n    email = $2\nWHERE\n    id = $1;\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "e8fb9bd07a7d683a92d4bacc76285405a1661ea9dc4c76a2fe8bc8db8dc1f3db": {
+    "query": "SELECT\n    *\nFROM\n    user_account\nWHERE\n    lower($1) = lower(username)\n    OR (\n        email IS NOT NULL\n        AND lower($1) = lower(email)\n    );\n",
     "describe": {
       "columns": [
         {
@@ -772,19 +785,6 @@
         true,
         true
       ]
-    }
-  },
-  "e64304a47a011c7a35c4fbbae7e1ed3c2e1525af383f94d0df3f4ce5c6f722fe": {
-    "query": "UPDATE\n    user_account\nSET\n    email = $2\nWHERE\n    id = $1;\n",
-    "describe": {
-      "columns": [],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Text"
-        ]
-      },
-      "nullable": []
     }
   },
   "eb02f3fc3b4d2427a0b2748b9ce2b586fd73fa2d5ace7ce30d63c6f773261a21": {

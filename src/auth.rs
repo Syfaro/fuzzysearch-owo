@@ -47,6 +47,10 @@ async fn register_post(
         error_messages.push("Username must be 5 characters or greater.");
     }
 
+    if form.username.contains('@') {
+        error_messages.push("Username may not contain the '@' symbol.");
+    }
+
     if models::User::username_exists(&pool, &form.username).await? {
         error_messages.push("Username already in use.");
     }
@@ -57,7 +61,7 @@ async fn register_post(
 
     let estimate = zxcvbn(&form.password, &[&form.username]).map_err(Error::from_displayable)?;
     if estimate.score() < 3 {
-        error_messages.push("Password must be longer or contain more special symbols.");
+        error_messages.push("Password must be longer or contain more symbols.");
     }
 
     if !error_messages.is_empty() {

@@ -99,6 +99,12 @@ pub struct Config {
     /// Full URL to site, including https and excluding trailing slash.
     #[clap(long, env("HTTP_HOST"))]
     pub http_host: String,
+    /// Number of worker threads for HTTP server.
+    #[clap(long, env("HTTP_WORKERS"), default_value = "4")]
+    pub http_workers: usize,
+    /// Address to bind HTTP server to.
+    #[clap(long, env("HTTP_BIND"), default_value = "127.0.0.1:8080")]
+    pub http_bind: String,
 }
 
 #[cfg(feature = "env")]
@@ -183,6 +189,8 @@ async fn main() {
         "cookie private key must be greater than 32 bytes"
     );
 
+    let (http_bind, http_workers) = (config.http_bind.clone(), config.http_workers);
+
     HttpServer::new(move || {
         let session = CookieSession::private(&cookie_private_key).secure(!config.cookie_insecure);
 
@@ -201,8 +209,8 @@ async fn main() {
             .service(actix_files::Files::new("/static", "assets").prefer_utf8(true))
             .service(index)
     })
-    .workers(4)
-    .bind("0.0.0.0:8095")
+    .workers(http_workers)
+    .bind(http_bind)
     .expect("could not bind server")
     .run()
     .await
