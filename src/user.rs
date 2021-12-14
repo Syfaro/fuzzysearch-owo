@@ -164,7 +164,13 @@ async fn single(
 struct AccountLink;
 
 #[get("/link")]
-async fn account_link_get() -> Result<HttpResponse, Error> {
+async fn account_link_get(user: models::User) -> Result<HttpResponse, Error> {
+    if !user.has_verified_email() {
+        return Err(Error::UserError(
+            "You must verify your email address first.".into(),
+        ));
+    }
+
     let body = AccountLink.render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -182,6 +188,12 @@ async fn account_link_post(
     user: models::User,
     form: web::Form<AccountLinkForm>,
 ) -> Result<HttpResponse, Error> {
+    if !user.has_verified_email() {
+        return Err(Error::UserError(
+            "You must verify your email address first.".into(),
+        ));
+    }
+
     let account_id =
         models::LinkedAccount::create(&conn, user.id, form.site, &form.username, None).await?;
 
@@ -293,6 +305,109 @@ async fn media_remove(
         .finish())
 }
 
+#[derive(Template)]
+#[template(path = "user/add_email.html")]
+struct AddEmail {
+    error_message: Option<String>,
+}
+
+#[get("/add")]
+async fn email_add(_user: models::User) -> Result<HttpResponse, Error> {
+    let body = AddEmail {
+        error_message: None,
+    }
+    .render()?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[derive(Deserialize)]
+struct AddEmailForm {
+    email: lettre::Address,
+}
+
+#[derive(askama::Template)]
+#[template(path = "email/verify.txt")]
+struct EmailVerify<'a> {
+    username: &'a str,
+    link: &'a str,
+}
+
+#[post("/add")]
+async fn email_add_post(
+    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    config: web::Data<crate::Config>,
+    user: models::User,
+    form: web::Form<AddEmailForm>,
+) -> Result<HttpResponse, Error> {
+    let body = EmailVerify {
+        username: "Syfaro",
+        link: &format!(
+            "{}/user/email/verify?u={}&v={}",
+            config.http_host,
+            user.id,
+            user.email_verifier.unwrap_or_else(Uuid::new_v4)
+        ),
+    }
+    .render()?;
+
+    models::User::set_email(&conn, user.id, &form.email.to_string()).await?;
+
+    let email = lettre::Message::builder()
+        .from(config.smtp_from.clone())
+        .reply_to(config.smtp_reply_to.clone())
+        .to(lettre::message::Mailbox::new(
+            Some(user.username),
+            form.email.clone(),
+        ))
+        .subject("Verify your FuzzySearch OwO account email address")
+        .body(body)?;
+
+    let creds = lettre::transport::smtp::authentication::Credentials::new(
+        config.smtp_username.clone(),
+        config.smtp_password.clone(),
+    );
+
+    let mailer: lettre::AsyncSmtpTransport<lettre::Tokio1Executor> =
+        lettre::AsyncSmtpTransport::<lettre::Tokio1Executor>::relay(&config.smtp_host)
+            .unwrap()
+            .credentials(creds)
+            .build();
+
+    lettre::AsyncTransport::send(&mailer, email).await.unwrap();
+
+    Ok(HttpResponse::Found()
+        .insert_header(("Location", USER_HOME))
+        .finish())
+}
+
+#[derive(Deserialize)]
+struct EmailVerifyQuery {
+    #[serde(rename = "u")]
+    user_id: Uuid,
+    #[serde(rename = "v")]
+    verifier: Uuid,
+}
+
+#[get("/verify")]
+async fn verify_email(
+    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    query: web::Query<EmailVerifyQuery>,
+    user: Option<models::User>,
+    session: actix_session::Session,
+) -> Result<HttpResponse, Error> {
+    if !models::User::verify_email(&conn, query.user_id, query.verifier).await? {
+        return Err(Error::Missing);
+    };
+
+    if user.is_none() {
+        session.insert("user-id", query.user_id)?;
+    }
+
+    Ok(HttpResponse::Found()
+        .insert_header(("Location", USER_HOME))
+        .finish())
+}
+
 pub fn service() -> Scope {
     web::scope("/user")
         .service(services![home, events, single])
@@ -303,4 +418,5 @@ pub fn service() -> Scope {
             account_view
         ]))
         .service(web::scope("/media").service(services![media_view, media_remove]))
+        .service(web::scope("/email").service(services![email_add, email_add_post, verify_email]))
 }

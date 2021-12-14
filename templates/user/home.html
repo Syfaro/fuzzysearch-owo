@@ -29,6 +29,7 @@
         <div class="block has-text-centered">
           <h3 class="subtitle is-4">Monitored Accounts</h3>
 
+          {% if user.has_verified_email() %}
           {% if monitored_accounts.is_empty() %}
           <a href="/user/account/link" class="button is-primary is-large">Link First Account</a>
           {% else %}
@@ -47,6 +48,15 @@
           <div class="block">
             <a href="/user/account/link" class="button is-info is-outlined">Link Another Account</a>
           </div>
+          {% endif %}
+          {% else if user.has_unverified_email() %}
+          <p>
+            Verification email sent, please click the link.
+          </p>
+          {% else %}
+          <p>
+            Please <a href="/user/email/add">add your email address</a> first.
+          </p>
           {% endif %}
         </div>
 

@@ -1,0 +1,8 @@
+Hi {{ username }}!
+
+Please click this link to verify your email: {{ link }}
+
+If you ever have suggestions or issues, please feel free to reply to this email.
+
+Thanks,
+Syfaro

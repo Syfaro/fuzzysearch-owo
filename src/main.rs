@@ -75,6 +75,30 @@ pub struct Config {
     /// FurAffinity cookie b.
     #[clap(long, env("FURAFFINITY_COOKIE_B"))]
     pub furaffinity_cookie_b: String,
+
+    /// SMTP hostname.
+    #[clap(long, env("SMTP_HOST"))]
+    pub smtp_host: String,
+    /// SMTP username.
+    #[clap(long, env("SMTP_USERNAME"))]
+    pub smtp_username: String,
+    /// SMTP password.
+    #[clap(long, env("SMTP_PASSWORD"))]
+    pub smtp_password: String,
+    /// SMTP port.
+    #[clap(long, env("SMTP_PORT"), default_value = "465")]
+    pub smtp_port: u16,
+
+    /// From address for emails.
+    #[clap(long, env("SMTP_FROM"))]
+    pub smtp_from: lettre::message::Mailbox,
+    /// Reply to address for emails.
+    #[clap(long, env("SMTP_REPLY_TO"))]
+    pub smtp_reply_to: lettre::message::Mailbox,
+
+    /// Full URL to site, including https and excluding trailing slash.
+    #[clap(long, env("HTTP_HOST"))]
+    pub http_host: String,
 }
 
 #[cfg(feature = "env")]

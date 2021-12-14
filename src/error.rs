@@ -10,6 +10,8 @@ pub enum Error {
     Unknown,
     #[error("unknown error: {0}")]
     UnknownMessage(Cow<'static, str>),
+    #[error("user error: {0}")]
+    UserError(Cow<'static, str>),
 
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),
@@ -31,6 +33,10 @@ pub enum Error {
     S3(String),
     #[error("reqwest error: {0}")]
     Reqwest(#[from] reqwest::Error),
+    #[error("email content error: {0}")]
+    EmailContent(#[from] lettre::error::Error),
+    #[error("email transport error: {0}")]
+    EmailTransport(#[from] lettre::transport::smtp::Error),
 
     #[error("request too large: {0}")]
     TooLarge(usize),
@@ -51,6 +57,7 @@ impl Error {
             Self::Image(err) => format!("Image could not be handled: {}", err.to_string()).into(),
             Self::TooLarge(_size) => "Request body too large.".into(),
             Self::LoadingError(msg) => format!("Error loading resource: {}", msg).into(),
+            Self::UserError(msg) => msg.to_owned(),
             _ => "An internal server error occured.".into(),
         }
     }
@@ -68,7 +75,7 @@ impl Error {
 #[template(path = "error.html")]
 struct ErrorPage<'a> {
     error_message: &'a str,
-    status_code: u16,
+    status_line: String,
 }
 
 impl actix_web::error::ResponseError for Error {
@@ -76,7 +83,7 @@ impl actix_web::error::ResponseError for Error {
         match self {
             Self::Actix(err) => err.as_response_error().status_code(),
             Self::Missing => StatusCode::NOT_FOUND,
-            Self::Image(_) => StatusCode::BAD_REQUEST,
+            Self::Image(_) | Self::UserError(_) => StatusCode::BAD_REQUEST,
             Self::TooLarge(_) => StatusCode::PAYLOAD_TOO_LARGE,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -87,9 +94,16 @@ impl actix_web::error::ResponseError for Error {
             return err.as_response_error().error_response();
         }
 
+        let code = self.status_code();
+
+        let status_line = match code.canonical_reason() {
+            Some(reason) => format!("Error {}: {}", code.as_str(), reason),
+            None => format!("Error {}", code.as_str()),
+        };
+
         let page = ErrorPage {
             error_message: &self.error_message(),
-            status_code: self.status_code().as_u16(),
+            status_line,
         }
         .render();
 

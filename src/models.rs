@@ -16,6 +16,8 @@ use crate::{api, Error};
 pub struct User {
     pub id: Uuid,
     pub username: String,
+    pub email: Option<String>,
+    pub email_verifier: Option<Uuid>,
 
     hashed_password: String,
 }
@@ -30,6 +32,14 @@ impl Debug for User {
 }
 
 impl User {
+    pub fn has_verified_email(&self) -> bool {
+        self.email.is_some() && self.email_verifier.is_none()
+    }
+
+    pub fn has_unverified_email(&self) -> bool {
+        self.email.is_some() && self.email_verifier.is_some()
+    }
+
     pub async fn lookup_by_id(
         conn: &sqlx::Pool<sqlx::Postgres>,
         id: Uuid,
@@ -106,6 +116,31 @@ impl User {
             .hash()
             .map_err(Error::from_displayable)?;
         Ok(hash)
+    }
+
+    pub async fn set_email(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        user_id: Uuid,
+        email: &str,
+    ) -> Result<(), Error> {
+        sqlx::query_file!("queries/auth/user_set_email.sql", user_id, email)
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn verify_email(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        user_id: Uuid,
+        verifier: Uuid,
+    ) -> Result<bool, Error> {
+        let updated_user_id =
+            sqlx::query_file_scalar!("queries/auth/user_verify_email.sql", user_id, verifier)
+                .fetch_optional(conn)
+                .await?;
+
+        Ok(updated_user_id.is_some())
     }
 }
 

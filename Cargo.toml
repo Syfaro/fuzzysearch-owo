@@ -51,6 +51,8 @@ rusoto_s3 = "0.47"
 redis = { version = "0.21", features = ["tokio-comp", "aio", "connection-manager"] }
 faktory = "0.11"
 
+lettre = { version = "0.10.0-rc.4", features = ["tokio1-native-tls", "tracing", "serde"] }
+
 furaffinity-rs = { git = "https://github.com/Syfaro/furaffinity-rs.git" }
 fuzzysearch = { git = "https://github.com/Syfaro/fuzzysearch-rs.git", features = ["trace", "local_hash"] }
 
