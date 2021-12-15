@@ -12,12 +12,23 @@ mod user;
 
 pub use error::Error;
 
+#[derive(Clone, clap::Subcommand)]
+pub enum ServiceMode {
+    /// Run background tasks. Make sure to also set labels as needed.
+    BackgroundWorker,
+    /// Serve website.
+    Web,
+}
+
 #[derive(Clone, Parser)]
 #[clap(about, version, author)]
 pub struct Config {
     /// Database URL, in the format `postgres://user:password@host/database`.
     #[clap(long, env("DATABASE_URL"))]
     pub database_url: String,
+    /// If should run migrations on start.
+    #[clap(long, env("RUN_MIGRATIONS"))]
+    pub run_migrations: bool,
 
     /// S3 region name, can be anything for Minio.
     #[clap(long, env("S3_REGION_NAME"))]
@@ -54,8 +65,11 @@ pub struct Config {
     #[clap(long, env("FAKTORY_HOST"))]
     pub faktory_host: String,
     /// Number of workers for background jobs.
-    #[clap(long, env("BACKGROUND_WORKERS"), default_value = "2")]
-    pub background_workers: usize,
+    #[clap(long, env("FAKTORY_WORKERS"), default_value = "2")]
+    pub faktory_workers: usize,
+    /// Queues to fetch jobs from.
+    #[clap(long, env("FAKTORY_QUEUES"), arg_enum, use_delimiter = true)]
+    pub faktory_queues: Vec<jobs::FaktoryQueue>,
 
     /// Private key to sign and encrypt cookies, in hexadecimal. Must be at
     /// least 32 bytes.
@@ -109,6 +123,10 @@ pub struct Config {
     /// Path to static files.
     #[clap(long, env("ASSETS_DIR"), default_value = "./assets")]
     pub assets_dir: String,
+
+    /// Mode to run service.
+    #[clap(subcommand)]
+    pub service_mode: ServiceMode,
 }
 
 #[cfg(feature = "env")]
@@ -142,16 +160,18 @@ async fn main() {
     fuzzysearch_common::trace::configure_tracing("fuzzysearch-owo");
     fuzzysearch_common::trace::serve_metrics().await;
 
-    tracing::info!("starting fuzzysearch-owo on http://{}", config.http_host);
-
     let pool = sqlx::PgPool::connect(&config.database_url)
         .await
         .expect("could not connect to database");
 
-    sqlx::migrate!()
-        .run(&pool)
-        .await
-        .expect("database migrations failed");
+    if config.run_migrations {
+        tracing::info!("running migrations");
+
+        sqlx::migrate!()
+            .run(&pool)
+            .await
+            .expect("database migrations failed");
+    }
 
     let region = rusoto_core::Region::Custom {
         name: config.s3_region_name.clone(),
@@ -181,48 +201,57 @@ async fn main() {
         .await
         .expect("could not connect to faktory");
 
-    jobs::start_job_processing(jobs::JobContext {
-        faktory: faktory.clone(),
-        conn: pool.clone(),
-        redis: redis_manager.clone(),
-        s3: s3.clone(),
-        fuzzysearch: std::sync::Arc::new(fuzzysearch),
-        config: std::sync::Arc::new(config.clone()),
-    })
-    .await;
+    match config.service_mode {
+        ServiceMode::BackgroundWorker => {
+            jobs::start_job_processing(jobs::JobContext {
+                faktory: faktory.clone(),
+                conn: pool.clone(),
+                redis: redis_manager.clone(),
+                s3: s3.clone(),
+                fuzzysearch: std::sync::Arc::new(fuzzysearch),
+                config: std::sync::Arc::new(config.clone()),
+            })
+            .await
+            .expect("could not run background worker");
+        }
+        ServiceMode::Web => {
+            let cookie_private_key =
+                hex::decode(&config.cookie_private_key).expect("cookie secret was not hex data");
+            assert!(
+                cookie_private_key.len() >= 32,
+                "cookie private key must be greater than 32 bytes"
+            );
 
-    let cookie_private_key =
-        hex::decode(&config.cookie_private_key).expect("cookie secret was not hex data");
-    assert!(
-        cookie_private_key.len() >= 32,
-        "cookie private key must be greater than 32 bytes"
-    );
+            let (http_host, http_workers) = (config.http_host.clone(), config.http_workers);
+            tracing::info!("starting fuzzysearch-owo on http://{}", http_host);
 
-    let (http_bind, http_workers) = (config.http_host.clone(), config.http_workers);
+            HttpServer::new(move || {
+                let session =
+                    CookieSession::private(&cookie_private_key).secure(!config.cookie_insecure);
+                let files =
+                    actix_files::Files::new("/static", &config.assets_dir).prefer_utf8(true);
 
-    HttpServer::new(move || {
-        let session = CookieSession::private(&cookie_private_key).secure(!config.cookie_insecure);
-        let files = actix_files::Files::new("/static", &config.assets_dir).prefer_utf8(true);
-
-        App::new()
-            .wrap(tracing_actix_web::TracingLogger::default())
-            .wrap(session)
-            .app_data(web::Data::new(pool.clone()))
-            .app_data(web::Data::new(s3.clone()))
-            .app_data(web::Data::new(redis_client.clone()))
-            .app_data(web::Data::new(redis_manager.clone()))
-            .app_data(web::Data::new(faktory.clone()))
-            .app_data(web::Data::new(config.clone()))
-            .service(auth::service())
-            .service(user::service())
-            .service(api::service())
-            .service(files)
-            .service(index)
-    })
-    .workers(http_workers)
-    .bind(http_bind)
-    .expect("could not bind server")
-    .run()
-    .await
-    .expect("server failed");
+                App::new()
+                    .wrap(tracing_actix_web::TracingLogger::default())
+                    .wrap(session)
+                    .app_data(web::Data::new(pool.clone()))
+                    .app_data(web::Data::new(s3.clone()))
+                    .app_data(web::Data::new(redis_client.clone()))
+                    .app_data(web::Data::new(redis_manager.clone()))
+                    .app_data(web::Data::new(faktory.clone()))
+                    .app_data(web::Data::new(config.clone()))
+                    .service(auth::service())
+                    .service(user::service())
+                    .service(api::service())
+                    .service(files)
+                    .service(index)
+            })
+            .workers(http_workers)
+            .bind(http_host)
+            .expect("could not bind server")
+            .run()
+            .await
+            .expect("server failed");
+        }
+    }
 }

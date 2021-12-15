@@ -16,7 +16,38 @@ use uuid::Uuid;
 
 use crate::{models, Error};
 
-pub const FUZZYSEARCH_OWO_QUEUE: &str = "fuzzysearch-owo";
+#[derive(Clone, Debug, clap::ArgEnum)]
+pub enum FaktoryQueue {
+    Core,
+    Outgoing,
+}
+
+impl FaktoryQueue {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Core => "fuzzysearch_owo_core",
+            Self::Outgoing => "fuzzysearch_owo_outgoing",
+        }
+    }
+
+    fn label(&self) -> Option<&'static str> {
+        match self {
+            Self::Core => None,
+            Self::Outgoing => Some("outgoing"),
+        }
+    }
+}
+
+pub trait JobFuzzyQueue {
+    fn fuzzy_queue(self, queue: FaktoryQueue) -> Self;
+}
+
+impl JobFuzzyQueue for faktory::Job {
+    fn fuzzy_queue(mut self, queue: FaktoryQueue) -> Self {
+        self.queue = queue.as_str().to_string();
+        self
+    }
+}
 
 pub mod job {
     pub const ADD_ACCOUNT: &str = "add_account";
@@ -56,21 +87,10 @@ macro_rules! serialize_args {
     }
 }
 
-#[macro_export]
-macro_rules! queue_job {
-    ($ctx:expr, $kind: expr, $initiator:expr, $($arg:expr),*) => {
-        {
-            let args = vec![$(serde_json::to_value($arg)?,)*];
-            let job = faktory::Job::new($kind, args).on_queue(crate::jobs::FUZZYSEARCH_OWO_QUEUE);
-            $ctx.enqueue_job($initiator, job)
-        }
-    }
-}
-
 pub fn add_account_job(user_id: Uuid, account_id: Uuid) -> Result<faktory::Job, Error> {
     let args = serialize_args!(user_id, account_id);
 
-    Ok(faktory::Job::new(job::ADD_ACCOUNT, args).on_queue(FUZZYSEARCH_OWO_QUEUE))
+    Ok(faktory::Job::new(job::ADD_ACCOUNT, args).fuzzy_queue(FaktoryQueue::Outgoing))
 }
 
 pub fn add_furaffinity_submission_job(
@@ -81,7 +101,10 @@ pub fn add_furaffinity_submission_job(
 ) -> Result<faktory::Job, Error> {
     let args = serialize_args!(user_id, account_id, submission_id, import);
 
-    Ok(faktory::Job::new(job::ADD_SUBMISSION_FURAFFINITY, args).on_queue(FUZZYSEARCH_OWO_QUEUE))
+    Ok(
+        faktory::Job::new(job::ADD_SUBMISSION_FURAFFINITY, args)
+            .fuzzy_queue(FaktoryQueue::Outgoing),
+    )
 }
 
 pub fn new_submission_job(
@@ -89,7 +112,7 @@ pub fn new_submission_job(
 ) -> Result<faktory::Job, Error> {
     let args = serialize_args!(data);
 
-    Ok(faktory::Job::new(job::NEW_SUBMISSION, args).on_queue(FUZZYSEARCH_OWO_QUEUE))
+    Ok(faktory::Job::new(job::NEW_SUBMISSION, args).fuzzy_queue(FaktoryQueue::Core))
 }
 
 pub fn search_existing_submissions_job(
@@ -98,7 +121,7 @@ pub fn search_existing_submissions_job(
 ) -> Result<faktory::Job, Error> {
     let args = serialize_args!(user_id, media_id);
 
-    Ok(faktory::Job::new(job::SEARCH_EXISTING_SUBMISSIONS, args).on_queue(FUZZYSEARCH_OWO_QUEUE))
+    Ok(faktory::Job::new(job::SEARCH_EXISTING_SUBMISSIONS, args).fuzzy_queue(FaktoryQueue::Core))
 }
 
 #[derive(Clone)]
@@ -272,7 +295,7 @@ impl WorkerEnvironment {
                 let propagator = opentelemetry::sdk::propagation::TraceContextPropagator::new();
                 let cx = propagator.extract(&string_values);
 
-                let span = tracing::info_span!("faktory_job", name, %initiator);
+                let span = tracing::info_span!("faktory_job", name, %initiator, queue = %job.queue);
                 tracing_opentelemetry::OpenTelemetrySpanExt::set_parent(&span, cx);
 
                 let _guard = span.entered();
@@ -322,10 +345,32 @@ struct SimilarTemplate<'a> {
     similar_link: &'a str,
 }
 
-pub async fn start_job_processing(ctx: JobContext) {
+pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::JoinError> {
+    let queues: Vec<String> = ctx
+        .config
+        .faktory_queues
+        .iter()
+        .map(|queue| queue.as_str().to_string())
+        .collect();
+
+    let labels: Vec<String> = ctx
+        .config
+        .faktory_queues
+        .iter()
+        .flat_map(|queue| queue.label())
+        .chain(["fuzzysearch-owo"].into_iter())
+        .map(str::to_string)
+        .collect();
+
+    tracing::info!(
+        "starting faktory client on queues {} with labels {}",
+        queues.join(","),
+        labels.join(",")
+    );
+
     let mut client = faktory::ConsumerBuilder::default();
-    client.labels(vec!["rust".to_string(), "fuzzysearch-owo".to_string()]);
-    client.workers(ctx.config.background_workers);
+    client.labels(labels);
+    client.workers(ctx.config.faktory_workers);
 
     let handle = tokio::runtime::Handle::current();
 
@@ -335,7 +380,7 @@ pub async fn start_job_processing(ctx: JobContext) {
         ctx: Arc::new(ctx.clone()),
     };
 
-    environment.register("add_submission_furaffinity", |ctx, job| async move {
+    environment.register(job::ADD_SUBMISSION_FURAFFINITY, |ctx, job| async move {
         let mut args = job.args().iter();
         let (user_id, account_id, sub_id) = extract_args!(args, Uuid, Uuid, i32);
         let was_import: bool = get_arg_opt(&mut args)?.unwrap_or(false);
@@ -436,19 +481,17 @@ pub async fn start_job_processing(ctx: JobContext) {
                 .await?;
         }
 
-        queue_job!(
-            ctx.faktory,
-            "search_existing_submissions",
-            JobInitiator::User { user_id },
-            user_id,
-            item_id
-        )
-        .await?;
+        ctx.faktory
+            .enqueue_job(
+                JobInitiator::User { user_id },
+                search_existing_submissions_job(user_id, item_id)?,
+            )
+            .await?;
 
         Ok(())
     });
 
-    environment.register("search_existing_submissions", |ctx, job| async move {
+    environment.register(job::SEARCH_EXISTING_SUBMISSIONS, |ctx, job| async move {
         let mut args = job.args().iter();
         let (user_id, media_id) = extract_args!(args, Uuid, Uuid);
 
@@ -500,7 +543,7 @@ pub async fn start_job_processing(ctx: JobContext) {
         Ok(())
     });
 
-    environment.register("add_account", |ctx, job| async move {
+    environment.register(job::ADD_ACCOUNT, |ctx, job| async move {
         let mut args = job.args().iter();
         let (user_id, account_id) = extract_args!(args, Uuid, Uuid);
 
@@ -554,7 +597,7 @@ pub async fn start_job_processing(ctx: JobContext) {
         Ok(())
     });
 
-    environment.register("new_submission", |ctx, job| async move {
+    environment.register(job::NEW_SUBMISSION, |ctx, job| async move {
         let mut args = job.args().iter();
         let (data,) = extract_args!(args, fuzzysearch_common::faktory::WebHookData);
 
@@ -706,10 +749,11 @@ pub async fn start_job_processing(ctx: JobContext) {
             .connect(Some(&ctx.config.faktory_host))
             .expect("could not connect to faktory");
 
-        if let Err(err) = client.run(&[FUZZYSEARCH_OWO_QUEUE]) {
+        if let Err(err) = client.run(&queues) {
             tracing::error!("worker failed: {:?}", err);
         }
-    });
+    })
+    .await
 }
 
 async fn discover_furaffinity_submissions(
