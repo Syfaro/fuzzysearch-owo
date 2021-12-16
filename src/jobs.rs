@@ -547,7 +547,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
         let mut args = job.args().iter();
         let (user_id, account_id) = extract_args!(args, Uuid, Uuid);
 
-        let account = models::LinkedAccount::lookup_by_id(&ctx.conn, account_id, user_id)
+        let account = models::LinkedAccount::lookup_by_id(&ctx.conn, account_id)
             .await?
             .ok_or(Error::Missing)?;
 
@@ -578,8 +578,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
                             JobInitiator::User { user_id },
                             add_furaffinity_submission_job(user_id, account_id, id, true)?,
                         )
-                        .await
-                        .map_err(Error::from_displayable)?;
+                        .await?;
                 }
 
                 models::LinkedAccount::update_loading_state(
@@ -588,6 +587,18 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
                     user_id,
                     account_id,
                     models::LoadingState::LoadingItems { known },
+                )
+                .await?;
+            }
+            models::Site::Patreon => {
+                tracing::warn!("setting patreon to complete without loading");
+
+                models::LinkedAccount::update_loading_state(
+                    &ctx.conn,
+                    &ctx.redis,
+                    user_id,
+                    account_id,
+                    models::LoadingState::Complete,
                 )
                 .await?;
             }

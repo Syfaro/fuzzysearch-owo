@@ -7,6 +7,7 @@ mod auth;
 mod error;
 mod jobs;
 mod models;
+mod patreon;
 mod routes;
 mod user;
 
@@ -89,6 +90,13 @@ pub struct Config {
     /// FurAffinity cookie b.
     #[clap(long, env("FURAFFINITY_COOKIE_B"))]
     pub furaffinity_cookie_b: String,
+
+    /// Patreon client ID.
+    #[clap(long, env("PATREON_CLIENT_ID"))]
+    pub patreon_client_id: String,
+    /// Patreon client secret.
+    #[clap(long, env("PATREON_CLIENT_SECRET"))]
+    pub patreon_client_secret: String,
 
     /// SMTP hostname.
     #[clap(long, env("SMTP_HOST"))]
@@ -243,6 +251,7 @@ async fn main() {
                     .service(auth::service())
                     .service(user::service())
                     .service(api::service())
+                    .service(patreon::service())
                     .service(files)
                     .service(index)
             })

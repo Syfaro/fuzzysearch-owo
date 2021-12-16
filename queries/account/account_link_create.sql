@@ -3,7 +3,7 @@ INSERT INTO
         owner_id,
         source_site,
         username,
-        credentials
+        data
     )
 VALUES
-    ($1, $2, $3, $4) RETURNING id;
+    ($1, $2, $3, $4) RETURNING *;

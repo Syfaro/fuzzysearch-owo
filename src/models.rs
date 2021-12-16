@@ -449,7 +449,7 @@ pub struct LinkedAccount {
     pub username: String,
     pub last_update: Option<chrono::DateTime<chrono::Utc>>,
     pub loading_state: Option<LoadingState>,
-    pub credentials: Option<serde_json::Value>,
+    pub data: Option<serde_json::Value>,
 }
 
 impl LinkedAccount {
@@ -458,15 +458,26 @@ impl LinkedAccount {
         user_id: Uuid,
         source_site: Site,
         username: &str,
-        credentials: Option<serde_json::Value>,
-    ) -> Result<Uuid, Error> {
-        let id = sqlx::query_file_scalar!(
+        data: Option<serde_json::Value>,
+    ) -> Result<Self, Error> {
+        let id = sqlx::query_file!(
             "queries/account/account_link_create.sql",
             user_id,
             source_site.to_string(),
             username,
-            credentials
+            data
         )
+        .map(|row| LinkedAccount {
+            id: row.id,
+            owner_id: row.owner_id,
+            source_site: row.source_site.parse().expect("unknown site in database"),
+            username: row.username,
+            last_update: row.last_update,
+            loading_state: row
+                .loading_state
+                .and_then(|loading_state| serde_json::from_value(loading_state).ok()),
+            data: row.data,
+        })
         .fetch_one(conn)
         .await?;
 
@@ -476,9 +487,8 @@ impl LinkedAccount {
     pub async fn lookup_by_id(
         conn: &sqlx::Pool<sqlx::Postgres>,
         id: Uuid,
-        user_id: Uuid,
     ) -> Result<Option<Self>, Error> {
-        let account = sqlx::query_file!("queries/account/account_link_lookup_id.sql", id, user_id)
+        let account = sqlx::query_file!("queries/account/account_link_lookup_id.sql", id)
             .map(|row| LinkedAccount {
                 id: row.id,
                 owner_id: row.owner_id,
@@ -488,10 +498,39 @@ impl LinkedAccount {
                 loading_state: row
                     .loading_state
                     .and_then(|loading_state| serde_json::from_value(loading_state).ok()),
-                credentials: row.credentials,
+                data: row.data,
             })
             .fetch_optional(conn)
             .await?;
+
+        Ok(account)
+    }
+
+    pub async fn lookup_by_site_id(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        user_id: Uuid,
+        site: Site,
+        site_id: &str,
+    ) -> Result<Option<Self>, Error> {
+        let account = sqlx::query_file!(
+            "queries/account/lookup_by_site_id.sql",
+            user_id,
+            site.to_string(),
+            site_id
+        )
+        .map(|row| LinkedAccount {
+            id: row.id,
+            owner_id: row.owner_id,
+            source_site: row.source_site.parse().expect("unknown site in database"),
+            username: row.username,
+            last_update: row.last_update,
+            loading_state: row
+                .loading_state
+                .and_then(|loading_state| serde_json::from_value(loading_state).ok()),
+            data: row.data,
+        })
+        .fetch_optional(conn)
+        .await?;
 
         Ok(account)
     }
@@ -510,7 +549,7 @@ impl LinkedAccount {
                 loading_state: row
                     .loading_state
                     .and_then(|loading_state| serde_json::from_value(loading_state).ok()),
-                credentials: row.credentials,
+                data: row.data,
             })
             .fetch_all(conn)
             .await?;
@@ -559,6 +598,18 @@ impl LinkedAccount {
                     loading_state: loading_state.message(),
                 })?,
             )
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn update_data(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        account_id: Uuid,
+        data: Option<serde_json::Value>,
+    ) -> Result<(), Error> {
+        sqlx::query_file!("queries/account/update_data.sql", account_id, data)
+            .execute(conn)
             .await?;
 
         Ok(())
@@ -618,6 +669,7 @@ pub enum Site {
     E621,
     Weasyl,
     Twitter,
+    Patreon,
 }
 
 impl Display for Site {
@@ -627,6 +679,7 @@ impl Display for Site {
             Site::E621 => write!(f, "e621"),
             Site::Weasyl => write!(f, "Weasyl"),
             Site::Twitter => write!(f, "Twitter"),
+            Site::Patreon => write!(f, "Patreon"),
         }
     }
 }
@@ -640,6 +693,7 @@ impl FromStr for Site {
             "e621" => Site::E621,
             "Weasyl" => Site::Weasyl,
             "Twitter" => Site::Twitter,
+            "Patreon" => Site::Patreon,
             _ => return Err("unknown source site"),
         };
 
@@ -848,5 +902,25 @@ impl UserEvent {
             }
             _ => "Unknown event".to_string(),
         }
+    }
+}
+
+pub struct PatreonWebhookEvent;
+
+impl PatreonWebhookEvent {
+    pub async fn log(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        linked_account_id: Uuid,
+        event: serde_json::Value,
+    ) -> Result<Uuid, Error> {
+        let id = sqlx::query_file_scalar!(
+            "queries/patreon_webhook_event/log.sql",
+            linked_account_id,
+            event
+        )
+        .fetch_one(conn)
+        .await?;
+
+        Ok(id)
     }
 }

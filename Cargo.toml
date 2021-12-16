@@ -58,6 +58,10 @@ faktory = "0.11"
 
 lettre = { version = "0.10.0-rc.4", features = ["tokio1-native-tls", "tracing", "serde"] }
 
+oauth2 = { version = "4", features = ["reqwest"] }
+hmac = "0.12"
+md-5 = "0.10"
+
 furaffinity-rs = { git = "https://github.com/Syfaro/furaffinity-rs.git" }
 fuzzysearch = { git = "https://github.com/Syfaro/fuzzysearch-rs.git", features = ["trace", "local_hash"] }
 

@@ -14,14 +14,15 @@
               <label class="label">Site</label>
               <div class="control">
                 <div class="select is-fullwidth">
-                  <select name="site">
+                  <select name="site" id="site-select">
                     <option value="FurAffinity">FurAffinity</option>
+                    <option value="Patreon">Patreon</option>
                   </select>
                 </div>
               </div>
             </div>
 
-            <div class="field">
+            <div class="field" id="username-input">
               <label class="label">Username</label>
               <div class="control">
                 <input class="input" type="text" placeholder="Username" name="username" autocomplete="off">
@@ -41,4 +42,18 @@
     </div>
   </div>
 </section>
+
+<script>
+  const noFormSites = ['Patreon'];
+
+  const usernameInput = document.getElementById('username-input');
+
+  document.getElementById('site-select').addEventListener('change', (ev) => {
+    if (noFormSites.includes(ev.target.value)) {
+      usernameInput.style.display = 'none';
+    } else {
+      usernameInput.style.display = 'block';
+    }
+  });
+</script>
 {% endblock %}

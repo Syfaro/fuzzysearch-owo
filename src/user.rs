@@ -7,6 +7,7 @@ use sha2::Digest;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use uuid::Uuid;
 
+use crate::models::Site;
 use crate::{jobs, models, routes::*, Error};
 
 #[derive(Template)]
@@ -147,8 +148,7 @@ async fn single(
                 jobs::JobInitiator::user(user.id),
                 jobs::search_existing_submissions_job(user.id, id)?,
             )
-            .await
-            .map_err(Error::from_displayable)?;
+            .await?;
     }
 
     Ok(HttpResponse::Found()
@@ -175,7 +175,7 @@ async fn account_link_get(user: models::User) -> Result<HttpResponse, Error> {
 #[derive(Deserialize)]
 struct AccountLinkForm {
     site: models::Site,
-    username: String,
+    username: Option<String>,
 }
 
 #[post("/link")]
@@ -191,21 +191,30 @@ async fn account_link_post(
         ));
     }
 
-    let account_id =
-        models::LinkedAccount::create(&conn, user.id, form.site, &form.username, None).await?;
+    match form.site {
+        Site::Patreon => {
+            return Ok(HttpResponse::Found()
+                .insert_header(("Location", "/patreon/auth"))
+                .finish())
+        }
+        _ => (),
+    }
+
+    let username = form.username.as_deref().ok_or(Error::Missing)?;
+
+    let account = models::LinkedAccount::create(&conn, user.id, form.site, username, None).await?;
 
     faktory
         .enqueue_job(
             jobs::JobInitiator::user(user.id),
-            jobs::add_account_job(user.id, account_id)?,
+            jobs::add_account_job(user.id, account.id)?,
         )
-        .await
-        .map_err(Error::from_displayable)?;
+        .await?;
 
     Ok(HttpResponse::Found()
         .insert_header((
             "Location",
-            format!("/user/account/{}", account_id.to_string()),
+            format!("/user/account/{}", account.id.to_string()),
         ))
         .finish())
 }
@@ -244,7 +253,7 @@ async fn account_view(
     user: models::User,
 ) -> Result<HttpResponse, Error> {
     let account_id: Uuid = path.into_inner().0;
-    let account = models::LinkedAccount::lookup_by_id(&conn, account_id, user.id)
+    let account = models::LinkedAccount::lookup_by_id(&conn, account_id)
         .await?
         .ok_or(Error::Missing)?;
     let (item_count, total_content_size) =
