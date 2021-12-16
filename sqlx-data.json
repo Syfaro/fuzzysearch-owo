@@ -172,6 +172,98 @@
       ]
     }
   },
+  "3e1a263e5d37619937d78ff82a3c74398f307e866a94337e827e61afd74beeb1": {
+    "query": "SELECT\n    *\nFROM\n    linked_account\nWHERE\n    owner_id = $1\n    AND source_site = $2\n    AND data ->> 'site_id' = $3;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "source_site",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "username",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "last_update",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 5,
+          "name": "loading_state",
+          "type_info": "Jsonb"
+        },
+        {
+          "ordinal": 6,
+          "name": "data",
+          "type_info": "Jsonb"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text",
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  "3f091fdddbee429487163837c17f18b8139e3c2bee1d43168d936018169d868f": {
+    "query": "INSERT INTO\n    patreon_webhook_event (linked_account_id, data)\nVALUES\n    ($1, $2) RETURNING id;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Jsonb"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
+  "432653c3dd8926da7a9565c36ec6db289917d56fe19df29900b7440e9588581a": {
+    "query": "UPDATE\n    linked_account\nSET\n    data = $2\nWHERE\n    id = $1;\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Jsonb"
+        ]
+      },
+      "nullable": []
+    }
+  },
   "4f6f6ef9bade4bc0c2e54649e095248a05839fae970ba198b54427788cb1e166": {
     "query": "INSERT INTO\n    owned_media_item (\n        owner_id,\n        account_id,\n        source_id,\n        perceptual_hash,\n        sha256_hash,\n        link,\n        title,\n        posted_at,\n        last_modified\n    )\nVALUES\n    ($1, $2, $3, $4, $5, $6, $7, $8, current_timestamp) RETURNING id;\n",
     "describe": {
@@ -397,7 +489,63 @@
         },
         {
           "ordinal": 6,
-          "name": "credentials",
+          "name": "data",
+          "type_info": "Jsonb"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  "7771385d57fa5aef4120fb21b4e4216e4b75c263ff82e59e35e1b482c6cf9606": {
+    "query": "SELECT\n    *\nFROM\n    linked_account\nWHERE\n    id = $1;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "source_site",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "username",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "last_update",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 5,
+          "name": "loading_state",
+          "type_info": "Jsonb"
+        },
+        {
+          "ordinal": 6,
+          "name": "data",
           "type_info": "Jsonb"
         }
       ],
@@ -439,63 +587,6 @@
       },
       "nullable": [
         false
-      ]
-    }
-  },
-  "85f24a97d2dd92c177c70bce3ec1920e873fea6a162d08e9ec9d37165c838076": {
-    "query": "SELECT\n    *\nFROM\n    linked_account\nWHERE\n    id = $1\n    AND owner_id = $2;\n",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 1,
-          "name": "owner_id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 2,
-          "name": "source_site",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 3,
-          "name": "username",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 4,
-          "name": "last_update",
-          "type_info": "Timestamptz"
-        },
-        {
-          "ordinal": 5,
-          "name": "loading_state",
-          "type_info": "Jsonb"
-        },
-        {
-          "ordinal": 6,
-          "name": "credentials",
-          "type_info": "Jsonb"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Uuid"
-        ]
-      },
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        true,
-        true,
-        true
       ]
     }
   },
@@ -591,6 +682,65 @@
       ]
     }
   },
+  "930ae63c1ef71a87799036a706f5ce4a5522872ba7c1aad2f2c8ad68b2d4f883": {
+    "query": "INSERT INTO\n    linked_account (\n        owner_id,\n        source_site,\n        username,\n        data\n    )\nVALUES\n    ($1, $2, $3, $4) RETURNING *;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "source_site",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "username",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "last_update",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 5,
+          "name": "loading_state",
+          "type_info": "Jsonb"
+        },
+        {
+          "ordinal": 6,
+          "name": "data",
+          "type_info": "Jsonb"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text",
+          "Text",
+          "Jsonb"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
   "953533be7793b31662f170180386ca19a0e01a3e5d9f8698c7a934341aaf5870": {
     "query": "SELECT\n    *\nFROM\n    user_event\nWHERE\n    owner_id = $1\n    AND related_to_media_item_id = $2\nORDER BY\n    created_at DESC\nLIMIT\n    50;\n",
     "describe": {
@@ -665,29 +815,6 @@
       },
       "nullable": [
         null
-      ]
-    }
-  },
-  "bd66237723c0579b1857b9e1070d0f35590aac656149f7d6c18500ca301158ed": {
-    "query": "INSERT INTO\n    linked_account (\n        owner_id,\n        source_site,\n        username,\n        credentials\n    )\nVALUES\n    ($1, $2, $3, $4) RETURNING id;\n",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Uuid"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Text",
-          "Text",
-          "Jsonb"
-        ]
-      },
-      "nullable": [
-        false
       ]
     }
   },

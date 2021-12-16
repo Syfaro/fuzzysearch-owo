@@ -44,7 +44,7 @@ impl User {
         conn: &sqlx::Pool<sqlx::Postgres>,
         id: Uuid,
     ) -> Result<Option<User>, Error> {
-        let user = sqlx::query_file_as!(User, "queries/auth/user_lookup_id.sql", id)
+        let user = sqlx::query_file_as!(User, "queries/user/lookup_id.sql", id)
             .fetch_optional(conn)
             .await?;
 
@@ -56,7 +56,7 @@ impl User {
         username: &str,
         password: &str,
     ) -> Result<Option<User>, Error> {
-        let user = sqlx::query_file_as!(User, "queries/auth/user_lookup_login.sql", username)
+        let user = sqlx::query_file_as!(User, "queries/user/lookup_login.sql", username)
             .fetch_optional(conn)
             .await?;
 
@@ -79,7 +79,7 @@ impl User {
     ) -> Result<Uuid, Error> {
         let password = Self::hash_password(password)?;
 
-        let id = sqlx::query_file_scalar!("queries/auth/user_create.sql", username, password)
+        let id = sqlx::query_file_scalar!("queries/user/create.sql", username, password)
             .fetch_one(conn)
             .await?;
 
@@ -90,7 +90,7 @@ impl User {
         conn: &sqlx::Pool<sqlx::Postgres>,
         username: &str,
     ) -> Result<bool, Error> {
-        let exists = sqlx::query_file_scalar!("queries/auth/user_username_exists.sql", username)
+        let exists = sqlx::query_file_scalar!("queries/user/username_exists.sql", username)
             .fetch_one(conn)
             .await?;
 
@@ -123,7 +123,7 @@ impl User {
         user_id: Uuid,
         email: &str,
     ) -> Result<(), Error> {
-        sqlx::query_file!("queries/auth/user_set_email.sql", user_id, email)
+        sqlx::query_file!("queries/user/set_email.sql", user_id, email)
             .execute(conn)
             .await?;
 
@@ -136,7 +136,7 @@ impl User {
         verifier: Uuid,
     ) -> Result<bool, Error> {
         let updated_user_id =
-            sqlx::query_file_scalar!("queries/auth/user_verify_email.sql", user_id, verifier)
+            sqlx::query_file_scalar!("queries/user/verify_email.sql", user_id, verifier)
                 .fetch_optional(conn)
                 .await?;
 
@@ -172,7 +172,7 @@ impl OwnedMediaItem {
         id: Uuid,
         user_id: Uuid,
     ) -> Result<Option<Self>, Error> {
-        let item = sqlx::query_file!("queries/owned_media/media_lookup_id.sql", id, user_id)
+        let item = sqlx::query_file!("queries/owned_media/get_by_id.sql", id, user_id)
             .map(|row| OwnedMediaItem {
                 id: row.id,
                 owner_id: row.owner_id,
@@ -201,7 +201,7 @@ impl OwnedMediaItem {
         conn: &sqlx::Pool<sqlx::Postgres>,
         user_id: Uuid,
     ) -> Result<(i64, i64), Error> {
-        let stats = sqlx::query_file!("queries/owned_media/media_count.sql", user_id)
+        let stats = sqlx::query_file!("queries/owned_media/user_item_count.sql", user_id)
             .fetch_one(conn)
             .await?;
 
@@ -215,7 +215,7 @@ impl OwnedMediaItem {
         sha256_hash: [u8; 32],
     ) -> Result<Uuid, Error> {
         let item_id = sqlx::query_file_scalar!(
-            "queries/owned_media/manual_upload.sql",
+            "queries/owned_media/add_manual_item.sql",
             user_id,
             perceptual_hash,
             sha256_hash.to_vec()
@@ -238,7 +238,7 @@ impl OwnedMediaItem {
         posted_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<Uuid, Error> {
         let item = sqlx::query_file_scalar!(
-            "queries/owned_media/media_import.sql",
+            "queries/owned_media/add_item.sql",
             user_id,
             account_id,
             source_id.to_string(),
@@ -279,7 +279,7 @@ impl OwnedMediaItem {
         let (thumb_url, _thumb_size) = upload_image(s3, config, thumb).await?;
 
         sqlx::query_file!(
-            "queries/owned_media/media_set_urls.sql",
+            "queries/owned_media/update_media.sql",
             id,
             content_url,
             content_size as i64,
@@ -295,7 +295,7 @@ impl OwnedMediaItem {
         conn: &sqlx::Pool<sqlx::Postgres>,
         user_id: Uuid,
     ) -> Result<Vec<Self>, Error> {
-        let items = sqlx::query_file!("queries/owned_media/media_recent.sql", user_id)
+        let items = sqlx::query_file!("queries/owned_media/recent_media.sql", user_id)
             .map(|row| OwnedMediaItem {
                 id: row.id,
                 owner_id: row.owner_id,
@@ -335,31 +335,27 @@ impl OwnedMediaItem {
         conn: &sqlx::Pool<sqlx::Postgres>,
         perceptual_hash: i64,
     ) -> Result<Vec<Self>, Error> {
-        let items = sqlx::query_file!(
-            "queries/owned_media/media_similar_search.sql",
-            perceptual_hash,
-            3
-        )
-        .map(|row| OwnedMediaItem {
-            id: row.id,
-            owner_id: row.owner_id,
-            account_id: row.account_id,
-            source_id: row.source_id,
-            perceptual_hash: row.perceptual_hash,
-            sha256_hash: row
-                .sha256_hash
-                .try_into()
-                .expect("sha256 data was not valid"),
-            link: row.link,
-            title: row.title,
-            posted_at: row.posted_at,
-            last_modified: row.last_modified,
-            content_url: row.content_url,
-            content_size: row.content_size,
-            thumb_url: row.thumb_url,
-        })
-        .fetch_all(conn)
-        .await?;
+        let items = sqlx::query_file!("queries/owned_media/find_similar.sql", perceptual_hash, 3)
+            .map(|row| OwnedMediaItem {
+                id: row.id,
+                owner_id: row.owner_id,
+                account_id: row.account_id,
+                source_id: row.source_id,
+                perceptual_hash: row.perceptual_hash,
+                sha256_hash: row
+                    .sha256_hash
+                    .try_into()
+                    .expect("sha256 data was not valid"),
+                link: row.link,
+                title: row.title,
+                posted_at: row.posted_at,
+                last_modified: row.last_modified,
+                content_url: row.content_url,
+                content_size: row.content_size,
+                thumb_url: row.thumb_url,
+            })
+            .fetch_all(conn)
+            .await?;
 
         Ok(items)
     }
@@ -369,7 +365,7 @@ impl OwnedMediaItem {
         user_id: Uuid,
         media_id: Uuid,
     ) -> Result<(), Error> {
-        sqlx::query_file!("queries/owned_media/media_remove.sql", user_id, media_id)
+        sqlx::query_file!("queries/owned_media/remove.sql", user_id, media_id)
             .execute(conn)
             .await?;
 
@@ -461,7 +457,7 @@ impl LinkedAccount {
         data: Option<serde_json::Value>,
     ) -> Result<Self, Error> {
         let id = sqlx::query_file!(
-            "queries/account/account_link_create.sql",
+            "queries/linked_account/create.sql",
             user_id,
             source_site.to_string(),
             username,
@@ -488,7 +484,7 @@ impl LinkedAccount {
         conn: &sqlx::Pool<sqlx::Postgres>,
         id: Uuid,
     ) -> Result<Option<Self>, Error> {
-        let account = sqlx::query_file!("queries/account/account_link_lookup_id.sql", id)
+        let account = sqlx::query_file!("queries/linked_account/lookup_by_id.sql", id)
             .map(|row| LinkedAccount {
                 id: row.id,
                 owner_id: row.owner_id,
@@ -513,7 +509,7 @@ impl LinkedAccount {
         site_id: &str,
     ) -> Result<Option<Self>, Error> {
         let account = sqlx::query_file!(
-            "queries/account/lookup_by_site_id.sql",
+            "queries/linked_account/lookup_by_site_id.sql",
             user_id,
             site.to_string(),
             site_id
@@ -539,7 +535,7 @@ impl LinkedAccount {
         conn: &sqlx::Pool<sqlx::Postgres>,
         user_id: Uuid,
     ) -> Result<Vec<Self>, Error> {
-        let accounts = sqlx::query_file!("queries/account/account_link_owned_by_user.sql", user_id)
+        let accounts = sqlx::query_file!("queries/linked_account/owned_by_user.sql", user_id)
             .map(|row| LinkedAccount {
                 id: row.id,
                 owner_id: row.owner_id,
@@ -581,7 +577,7 @@ impl LinkedAccount {
         loading_state: LoadingState,
     ) -> Result<(), Error> {
         sqlx::query_file!(
-            "queries/account/account_update_loading_state.sql",
+            "queries/linked_account/update_loading_state.sql",
             user_id,
             account_id,
             serde_json::to_value(&loading_state)?,
@@ -608,7 +604,7 @@ impl LinkedAccount {
         account_id: Uuid,
         data: Option<serde_json::Value>,
     ) -> Result<(), Error> {
-        sqlx::query_file!("queries/account/update_data.sql", account_id, data)
+        sqlx::query_file!("queries/linked_account/update_data.sql", account_id, data)
             .execute(conn)
             .await?;
 
@@ -620,7 +616,7 @@ impl LinkedAccount {
         user_id: Uuid,
         account_id: Uuid,
     ) -> Result<(), Error> {
-        sqlx::query_file!("queries/account/account_remove.sql", user_id, account_id)
+        sqlx::query_file!("queries/linked_account/remove.sql", user_id, account_id)
             .execute(conn)
             .await?;
 
@@ -632,13 +628,9 @@ impl LinkedAccount {
         user_id: Uuid,
         account_id: Uuid,
     ) -> Result<(i64, i64), Error> {
-        let stats = sqlx::query_file!(
-            "queries/owned_media/account_media_count.sql",
-            user_id,
-            account_id
-        )
-        .fetch_one(conn)
-        .await?;
+        let stats = sqlx::query_file!("queries/linked_account/items.sql", user_id, account_id)
+            .fetch_one(conn)
+            .await?;
 
         Ok((stats.count, stats.total_content_size))
     }
@@ -649,7 +641,7 @@ impl LinkedAccount {
         username: &str,
     ) -> Result<Option<(Uuid, Uuid)>, Error> {
         let account = sqlx::query_file!(
-            "queries/account/account_lookup_by_username.sql",
+            "queries/linked_account/search_site_account.sql",
             site_name,
             username
         )
@@ -778,7 +770,7 @@ impl UserEvent {
         message: M,
     ) -> Result<Uuid, Error> {
         let notification_id = sqlx::query_file_scalar!(
-            "queries/user_event/event_create.sql",
+            "queries/user_event/notify.sql",
             user_id,
             message.as_ref(),
             "user"
@@ -812,7 +804,7 @@ impl UserEvent {
         let data: UserEventData = similar_image.into();
 
         let notification_id = sqlx::query_file_scalar!(
-            "queries/user_event/event_similar.sql",
+            "queries/user_event/similar_found.sql",
             user_id,
             media_id,
             format!("Found similar image: {}", link),
@@ -840,7 +832,7 @@ impl UserEvent {
         conn: &sqlx::Pool<sqlx::Postgres>,
         user_id: Uuid,
     ) -> Result<Vec<Self>, Error> {
-        let events = sqlx::query_file!("queries/user_event/event_recent.sql", user_id)
+        let events = sqlx::query_file!("queries/user_event/recent_events.sql", user_id)
             .map(|row| UserEvent {
                 id: row.id,
                 owner_id: row.owner_id,
@@ -861,7 +853,7 @@ impl UserEvent {
         media_id: Uuid,
     ) -> Result<Vec<Self>, Error> {
         let events = sqlx::query_file!(
-            "queries/user_event/event_recent_media.sql",
+            "queries/user_event/recent_events_for_media.sql",
             user_id,
             media_id
         )
