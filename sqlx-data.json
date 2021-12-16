@@ -360,6 +360,27 @@
       ]
     }
   },
+  "5a31bf2e799fe5b3f6f467576b048326ce1db4ec2392f55470b81d70c38d9d5a": {
+    "query": "INSERT INTO\n    auth_state (owner_id, state)\nVALUES\n    ($1, $2) RETURNING id;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
   "74f013efbe0119a615545ccf9833d805d5245158f9aba8063af00155ac98cae4": {
     "query": "SELECT\n    *\nFROM\n    owned_media_item\nWHERE\n    perceptual_hash <@ ($1, $2);\n",
     "describe": {
@@ -741,6 +762,27 @@
       ]
     }
   },
+  "9499afaf61b5a24ace5360d39e21234c56d9c8daaf4ae6e2bb1fd10f30718802": {
+    "query": "SELECT\n    1\nFROM\n    auth_state\nWHERE\n    owner_id = $1\n    AND state = $2\n    AND current_timestamp < expires_after;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "?column?",
+          "type_info": "Int4"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text"
+        ]
+      },
+      "nullable": [
+        null
+      ]
+    }
+  },
   "953533be7793b31662f170180386ca19a0e01a3e5d9f8698c7a934341aaf5870": {
     "query": "SELECT\n    *\nFROM\n    user_event\nWHERE\n    owner_id = $1\n    AND related_to_media_item_id = $2\nORDER BY\n    created_at DESC\nLIMIT\n    50;\n",
     "describe": {
@@ -855,6 +897,19 @@
         null,
         null
       ]
+    }
+  },
+  "d4fc518c647e8ef3d77601a047a431b9206c67497630668029f77bc09ee8fd86": {
+    "query": "DELETE FROM\n    auth_state\nWHERE\n    owner_id = $1\n    AND state = $2;\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text"
+        ]
+      },
+      "nullable": []
     }
   },
   "e64304a47a011c7a35c4fbbae7e1ed3c2e1525af383f94d0df3f4ce5c6f722fe": {

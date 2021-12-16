@@ -50,16 +50,22 @@ fn get_authenticated_client(config: &crate::Config, token: &str) -> Result<reqwe
 }
 
 #[get("/auth")]
-async fn auth(config: web::Data<crate::Config>) -> Result<HttpResponse, Error> {
+async fn auth(
+    config: web::Data<crate::Config>,
+    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    user: models::User,
+) -> Result<HttpResponse, Error> {
     let client = get_oauth_client(&config)?;
 
-    let (authorize_url, _csrf_state) = client
+    let (authorize_url, csrf_state) = client
         .authorize_url(CsrfToken::new_random)
         .add_scope(oauth2::Scope::new("identity".to_string()))
         .add_scope(oauth2::Scope::new("campaigns".to_string()))
         .add_scope(oauth2::Scope::new("campaigns.posts".to_string()))
         .add_scope(oauth2::Scope::new("w:campaigns.webhook".to_string()))
         .url();
+
+    models::AuthState::create(&conn, user.id, csrf_state.secret()).await?;
 
     Ok(HttpResponse::Found()
         .insert_header(("Location", authorize_url.as_str()))
@@ -114,6 +120,10 @@ async fn callback(
     user: models::User,
     query: web::Query<PatreonOAuthCallback>,
 ) -> Result<HttpResponse, Error> {
+    if !models::AuthState::lookup(&conn, user.id, &query.state).await? {
+        return Err(Error::Missing);
+    }
+
     let client = get_oauth_client(&config)?;
     let code = AuthorizationCode::new(query.code.clone());
 
@@ -122,6 +132,8 @@ async fn callback(
         .request_async(oauth2::reqwest::async_http_client)
         .await
         .map_err(|_err| Error::UserError("Could not authenticate with Patreon".into()))?;
+
+    models::AuthState::remove(&conn, user.id, &query.state).await?;
 
     let client = get_authenticated_client(&config, token.access_token().secret())?;
 

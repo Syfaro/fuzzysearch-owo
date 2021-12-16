@@ -897,6 +897,46 @@ impl UserEvent {
     }
 }
 
+pub struct AuthState;
+
+impl AuthState {
+    pub async fn create(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        user_id: Uuid,
+        state: &str,
+    ) -> Result<Uuid, Error> {
+        let id = sqlx::query_file_scalar!("queries/auth_state/create.sql", user_id, state)
+            .fetch_one(conn)
+            .await?;
+
+        Ok(id)
+    }
+
+    pub async fn lookup(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        user_id: Uuid,
+        state: &str,
+    ) -> Result<bool, Error> {
+        let state = sqlx::query_file_scalar!("queries/auth_state/lookup.sql", user_id, state)
+            .fetch_optional(conn)
+            .await?;
+
+        Ok(state.is_some())
+    }
+
+    pub async fn remove(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        user_id: Uuid,
+        state: &str,
+    ) -> Result<(), Error> {
+        sqlx::query_file!("queries/auth_state/remove.sql", user_id, state)
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
+}
+
 pub struct PatreonWebhookEvent;
 
 impl PatreonWebhookEvent {
