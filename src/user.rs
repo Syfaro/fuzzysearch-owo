@@ -423,7 +423,7 @@ async fn email_add_post(
     form: web::Form<AddEmailForm>,
 ) -> Result<HttpResponse, Error> {
     let body = EmailVerify {
-        username: "Syfaro",
+        username: &user.username,
         link: &format!(
             "{}/user/email/verify?u={}&v={}",
             config.host_url,
