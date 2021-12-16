@@ -2,6 +2,7 @@ use actix_web::{get, post, services, web, HttpResponse, Scope};
 use actix_web::{HttpRequest, Responder};
 use askama::Template;
 use futures::TryStreamExt;
+use rand::Rng;
 use serde::Deserialize;
 use sha2::Digest;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
@@ -181,7 +182,6 @@ struct AccountLinkForm {
 #[post("/link")]
 async fn account_link_post(
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
-    faktory: web::Data<jobs::FaktoryClient>,
     user: models::User,
     form: web::Form<AccountLinkForm>,
 ) -> Result<HttpResponse, Error> {
@@ -202,14 +202,18 @@ async fn account_link_post(
 
     let username = form.username.as_deref().ok_or(Error::Missing)?;
 
-    let account = models::LinkedAccount::create(&conn, user.id, form.site, username, None).await?;
+    let token: String = rand::thread_rng()
+        .sample_iter(&rand::distributions::Alphanumeric)
+        .take(12)
+        .map(char::from)
+        .collect();
 
-    faktory
-        .enqueue_job(
-            jobs::JobInitiator::user(user.id),
-            jobs::add_account_job(user.id, account.id)?,
-        )
-        .await?;
+    let data = match form.site {
+        Site::FurAffinity => Some(serde_json::json!({ "verification_key": token })),
+        _ => None,
+    };
+
+    let account = models::LinkedAccount::create(&conn, user.id, form.site, username, data).await?;
 
     Ok(HttpResponse::Found()
         .insert_header((
@@ -220,7 +224,7 @@ async fn account_link_post(
 }
 
 #[derive(Deserialize)]
-struct AccountRemoveForm {
+struct AccountIdForm {
     account_id: Uuid,
 }
 
@@ -228,7 +232,7 @@ struct AccountRemoveForm {
 async fn account_remove(
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
     user: models::User,
-    form: web::Form<AccountRemoveForm>,
+    form: web::Form<AccountIdForm>,
 ) -> Result<HttpResponse, Error> {
     models::LinkedAccount::remove(&conn, user.id, form.account_id).await?;
 
@@ -266,6 +270,76 @@ async fn account_view(
     }
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[post("/verify")]
+async fn account_verify(
+    config: web::Data<crate::Config>,
+    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    faktory: web::Data<jobs::FaktoryClient>,
+    user: models::User,
+    form: web::Form<AccountIdForm>,
+) -> Result<HttpResponse, Error> {
+    let account = models::LinkedAccount::lookup_by_id(&conn, form.account_id)
+        .await?
+        .ok_or(Error::Missing)?;
+
+    if account.owner_id != user.id {
+        return Err(Error::Missing);
+    }
+
+    let key = match account.verification_key() {
+        Some(key) => key,
+        None => return Err(Error::Missing),
+    };
+
+    // TODO: this should be moved to a job
+    let enqueue_new_job = match account.source_site {
+        Site::FurAffinity => {
+            let client = reqwest::Client::default();
+
+            let body = client
+                .get(format!(
+                    "https://www.furaffinity.net/user/{}/",
+                    account.username,
+                ))
+                .header(
+                    reqwest::header::COOKIE,
+                    format!(
+                        "a={}; b={}",
+                        config.furaffinity_cookie_a, config.furaffinity_cookie_b
+                    ),
+                )
+                .send()
+                .await?
+                .text()
+                .await?;
+
+            if body.contains(key) {
+                models::LinkedAccount::update_data(&conn, account.id, None).await?;
+                true
+            } else {
+                false
+            }
+        }
+        _ => unimplemented!(),
+    };
+
+    if enqueue_new_job {
+        faktory
+            .enqueue_job(
+                jobs::JobInitiator::user(user.id),
+                jobs::add_account_job(user.id, account.id)?,
+            )
+            .await?;
+    }
+
+    Ok(HttpResponse::Found()
+        .insert_header((
+            "Location",
+            format!("/user/account/{}", account.id.to_string()),
+        ))
+        .finish())
 }
 
 #[derive(Template)]
@@ -424,7 +498,8 @@ pub fn service() -> Scope {
             account_link_get,
             account_link_post,
             account_remove,
-            account_view
+            account_view,
+            account_verify,
         ]))
         .service(web::scope("/media").service(services![media_view, media_remove]))
         .service(web::scope("/email").service(services![email_add, email_add_post, verify_email]))

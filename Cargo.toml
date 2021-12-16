@@ -45,6 +45,7 @@ zxcvbn = "2"
 sha2 = "0.10"
 hex = "0.4"
 image = "0.23"
+rand = "0.8"
 
 reqwest = { version = "0.11", features = ["json"] }
 scraper = "0.12"

@@ -23,7 +23,8 @@
               <p class="title" id="account-loading-state">{{ account.loading_state() }}</p>
 
               {% if account.is_loading() %}
-                <progress id="account-import-progress" class="progress is-small is-primary mt-2" max="100">Unknown</progress>
+              <progress id="account-import-progress" class="progress is-small is-primary mt-2"
+                max="100">Unknown</progress>
               {% endif %}
             </div>
           </div>
@@ -47,6 +48,38 @@
 
     <div class="columns is-centered">
       <div class="column is-one-third">
+        {% match account.verification_key() %}
+        {% when Some with (verification_key) %}
+        <div class="block">
+          <article class="message is-warning">
+            <div class="message-header">
+              <p>Verify Account</p>
+            </div>
+
+            <div class="message-body">
+              <p class="block">
+                You must verify your account before posts can be imported. Please add the following code somewhere on
+                your public profile. As soon as your account has been verified you may remove it.
+              </p>
+
+              <p class="block">
+                <code id="verification-key">{{ verification_key }}</code>
+              </p>
+
+              <div class="block">
+                <form method="POST" action="/user/account/verify">
+                  <input type="hidden" name="account_id" value="{{ account.id }}">
+                  <div class="control">
+                    <button class="button is-fullwidth is-primary">Verify Account</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+            </message>
+        </div>
+        {% else %}
+        {% endmatch %}
+
         <div class="block">
           <form method="POST" action="/user/account/remove">
             <input type="hidden" name="account_id" value="{{ account.id }}">
@@ -64,4 +97,20 @@
     </div>
   </div>
 </section>
+
+<script>
+  const verificationKey = document.getElementById('verification-key');
+  if (verificationKey) {
+    verificationKey.style.cursor = 'pointer';
+
+    verificationKey.addEventListener('click', (ev) => {
+      navigator.clipboard.writeText(verificationKey.textContent).then(() => {
+        bulmaToast.toast({
+          message: 'Code copied to clipboard',
+          type: 'is-info',
+        });
+      });
+    });
+  }
+</script>
 {% endblock %}

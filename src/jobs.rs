@@ -565,30 +565,42 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
                 let ids = discover_furaffinity_submissions(&account.username, &ctx.config)
                     .await
                     .map_err(Error::from_displayable)?;
-                let known = ids.len() as i32;
 
-                let mut redis = ctx.redis.clone();
-                let key = format!("account-import-ids:loading:{}", account_id);
-                redis.sadd::<_, _, ()>(&key, &ids).await?;
-                redis.expire::<_, ()>(key, 60 * 60 * 24 * 7).await?;
+                if ids.is_empty() {
+                    models::LinkedAccount::update_loading_state(
+                        &ctx.conn,
+                        &ctx.redis,
+                        user_id,
+                        account_id,
+                        models::LoadingState::Complete,
+                    )
+                    .await?;
+                } else {
+                    let known = ids.len() as i32;
 
-                for id in ids {
-                    ctx.faktory
-                        .enqueue_job(
-                            JobInitiator::User { user_id },
-                            add_furaffinity_submission_job(user_id, account_id, id, true)?,
-                        )
-                        .await?;
+                    let mut redis = ctx.redis.clone();
+                    let key = format!("account-import-ids:loading:{}", account_id);
+                    redis.sadd::<_, _, ()>(&key, &ids).await?;
+                    redis.expire::<_, ()>(key, 60 * 60 * 24 * 7).await?;
+
+                    for id in ids {
+                        ctx.faktory
+                            .enqueue_job(
+                                JobInitiator::User { user_id },
+                                add_furaffinity_submission_job(user_id, account_id, id, true)?,
+                            )
+                            .await?;
+                    }
+
+                    models::LinkedAccount::update_loading_state(
+                        &ctx.conn,
+                        &ctx.redis,
+                        user_id,
+                        account_id,
+                        models::LoadingState::LoadingItems { known },
+                    )
+                    .await?;
                 }
-
-                models::LinkedAccount::update_loading_state(
-                    &ctx.conn,
-                    &ctx.redis,
-                    user_id,
-                    account_id,
-                    models::LoadingState::LoadingItems { known },
-                )
-                .await?;
             }
             models::Site::Patreon => {
                 tracing::warn!("setting patreon to complete without loading");

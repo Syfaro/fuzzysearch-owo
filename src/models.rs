@@ -651,6 +651,14 @@ impl LinkedAccount {
 
         Ok(account)
     }
+
+    pub fn verification_key(&self) -> Option<&str> {
+        self.data
+            .as_ref()
+            .and_then(|data| data.as_object())
+            .and_then(|obj| obj.get("verification_key"))
+            .and_then(|key| key.as_str())
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
