@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="section">
+    <div class="container">
+        <section class="hero is-medium is-medium">
+            <div class="hero-body">
+                <h1 class="title is-size-3 is-size-1-desktop">FuzzySearch OwO</h1>
+                <h2 class="subtitle is-size-4 is-size-2-desktop is-italic">Notices your artwork being reposted.</h2>
+
+                <div class="block">
+                    <p>
+                        <strong>FuzzySearch OwO</strong> is a tool to automatically find unauthorized reposts of your
+                        artwork. It automatically collects posts you've made and send notifications when it finds them
+                        elsewhere.
+                    </p>
+                </div>
+
+                <div class="block">
+                    <div class="buttons">
+                        <a href="/auth/register" class="button is-large is-primary umami--click--signup-button">Sign
+                            Up</a>
+                        <a href="/auth/login" class="button is-large is-link umami--click--signin-button">Sign In</a>
+                    </div>
+                </div>
+
+                <div class="columns">
+                    <div class="column is-one-third-desktop">
+                        <h3 class="is-size-5 is-size-3-desktop">Watches On</h3>
+
+                        <ul>
+                            <li>FurAffinity</li>
+                            <li>Weasyl</li>
+                            <li>e621</li>
+                            <li>
+                                Twitter
+                                <span class="has-text-grey">&mdash; limited collection of users</span>
+                            </li>
+                            <li>
+                                <a href="https://owo-feedback.fuzzysearch.net"
+                                    class="umami--click--feedback-watches">And more coming soon!</a>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="column is-one-third-desktop">
+                        <h3 class="is-size-5 is-size-3-desktop">Collects From</h3>
+
+                        <ul>
+                            <li>FurAffinity</li>
+                            <li>Patreon</li>
+                            <li>
+                                <a href="https://owo-feedback.fuzzysearch.net"
+                                    class="umami--click--feedback-collects">And more coming soon!</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+</section>
+{% endblock %}

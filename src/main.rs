@@ -1,5 +1,6 @@
 use actix_session::CookieSession;
 use actix_web::{web, App, HttpResponse, HttpServer};
+use askama::Template;
 use clap::Parser;
 
 mod api;
@@ -148,17 +149,24 @@ fn load_config() -> Config {
     Config::parse()
 }
 
-#[actix_web::get("/")]
-async fn index(user: Option<models::User>) -> HttpResponse {
-    let location = if user.is_some() {
-        routes::USER_HOME
-    } else {
-        routes::AUTH_LOGIN
-    };
+#[derive(Template)]
+#[template(path = "home.html")]
+struct Home;
 
-    HttpResponse::Found()
-        .insert_header(("Location", location))
-        .finish()
+#[actix_web::get("/")]
+async fn index(user: Option<models::User>) -> Result<HttpResponse, Error> {
+    if user.is_some() {
+        return Ok(HttpResponse::Found()
+            .insert_header(("Location", routes::USER_HOME))
+            .finish());
+    }
+
+    let body = Home.render()?;
+    Ok(HttpResponse::Ok().body(body))
+}
+
+async fn not_found() -> Result<HttpResponse, Error> {
+    Err(Error::Missing)
 }
 
 #[tokio::main]
@@ -254,6 +262,7 @@ async fn main() {
                     .service(patreon::service())
                     .service(files)
                     .service(index)
+                    .default_service(web::to(not_found))
             })
             .workers(http_workers)
             .bind(http_host)
