@@ -912,6 +912,26 @@
       "nullable": []
     }
   },
+  "e12de042e0d40c9a18088e373341e3b8087bdce43c82317a274f4fec4e6c4e11": {
+    "query": "SELECT\n    exists(\n        SELECT\n            1\n        FROM\n            user_account\n        WHERE\n            lower(email) = lower($1)\n    ) \"exists!\";\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "exists!",
+          "type_info": "Bool"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        null
+      ]
+    }
+  },
   "e64304a47a011c7a35c4fbbae7e1ed3c2e1525af383f94d0df3f4ce5c6f722fe": {
     "query": "UPDATE\n    user_account\nSET\n    email = $2\nWHERE\n    id = $1;\n",
     "describe": {
