@@ -97,6 +97,17 @@ impl User {
         Ok(exists)
     }
 
+    pub async fn email_exists(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        email: &str,
+    ) -> Result<bool, Error> {
+        let exists = sqlx::query_file_scalar!("queries/user/email_exists.sql", email)
+            .fetch_one(conn)
+            .await?;
+
+        Ok(exists)
+    }
+
     fn verify_password(&self, input: &str) -> bool {
         let mut verifier = Verifier::default();
 

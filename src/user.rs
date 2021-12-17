@@ -433,6 +433,10 @@ async fn email_add_post(
     }
     .render()?;
 
+    if models::User::email_exists(&conn, &form.email.to_string()).await? {
+        return Err(Error::UserError("Email is already in use.".into()));
+    }
+
     models::User::set_email(&conn, user.id, &form.email.to_string()).await?;
 
     let email = lettre::Message::builder()
