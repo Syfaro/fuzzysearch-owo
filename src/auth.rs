@@ -45,6 +45,10 @@ async fn register_post(
         error_messages.push("Username must be 5 characters or greater.");
     }
 
+    if form.username.len() > 24 {
+        error_messages.push("Username must be less than 24 characters.");
+    }
+
     if form.username.contains('@') {
         error_messages.push("Username may not contain the '@' symbol.");
     }
