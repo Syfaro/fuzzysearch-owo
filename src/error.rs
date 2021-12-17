@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use actix_http::{http, StatusCode};
-use actix_web::HttpResponseBuilder;
+use actix_web::{HttpResponse, HttpResponseBuilder};
 use askama::Template;
 
 #[derive(Debug, thiserror::Error)]
@@ -12,6 +12,8 @@ pub enum Error {
     UnknownMessage(Cow<'static, str>),
     #[error("user error: {0}")]
     UserError(Cow<'static, str>),
+    #[error("unauthorized")]
+    Unauthorized,
 
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),
@@ -58,6 +60,7 @@ impl Error {
             Self::TooLarge(_size) => "Request body too large.".into(),
             Self::LoadingError(msg) => format!("Error loading resource: {}", msg).into(),
             Self::UserError(msg) => msg.to_owned(),
+            Self::Unauthorized => "You are not authorized to see this.".into(),
             _ => "An internal server error occured.".into(),
         }
     }
@@ -69,6 +72,7 @@ impl Error {
             Error::Missing => false,
             Error::TooLarge(_) => false,
             Error::EmailContent(_) => false,
+            Error::Unauthorized => false,
             _ => true,
         }
     }
@@ -96,11 +100,18 @@ impl actix_web::error::ResponseError for Error {
             Self::Missing => StatusCode::NOT_FOUND,
             Self::Image(_) | Self::UserError(_) => StatusCode::BAD_REQUEST,
             Self::TooLarge(_) => StatusCode::PAYLOAD_TOO_LARGE,
+            Self::Unauthorized => StatusCode::UNAUTHORIZED,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
     fn error_response(&self) -> actix_web::HttpResponse {
+        if matches!(self, Error::Unauthorized) {
+            return HttpResponse::Found()
+                .insert_header(("Location", "/auth/login"))
+                .finish();
+        }
+
         if let Error::Actix(err) = self {
             return err.as_response_error().error_response();
         }

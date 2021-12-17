@@ -2,9 +2,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 use actix_session::Session;
-use actix_web::{
-    error::ErrorUnauthorized, get, post, services, web, FromRequest, HttpResponse, Scope,
-};
+use actix_web::{get, post, services, web, FromRequest, HttpResponse, Scope};
 use askama::Template;
 use serde::Deserialize;
 use uuid::Uuid;
@@ -171,7 +169,7 @@ impl FromRequest for models::User {
 
             let user_id = match session.get::<Uuid>("user-id") {
                 Ok(Some(user_id)) => user_id,
-                Ok(None) => return Err(ErrorUnauthorized("user not authenticated").into()),
+                Ok(None) => return Err(Error::Unauthorized),
                 Err(err) => return Err(err.into()),
             };
 
@@ -179,7 +177,7 @@ impl FromRequest for models::User {
                 Ok(Some(user)) => Ok(user),
                 Ok(None) => {
                     session.purge();
-                    Err(ErrorUnauthorized("user not authenticated").into())
+                    Err(Error::Unauthorized)
                 }
                 Err(err) => Err(err),
             }
