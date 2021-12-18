@@ -129,6 +129,56 @@
       "nullable": []
     }
   },
+  "18c35d01397d679654539e68df0e145812a821a57c860e8f0a220aa6124d8bb9": {
+    "query": "SELECT\n    *\nFROM\n    flist_file\nWHERE\n    id = $1;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "ext",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "character_name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "size",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 4,
+          "name": "sha256",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 5,
+          "name": "perceptual_hash",
+          "type_info": "Int8"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
   "2dc224affa78594b67af913a2d4cdf143d6a1869bcd9d3e0bfa63cd2842d1458": {
     "query": "UPDATE\n    user_account\nSET\n    email_verifier = null\nWHERE\n    id = $1\n    AND email_verifier = $2 RETURNING id;\n",
     "describe": {
@@ -148,6 +198,20 @@
       "nullable": [
         false
       ]
+    }
+  },
+  "3159f7eda032c78d407e8cb01daaa79c14d92a60b83e3ac30160189be75876b9": {
+    "query": "INSERT INTO\n    flist_file (id, ext, character_name)\nVALUES\n    ($1, $2, $3) ON CONFLICT DO NOTHING;\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Int4",
+          "Text",
+          "Text"
+        ]
+      },
+      "nullable": []
     }
   },
   "32b153ec58c873eb22d8d442c2e33d59970c72ebf420cc5be7d352f86d66a18a": {
@@ -262,6 +326,48 @@
         ]
       },
       "nullable": []
+    }
+  },
+  "432d46f47da5eba2b5033373e2d0333f05e54c6de3db8b5a0838448ba228fa1b": {
+    "query": "SELECT\n    *\nfrom\n    flist_import_run\nORDER BY\n    finished_at DESC NULLS FIRST\nLIMIT\n    1;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "started_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 2,
+          "name": "finished_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 3,
+          "name": "starting_id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 4,
+          "name": "max_id",
+          "type_info": "Int4"
+        }
+      ],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": [
+        false,
+        false,
+        true,
+        false,
+        true
+      ]
     }
   },
   "4f6f6ef9bade4bc0c2e54649e095248a05839fae970ba198b54427788cb1e166": {
@@ -586,56 +692,6 @@
       ]
     }
   },
-  "793565f0a3877c18f374c8652a356ad6b20f5f0dce7d850d876b2d29c2c46d38": {
-    "query": "SELECT * FROM flist_file WHERE id = $1",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Int4"
-        },
-        {
-          "ordinal": 1,
-          "name": "ext",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 2,
-          "name": "character_name",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 3,
-          "name": "size",
-          "type_info": "Int4"
-        },
-        {
-          "ordinal": 4,
-          "name": "sha256",
-          "type_info": "Bytea"
-        },
-        {
-          "ordinal": 5,
-          "name": "perceptual_hash",
-          "type_info": "Int8"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      },
-      "nullable": [
-        false,
-        false,
-        false,
-        true,
-        true,
-        true
-      ]
-    }
-  },
   "7a8266a0cee6f8e80ca7a8ba314c0b7b282accef2f28e3d8675bf777930f00a7": {
     "query": "INSERT INTO\n    user_event (\n        owner_id,\n        related_to_media_item_id,\n        message,\n        event_name,\n        data,\n        created_at\n    )\nVALUES\n    ($1, $2, $3, $4, $5, $6) RETURNING id;\n",
     "describe": {
@@ -659,20 +715,6 @@
       "nullable": [
         false
       ]
-    }
-  },
-  "7bf3a2be0f1db36f0921ee1da9dbc7b4bcea1bd81a69374687913ed8808ee00b": {
-    "query": "INSERT INTO flist_file (id, ext, character_name) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
-    "describe": {
-      "columns": [],
-      "parameters": {
-        "Left": [
-          "Int4",
-          "Text",
-          "Text"
-        ]
-      },
-      "nullable": []
     }
   },
   "90c93803db8af98fd8ad7d9ff14b66890504953e3f8d77e502827011885ee428": {
@@ -765,19 +807,6 @@
         true,
         true
       ]
-    }
-  },
-  "92fc804b3b1531de371dede2b644d55f78dd428ac84d8bfde249b007b34293ad": {
-    "query": "UPDATE flist_import_run SET finished_at = current_timestamp, max_id = $2 WHERE id = $1",
-    "describe": {
-      "columns": [],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Int4"
-        ]
-      },
-      "nullable": []
     }
   },
   "930ae63c1ef71a87799036a706f5ce4a5522872ba7c1aad2f2c8ad68b2d4f883": {
@@ -937,41 +966,6 @@
       ]
     }
   },
-  "acb9bc3d8b6dd6cc87d7e573f052bc6d335dc68b2cf4db2fda908a486998ee77": {
-    "query": "UPDATE flist_file SET sha256 = $2, size = $3, perceptual_hash = $4 WHERE id = $1",
-    "describe": {
-      "columns": [],
-      "parameters": {
-        "Left": [
-          "Int4",
-          "Bytea",
-          "Int4",
-          "Int8"
-        ]
-      },
-      "nullable": []
-    }
-  },
-  "c077476152621fe91f66b16490c521231a687a7acf73e415965f4e1a6fee247a": {
-    "query": "INSERT INTO flist_import_run (starting_id) VALUES ($1) RETURNING id",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Uuid"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      },
-      "nullable": [
-        false
-      ]
-    }
-  },
   "c5d2ab0824d09910f1e20bac7fefdcde7e309af236bb0856bc49c626f40221cb": {
     "query": "DELETE FROM\n    owned_media_item\nWHERE\n    owner_id = $1\n    AND id = $2;\n",
     "describe": {
@@ -983,48 +977,6 @@
         ]
       },
       "nullable": []
-    }
-  },
-  "cde5617a47b27ca6602fe43eb63a9d5e6f764d04d9f1944a722e555f4763ee96": {
-    "query": "SELECT * from flist_import_run ORDER BY finished_at DESC NULLS FIRST LIMIT 1",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 1,
-          "name": "started_at",
-          "type_info": "Timestamptz"
-        },
-        {
-          "ordinal": 2,
-          "name": "finished_at",
-          "type_info": "Timestamptz"
-        },
-        {
-          "ordinal": 3,
-          "name": "starting_id",
-          "type_info": "Int4"
-        },
-        {
-          "ordinal": 4,
-          "name": "max_id",
-          "type_info": "Int4"
-        }
-      ],
-      "parameters": {
-        "Left": []
-      },
-      "nullable": [
-        false,
-        false,
-        true,
-        false,
-        true
-      ]
     }
   },
   "d323b8bbcee14a2712722f63fe7d5fbdcd9ee5589640eb1679779e8eeecd70ea": {
@@ -1066,6 +1018,26 @@
       "nullable": []
     }
   },
+  "d9d29a607cd182b3e01e18a216655d4a336aa0507c5c792fc933b09b4a86f478": {
+    "query": "INSERT INTO\n    flist_import_run (starting_id)\nVALUES\n    ($1) RETURNING id;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
   "e12de042e0d40c9a18088e373341e3b8087bdce43c82317a274f4fec4e6c4e11": {
     "query": "SELECT\n    exists(\n        SELECT\n            1\n        FROM\n            user_account\n        WHERE\n            lower(email) = lower($1)\n    ) \"exists!\";\n",
     "describe": {
@@ -1084,6 +1056,21 @@
       "nullable": [
         null
       ]
+    }
+  },
+  "e5b7ff20e2dd2d295fb7dacf7447bbaba856e9a61df1d6c161f2a6acce04105d": {
+    "query": "UPDATE\n    flist_file\nSET\n    sha256 = $2,\n    size = $3,\n    perceptual_hash = $4\nWHERE\n    id = $1;\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Int4",
+          "Bytea",
+          "Int4",
+          "Int8"
+        ]
+      },
+      "nullable": []
     }
   },
   "e64304a47a011c7a35c4fbbae7e1ed3c2e1525af383f94d0df3f4ce5c6f722fe": {
@@ -1243,6 +1230,70 @@
         true,
         true,
         true,
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  "ede1d7d71d383b7be365ac7aa72cc3bd1a14fe30b14ca99d08312783fc12e5b2": {
+    "query": "UPDATE\n    flist_import_run\nSET\n    finished_at = current_timestamp,\n    max_id = $2\nWHERE\n    id = $1;\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Int4"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "f454852668fd52c1e47118536bb5b57263d32b8f9e91d59a17b0d8ce2ff0e47e": {
+    "query": "SELECT\n    *\nFROM\n    flist_file\nWHERE\n    perceptual_hash <@ ($1, $2);\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 1,
+          "name": "ext",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "character_name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "size",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 4,
+          "name": "sha256",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 5,
+          "name": "perceptual_hash",
+          "type_info": "Int8"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Int8",
+          "Int8"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
         false,
         true,
         true,

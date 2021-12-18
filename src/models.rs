@@ -978,3 +978,108 @@ impl PatreonWebhookEvent {
         Ok(id)
     }
 }
+
+pub struct FListFile {
+    pub id: i32,
+    pub ext: String,
+    pub character_name: String,
+    pub size: Option<i32>,
+    pub sha256: Option<Vec<u8>>,
+    pub perceptual_hash: Option<i64>,
+}
+
+impl FListFile {
+    pub async fn similar_images(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        perceptual_hash: i64,
+    ) -> Result<Vec<Self>, Error> {
+        let images =
+            sqlx::query_file_as!(Self, "queries/flist/similar_images.sql", perceptual_hash, 3)
+                .fetch_all(conn)
+                .await?;
+
+        Ok(images)
+    }
+
+    pub async fn insert_item(
+        conn: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        id: i32,
+        ext: &str,
+        character_name: &str,
+    ) -> Result<(), Error> {
+        sqlx::query_file!("queries/flist/insert_item.sql", id, ext, character_name)
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn get_by_id(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        id: i32,
+    ) -> Result<Option<Self>, Error> {
+        let item = sqlx::query_file_as!(Self, "queries/flist/get_by_id.sql", id)
+            .fetch_optional(conn)
+            .await?;
+
+        Ok(item)
+    }
+
+    pub async fn update(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        id: i32,
+        size: i32,
+        sha256: Vec<u8>,
+        perceptual_hash: Option<i64>,
+    ) -> Result<(), Error> {
+        sqlx::query_file!(
+            "queries/flist/update.sql",
+            id,
+            sha256,
+            size,
+            perceptual_hash
+        )
+        .execute(conn)
+        .await?;
+
+        Ok(())
+    }
+}
+
+pub struct FListImportRun {
+    pub id: Uuid,
+    pub started_at: chrono::DateTime<chrono::Utc>,
+    pub finished_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub starting_id: i32,
+    pub max_id: Option<i32>,
+}
+
+impl FListImportRun {
+    pub async fn previous_run(conn: &sqlx::Pool<sqlx::Postgres>) -> Result<Option<Self>, Error> {
+        let previous_run = sqlx::query_file_as!(Self, "queries/flist/previous_run.sql")
+            .fetch_optional(conn)
+            .await?;
+
+        Ok(previous_run)
+    }
+
+    pub async fn start(conn: &sqlx::Pool<sqlx::Postgres>, starting_id: i32) -> Result<Uuid, Error> {
+        let id = sqlx::query_file_scalar!("queries/flist/start.sql", starting_id)
+            .fetch_one(conn)
+            .await?;
+
+        Ok(id)
+    }
+
+    pub async fn complete(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        id: Uuid,
+        max_id: i32,
+    ) -> Result<(), Error> {
+        sqlx::query_file!("queries/flist/complete.sql", id, max_id)
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
+}

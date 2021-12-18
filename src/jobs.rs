@@ -174,6 +174,12 @@ pub fn search_existing_submissions_job(
     Ok(faktory::Job::new(job::SEARCH_EXISTING_SUBMISSIONS, args).fuzzy_queue(FaktoryQueue::Core))
 }
 
+pub fn flist_hash_image_job(id: i32) -> faktory::Job {
+    let args = vec![serde_json::Value::from(id)];
+
+    faktory::Job::new(job::FLIST_HASH_IMAGE, args).fuzzy_queue(FaktoryQueue::Outgoing)
+}
+
 #[derive(Clone)]
 pub struct FaktoryClient {
     client: Arc<Mutex<faktory::Producer<TcpStream>>>,
@@ -577,27 +583,26 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
                 ))
             });
 
-        let flist_items = sqlx::query!(
-            "SELECT * FROM flist_file WHERE perceptual_hash <@ ($1, 3)",
-            perceptual_hash
-        )
-        .fetch_all(&ctx.conn)
-        .await?
-        .into_iter()
-        .flat_map(|file| {
-            Some((
-                models::SimilarImage {
-                    site: models::Site::FList,
-                    page_url: Some(format!("https://www.f-list.net/c/{}/", file.character_name)),
-                    posted_by: Some(file.character_name),
-                    content_url: format!(
-                        "https://static.f-list.net/images/charimage/{}.{}",
-                        file.id, file.ext
-                    ),
-                },
-                None,
-            ))
-        });
+        let flist_items = models::FListFile::similar_images(&ctx.conn, perceptual_hash)
+            .await?
+            .into_iter()
+            .flat_map(|file| {
+                Some((
+                    models::SimilarImage {
+                        site: models::Site::FList,
+                        page_url: Some(format!(
+                            "https://www.f-list.net/c/{}/",
+                            file.character_name
+                        )),
+                        posted_by: Some(file.character_name),
+                        content_url: format!(
+                            "https://static.f-list.net/images/charimage/{}.{}",
+                            file.id, file.ext
+                        ),
+                    },
+                    None,
+                ))
+            });
 
         for (similar_image, created_at) in fuzzysearch_items.chain(flist_items) {
             models::UserEvent::similar_found(
@@ -833,7 +838,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
     });
 
     environment.register(job::FLIST_COLLECT_GALLERY_IMAGES, |ctx, _job| async move {
-        let previous_run = sqlx::query!("SELECT * from flist_import_run ORDER BY finished_at DESC NULLS FIRST LIMIT 1").fetch_optional(&ctx.conn).await?;
+        let previous_run = models::FListImportRun::previous_run(&ctx.conn).await?;
         let previous_max = match previous_run {
             Some(run) if run.finished_at.is_none() => {
                 tracing::info!("previous run has not yet finished, skipping");
@@ -843,10 +848,12 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
             None => 0,
         };
 
-        let id = sqlx::query_scalar!("INSERT INTO flist_import_run (starting_id) VALUES ($1) RETURNING id", previous_max + 1).fetch_one(&ctx.conn).await?;
+        let id = models::FListImportRun::start(&ctx.conn, previous_max + 1).await?;
 
         let mut flist = crate::flist::FList::new(&ctx.config.user_agent);
-        flist.sign_in(&ctx.config.flist_username, &ctx.config.flist_password).await?;
+        flist
+            .sign_in(&ctx.config.flist_username, &ctx.config.flist_password)
+            .await?;
 
         let mut offset = None;
         let mut max_id = previous_max;
@@ -862,7 +869,8 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
             let mut tx = ctx.conn.begin().await?;
 
             for item in items.iter() {
-                sqlx::query!("INSERT INTO flist_file (id, ext, character_name) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", item.id, item.ext, item.character_name).execute(&mut tx).await?;
+                models::FListFile::insert_item(&mut tx, item.id, &item.ext, &item.character_name)
+                    .await?;
             }
 
             tx.commit().await?;
@@ -872,9 +880,9 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
 
             // Only enqueue jobs after changes have been committed
             for id in ids.iter().copied() {
-                let args = vec![serde_json::Value::from(id)];
-                let job = faktory::Job::new(job::FLIST_HASH_IMAGE, args).fuzzy_queue(FaktoryQueue::Outgoing);
-                ctx.faktory.enqueue_job(JobInitiator::external("flist"), job).await?;
+                ctx.faktory
+                    .enqueue_job(JobInitiator::external("flist"), flist_hash_image_job(id))
+                    .await?;
             }
 
             if max_id < max {
@@ -889,7 +897,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
             offset = Some(offset.unwrap_or(0) + items.len() as i32);
         }
 
-        sqlx::query!("UPDATE flist_import_run SET finished_at = current_timestamp, max_id = $2 WHERE id = $1", id, max_id).execute(&ctx.conn).await?;
+        models::FListImportRun::complete(&ctx.conn, id, max_id).await?;
 
         Ok(())
     });
@@ -898,8 +906,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
         let mut args = job.args().iter();
         let (id,) = extract_args!(args, i32);
 
-        let file = sqlx::query!("SELECT * FROM flist_file WHERE id = $1", id)
-            .fetch_optional(&ctx.conn)
+        let file = models::FListFile::get_by_id(&ctx.conn, id)
             .await?
             .ok_or(Error::Missing)?;
 
@@ -933,15 +940,8 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
         .await
         .map_err(Error::from_displayable)?;
 
-        sqlx::query!(
-            "UPDATE flist_file SET sha256 = $2, size = $3, perceptual_hash = $4 WHERE id = $1",
-            id,
-            sha256.to_vec(),
-            size as i64,
-            perceptual_hash
-        )
-        .execute(&ctx.conn)
-        .await?;
+        models::FListFile::update(&ctx.conn, id, size as i32, sha256.to_vec(), perceptual_hash)
+            .await?;
 
         let data = IncomingSubmission {
             site: models::Site::FList,
@@ -955,11 +955,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
         };
 
         ctx.faktory
-            .enqueue_job(
-                JobInitiator::external("flist"),
-                faktory::Job::new(job::NEW_SUBMISSION, serialize_args!(data))
-                    .fuzzy_queue(FaktoryQueue::Core),
-            )
+            .enqueue_job(JobInitiator::external("flist"), new_submission_job(data)?)
             .await?;
 
         Ok(())
