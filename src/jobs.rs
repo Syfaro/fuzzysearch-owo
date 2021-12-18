@@ -91,6 +91,51 @@ macro_rules! serialize_args {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct IncomingSubmission {
+    pub site: models::Site,
+    pub site_id: String,
+    pub posted_by: Option<String>,
+    pub sha256: Option<[u8; 32]>,
+    pub perceptual_hash: Option<[u8; 8]>,
+    pub content_url: String,
+    pub page_url: Option<String>,
+    pub posted_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl From<fuzzysearch_common::faktory::WebHookData> for IncomingSubmission {
+    fn from(data: fuzzysearch_common::faktory::WebHookData) -> Self {
+        IncomingSubmission {
+            site: models::Site::from(data.site),
+            site_id: data.site_id.to_string(),
+            sha256: data
+                .file_sha256
+                .map(|sha| sha.try_into().expect("sha256 was wrong length")),
+            perceptual_hash: data.hash,
+            content_url: data.file_url,
+            page_url: Some(match &data.site {
+                fuzzysearch_common::types::Site::FurAffinity => {
+                    format!("https://www.furaffinity.net/view/{}/", data.site_id)
+                }
+                fuzzysearch_common::types::Site::Twitter => {
+                    format!(
+                        "https://twitter.com/{}/status/{}",
+                        data.artist, data.site_id
+                    )
+                }
+                fuzzysearch_common::types::Site::E621 => {
+                    format!("https://e621.net/posts/{}", data.site_id)
+                }
+                fuzzysearch_common::types::Site::Weasyl => {
+                    format!("https://www.weasyl.com/view/{}", data.site_id)
+                }
+            }),
+            posted_by: Some(data.artist),
+            posted_at: None,
+        }
+    }
+}
+
 pub fn add_account_job(user_id: Uuid, account_id: Uuid) -> Result<faktory::Job, Error> {
     let args = serialize_args!(user_id, account_id);
 
@@ -111,10 +156,11 @@ pub fn add_furaffinity_submission_job(
     )
 }
 
-pub fn new_submission_job(
-    data: fuzzysearch_common::faktory::WebHookData,
-) -> Result<faktory::Job, Error> {
-    let args = serialize_args!(data);
+pub fn new_submission_job<D>(data: D) -> Result<faktory::Job, Error>
+where
+    D: Into<IncomingSubmission>,
+{
+    let args = serialize_args!(data.into());
 
     Ok(faktory::Job::new(job::NEW_SUBMISSION, args).fuzzy_queue(FaktoryQueue::Core))
 }
@@ -514,35 +560,53 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
             }
         };
 
-        let similar_items = ctx
+        let fuzzysearch_items = ctx
             .fuzzysearch
             .lookup_hashes(&[perceptual_hash], Some(3))
-            .await?;
+            .await?
+            .into_iter()
+            .flat_map(|file| {
+                Some((
+                    models::SimilarImage {
+                        page_url: Some(file.url()),
+                        site: models::Site::from(file.site_info?),
+                        posted_by: file.artists.as_ref().map(|artists| artists.join(", ")),
+                        content_url: file.url,
+                    },
+                    file.posted_at,
+                ))
+            });
 
-        for similar_item in similar_items {
-            let similar_image = models::SimilarImage {
-                site: models::Site::from(
-                    similar_item
-                        .site_info
-                        .as_ref()
-                        .ok_or(Error::Missing)?
-                        .to_owned(),
-                ),
-                posted_by: similar_item
-                    .artists
-                    .as_ref()
-                    .map(|artists| artists.join(", ")),
-                page_url: Some(similar_item.url()),
-                content_url: similar_item.url,
-            };
+        let flist_items = sqlx::query!(
+            "SELECT * FROM flist_file WHERE perceptual_hash <@ ($1, 3)",
+            perceptual_hash
+        )
+        .fetch_all(&ctx.conn)
+        .await?
+        .into_iter()
+        .flat_map(|file| {
+            Some((
+                models::SimilarImage {
+                    site: models::Site::FList,
+                    page_url: Some(format!("https://www.f-list.net/c/{}/", file.character_name)),
+                    posted_by: Some(file.character_name),
+                    content_url: format!(
+                        "https://static.f-list.net/images/charimage/{}.{}",
+                        file.id, file.ext
+                    ),
+                },
+                None,
+            ))
+        });
 
+        for (similar_image, created_at) in fuzzysearch_items.chain(flist_items) {
             models::UserEvent::similar_found(
                 &ctx.conn,
                 &ctx.redis,
                 user_id,
                 media_id,
                 similar_image,
-                Some(similar_item.posted_at.unwrap_or_else(chrono::Utc::now)),
+                Some(created_at.unwrap_or_else(chrono::Utc::now)),
             )
             .await?;
         }
@@ -629,76 +693,62 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
 
     environment.register(job::NEW_SUBMISSION, |ctx, job| async move {
         let mut args = job.args().iter();
-        let (data,) = extract_args!(args, fuzzysearch_common::faktory::WebHookData);
-
-        let site = models::Site::from(data.site);
-
-        let link = match &data.site {
-            fuzzysearch_common::types::Site::FurAffinity => {
-                format!("https://www.furaffinity.net/view/{}/", data.site_id)
-            }
-            fuzzysearch_common::types::Site::Twitter => {
-                format!(
-                    "https://twitter.com/{}/status/{}",
-                    data.artist, data.site_id
-                )
-            }
-            fuzzysearch_common::types::Site::E621 => {
-                format!("https://e621.net/posts/{}", data.site_id)
-            }
-            fuzzysearch_common::types::Site::Weasyl => {
-                format!("https://www.weasyl.com/view/{}", data.site_id)
-            }
-        };
-
-        let hash = data.hash.map(i64::from_be_bytes);
+        let (data,) = extract_args!(args, IncomingSubmission);
 
         // FurAffinity has some weird differences between how usernames are
         // displayed and how they're used in URLs.
-        let artist = if matches!(data.site, fuzzysearch_common::types::Site::FurAffinity) {
-            data.artist.replace('_', "")
+        let artist = if matches!(data.site, models::Site::FurAffinity) {
+            data.posted_by
+                .as_ref()
+                .map(|posted_by| posted_by.replace('_', ""))
         } else {
-            data.artist.clone()
+            data.posted_by.clone()
         };
 
-        if let Some((account_id, user_id)) =
-            models::LinkedAccount::search_site_account(&ctx.conn, &site.to_string(), &artist)
-                .await?
-        {
-            tracing::info!("new submission belongs to known account");
-
-            let sha256_hash: [u8; 32] = data
-                .file_sha256
-                .ok_or(Error::Missing)?
-                .try_into()
-                .expect("sha256 hash was wrong length");
-
-            let item = models::OwnedMediaItem::add_item(
+        if let Some(artist) = artist {
+            if let Some((account_id, user_id)) = models::LinkedAccount::search_site_account(
                 &ctx.conn,
-                user_id,
-                account_id,
-                data.site_id,
-                hash,
-                sha256_hash,
-                Some(link.clone()),
-                None, // TODO: collect title
-                None, // TODO: collect posted_at
+                &data.site.to_string(),
+                &artist,
             )
-            .await?;
+            .await?
+            {
+                tracing::info!("new submission belongs to known account");
 
-            let data = reqwest::Client::default()
-                .get(&data.file_url)
-                .send()
-                .await?
-                .bytes()
+                let sha256_hash: [u8; 32] = data
+                    .sha256
+                    .ok_or(Error::Missing)?
+                    .try_into()
+                    .expect("sha256 hash was wrong length");
+
+                let item = models::OwnedMediaItem::add_item(
+                    &ctx.conn,
+                    user_id,
+                    account_id,
+                    data.site_id,
+                    data.perceptual_hash.map(|hash| i64::from_be_bytes(hash)),
+                    sha256_hash,
+                    data.page_url.clone(),
+                    None, // TODO: collect title
+                    data.posted_at,
+                )
                 .await?;
-            let im = image::load_from_memory(&data)?;
 
-            models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item, im).await?;
+                let data = reqwest::Client::default()
+                    .get(&data.content_url)
+                    .send()
+                    .await?
+                    .bytes()
+                    .await?;
+                let im = image::load_from_memory(&data)?;
+
+                models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item, im)
+                    .await?;
+            }
         }
 
-        let hash = match hash {
-            Some(hash) => hash,
+        let hash = match data.perceptual_hash {
+            Some(hash) => i64::from_be_bytes(hash),
             None => {
                 tracing::warn!("webhook data had no hash");
                 return Ok(());
@@ -706,15 +756,22 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
         };
 
         let similar_items = models::OwnedMediaItem::find_similar(&ctx.conn, hash).await?;
+        if similar_items.is_empty() {
+            tracing::info!("found no similar images");
+
+            return Ok(());
+        }
 
         let similar_image = models::SimilarImage {
-            site,
-            posted_by: Some(data.artist.clone()),
-            page_url: Some(link.clone()),
-            content_url: data.file_url,
+            site: data.site,
+            posted_by: data.posted_by.clone(),
+            page_url: data.page_url.clone(),
+            content_url: data.content_url.clone(),
         };
 
         for item in similar_items {
+            tracing::debug!("found similar item owned by {}", item.owner_id);
+
             models::UserEvent::similar_found(
                 &ctx.conn,
                 &ctx.redis,
@@ -728,9 +785,12 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
             if let Some(models::User {
                 username,
                 email: Some(email),
+                email_verifier: None,
                 ..
             }) = models::User::lookup_by_id(&ctx.conn, item.owner_id).await?
             {
+                tracing::debug!("user had email, sending notification");
+
                 let body = askama::Template::render(&SimilarTemplate {
                     username: &username,
                     source_link: item
@@ -738,8 +798,8 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
                         .as_deref()
                         .unwrap_or_else(|| item.content_url.as_deref().unwrap_or("unknown")),
                     site_name: &data.site.to_string(),
-                    poster_name: &data.artist,
-                    similar_link: &link,
+                    poster_name: data.posted_by.as_deref().unwrap_or("unknown"),
+                    similar_link: data.page_url.as_deref().unwrap_or(&data.content_url),
                 })?;
 
                 let email = lettre::Message::builder()
@@ -814,7 +874,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
             for id in ids.iter().copied() {
                 let args = vec![serde_json::Value::from(id)];
                 let job = faktory::Job::new(job::FLIST_HASH_IMAGE, args).fuzzy_queue(FaktoryQueue::Outgoing);
-                ctx.faktory.enqueue_job(JobInitiator::Schedule, job).await?;
+                ctx.faktory.enqueue_job(JobInitiator::external("flist"), job).await?;
             }
 
             if max_id < max {
@@ -853,7 +913,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
             "https://static.f-list.net/images/charimage/{}.{}",
             file.id, file.ext
         );
-        let bytes = ctx.client.get(url).send().await?.bytes().await?;
+        let bytes = ctx.client.get(&url).send().await?.bytes().await?;
 
         let mut sha256 = sha2::Sha256::new();
         sha256.update(&bytes);
@@ -882,6 +942,25 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
         )
         .execute(&ctx.conn)
         .await?;
+
+        let data = IncomingSubmission {
+            site: models::Site::FList,
+            site_id: id.to_string(),
+            page_url: Some(format!("https://www.f-list.net/c/{}/", file.character_name)),
+            posted_by: Some(file.character_name),
+            sha256: Some(sha256),
+            perceptual_hash: perceptual_hash.map(|hash| hash.to_be_bytes()),
+            content_url: url,
+            posted_at: None,
+        };
+
+        ctx.faktory
+            .enqueue_job(
+                JobInitiator::external("flist"),
+                faktory::Job::new(job::NEW_SUBMISSION, serialize_args!(data))
+                    .fuzzy_queue(FaktoryQueue::Core),
+            )
+            .await?;
 
         Ok(())
     });

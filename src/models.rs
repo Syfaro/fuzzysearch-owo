@@ -681,6 +681,7 @@ pub enum Site {
     Weasyl,
     Twitter,
     Patreon,
+    FList,
 }
 
 impl Display for Site {
@@ -691,6 +692,7 @@ impl Display for Site {
             Site::Weasyl => write!(f, "Weasyl"),
             Site::Twitter => write!(f, "Twitter"),
             Site::Patreon => write!(f, "Patreon"),
+            Site::FList => write!(f, "F-list"),
         }
     }
 }
@@ -705,6 +707,7 @@ impl FromStr for Site {
             "Weasyl" => Site::Weasyl,
             "Twitter" => Site::Twitter,
             "Patreon" => Site::Patreon,
+            "F-list" => Site::FList,
             _ => return Err("unknown source site"),
         };
 

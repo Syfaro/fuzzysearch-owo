@@ -1,0 +1,8 @@
+jobs:
+  - name: check f-list
+    every: "*/5 * * * *"
+    job_type: flist_gallery
+    queue: fuzzysearch_owo_outgoing
+    args: []
+    custom:
+      initiator: schedule
