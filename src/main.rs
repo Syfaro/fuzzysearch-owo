@@ -6,6 +6,7 @@ use clap::Parser;
 mod api;
 mod auth;
 mod error;
+mod flist;
 mod jobs;
 mod models;
 mod patreon;
@@ -98,6 +99,13 @@ pub struct Config {
     /// Patreon client secret.
     #[clap(long, env("PATREON_CLIENT_SECRET"))]
     pub patreon_client_secret: String,
+
+    /// F-list username.
+    #[clap(long, env("FLIST_USERNAME"))]
+    pub flist_username: String,
+    /// F-list password.
+    #[clap(long, env("FLIST_PASSWORD"))]
+    pub flist_password: String,
 
     /// SMTP hostname.
     #[clap(long, env("SMTP_HOST"))]
@@ -217,6 +225,11 @@ async fn main() {
         .await
         .expect("could not connect to faktory");
 
+    let client = reqwest::ClientBuilder::default()
+        .user_agent(&config.user_agent)
+        .build()
+        .expect("could not create http client");
+
     match config.service_mode {
         ServiceMode::BackgroundWorker => {
             jobs::start_job_processing(jobs::JobContext {
@@ -226,6 +239,7 @@ async fn main() {
                 s3: s3.clone(),
                 fuzzysearch: std::sync::Arc::new(fuzzysearch),
                 config: std::sync::Arc::new(config.clone()),
+                client,
             })
             .await
             .expect("could not run background worker");

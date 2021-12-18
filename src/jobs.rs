@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::Display,
     net::TcpStream,
     sync::{Arc, Mutex},
@@ -11,6 +11,7 @@ use opentelemetry::propagation::TextMapPropagator;
 use prometheus::{register_counter_vec, register_histogram_vec, CounterVec, HistogramVec};
 use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
+use sha2::Digest;
 use tracing::Instrument;
 use uuid::Uuid;
 
@@ -54,6 +55,9 @@ pub mod job {
     pub const ADD_SUBMISSION_FURAFFINITY: &str = "add_submission_furaffinity";
     pub const NEW_SUBMISSION: &str = "new_submission";
     pub const SEARCH_EXISTING_SUBMISSIONS: &str = "search_existing_submissions";
+
+    pub const FLIST_COLLECT_GALLERY_IMAGES: &str = "flist_gallery";
+    pub const FLIST_HASH_IMAGE: &str = "flist_hash";
 }
 
 lazy_static::lazy_static! {
@@ -195,6 +199,7 @@ fn get_arg<T: serde::de::DeserializeOwned>(
 pub enum JobInitiator {
     User { user_id: Uuid },
     External { name: Cow<'static, str> },
+    Schedule,
     Unknown,
 }
 
@@ -219,6 +224,7 @@ impl Display for JobInitiator {
         match self {
             Self::User { .. } => write!(f, "user"),
             Self::External { name } => write!(f, "external_{}", name.replace(' ', "_")),
+            Self::Schedule => write!(f, "schedule"),
             Self::Unknown => write!(f, "unknown"),
         }
     }
@@ -257,6 +263,7 @@ pub struct JobContext {
     pub s3: rusoto_s3::S3Client,
     pub fuzzysearch: std::sync::Arc<fuzzysearch::FuzzySearch>,
     pub config: std::sync::Arc<crate::Config>,
+    pub client: reqwest::Client,
 }
 
 struct WorkerEnvironment {
@@ -761,6 +768,120 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
                 lettre::AsyncTransport::send(&mailer, email).await.unwrap();
             }
         }
+
+        Ok(())
+    });
+
+    environment.register(job::FLIST_COLLECT_GALLERY_IMAGES, |ctx, _job| async move {
+        let previous_run = sqlx::query!("SELECT * from flist_import_run ORDER BY finished_at DESC NULLS FIRST LIMIT 1").fetch_optional(&ctx.conn).await?;
+        let previous_max = match previous_run {
+            Some(run) if run.finished_at.is_none() => {
+                tracing::info!("previous run has not yet finished, skipping");
+                return Ok(());
+            }
+            Some(run) => run.max_id.unwrap_or(0),
+            None => 0,
+        };
+
+        let id = sqlx::query_scalar!("INSERT INTO flist_import_run (starting_id) VALUES ($1) RETURNING id", previous_max + 1).fetch_one(&ctx.conn).await?;
+
+        let mut flist = crate::flist::FList::new(&ctx.config.user_agent);
+        flist.sign_in(&ctx.config.flist_username, &ctx.config.flist_password).await?;
+
+        let mut offset = None;
+        let mut max_id = previous_max;
+        loop {
+            tracing::info!("loading flist gallery with offset {:?}", offset);
+
+            let items = flist.get_latest_gallery_items(offset).await?;
+            if items.is_empty() {
+                tracing::info!("found no new items, ending");
+                break;
+            }
+
+            let mut tx = ctx.conn.begin().await?;
+
+            for item in items.iter() {
+                sqlx::query!("INSERT INTO flist_file (id, ext, character_name) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", item.id, item.ext, item.character_name).execute(&mut tx).await?;
+            }
+
+            tx.commit().await?;
+
+            let ids: HashSet<_> = items.iter().map(|item| item.id).collect();
+            let max = ids.iter().copied().max().unwrap_or(0);
+
+            // Only enqueue jobs after changes have been committed
+            for id in ids.iter().copied() {
+                let args = vec![serde_json::Value::from(id)];
+                let job = faktory::Job::new(job::FLIST_HASH_IMAGE, args).fuzzy_queue(FaktoryQueue::Outgoing);
+                ctx.faktory.enqueue_job(JobInitiator::Schedule, job).await?;
+            }
+
+            if max_id < max {
+                max_id = max;
+            }
+
+            if ids.contains(&previous_max) {
+                tracing::info!("found previous max, ending");
+                break;
+            }
+
+            offset = Some(offset.unwrap_or(0) + items.len() as i32);
+        }
+
+        sqlx::query!("UPDATE flist_import_run SET finished_at = current_timestamp, max_id = $2 WHERE id = $1", id, max_id).execute(&ctx.conn).await?;
+
+        Ok(())
+    });
+
+    environment.register(job::FLIST_HASH_IMAGE, |ctx, job| async move {
+        let mut args = job.args().iter();
+        let (id,) = extract_args!(args, i32);
+
+        let file = sqlx::query!("SELECT * FROM flist_file WHERE id = $1", id)
+            .fetch_optional(&ctx.conn)
+            .await?
+            .ok_or(Error::Missing)?;
+
+        if file.sha256.is_some() {
+            tracing::info!("file already had hash, skipping");
+
+            return Ok(());
+        }
+
+        let url = format!(
+            "https://static.f-list.net/images/charimage/{}.{}",
+            file.id, file.ext
+        );
+        let bytes = ctx.client.get(url).send().await?.bytes().await?;
+
+        let mut sha256 = sha2::Sha256::new();
+        sha256.update(&bytes);
+        let sha256: [u8; 32] = sha256
+            .finalize()
+            .try_into()
+            .expect("sha256 was wrong length");
+        let size = bytes.len();
+
+        let perceptual_hash = tokio::task::spawn_blocking(move || -> Option<i64> {
+            let im = image::load_from_memory(&bytes).ok()?;
+
+            let hasher = fuzzysearch_common::get_hasher();
+            let bytes = hasher.hash_image(&im).as_bytes().try_into().ok()?;
+            Some(i64::from_be_bytes(bytes))
+        })
+        .await
+        .map_err(Error::from_displayable)?;
+
+        sqlx::query!(
+            "UPDATE flist_file SET sha256 = $2, size = $3, perceptual_hash = $4 WHERE id = $1",
+            id,
+            sha256.to_vec(),
+            size as i64,
+            perceptual_hash
+        )
+        .execute(&ctx.conn)
+        .await?;
 
         Ok(())
     });

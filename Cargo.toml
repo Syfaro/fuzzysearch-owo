@@ -47,8 +47,9 @@ hex = "0.4"
 image = "0.23"
 rand = "0.8"
 
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", features = ["json", "cookies"] }
 scraper = "0.12"
+regex = "1"
 
 rusoto_core = "0.47"
 rusoto_credential = "0.47"
