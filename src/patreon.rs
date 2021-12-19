@@ -31,7 +31,10 @@ fn get_oauth_client(config: &crate::Config) -> Result<BasicClient, Error> {
     )
 }
 
-fn get_authenticated_client(config: &crate::Config, token: &str) -> Result<reqwest::Client, Error> {
+pub fn get_authenticated_client(
+    config: &crate::Config,
+    token: &str,
+) -> Result<reqwest::Client, Error> {
     use reqwest::header;
 
     let mut headers = header::HeaderMap::new();
@@ -79,19 +82,30 @@ struct PatreonOAuthCallback {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-struct PatreonData<T> {
-    data: T,
+pub struct PatreonData<T> {
+    pub data: T,
+    pub meta: Option<PatreonMeta>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-struct PatreonDataItem<A, R = ()> {
-    id: String,
+pub struct PatreonMeta {
+    pub pagination: Option<PatreonPagination>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PatreonPagination {
+    pub total: i32,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PatreonDataItem<A, R = ()> {
+    pub id: String,
     #[serde(rename = "type")]
-    kind: String,
+    pub kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    attributes: Option<A>,
+    pub attributes: Option<A>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    relationships: Option<R>,
+    pub relationships: Option<R>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -110,6 +124,22 @@ struct PatreonWebhookDataAttributes {
     secret: String,
     triggers: Vec<String>,
     uri: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PatreonPostAttributes {
+    pub embed_data: Option<serde_json::Value>,
+    pub embed_url: Option<String>,
+    pub published_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub title: Option<String>,
+    pub url: String,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+pub struct PatreonCredentials {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub expires_after: chrono::DateTime<chrono::Utc>,
 }
 
 #[get("/callback")]
@@ -157,6 +187,28 @@ async fn callback(
         .id
         .as_str();
 
+    let credentials = PatreonCredentials {
+        access_token: token.access_token().secret().to_string(),
+        refresh_token: token
+            .refresh_token()
+            .ok_or(Error::Missing)?
+            .secret()
+            .to_string(),
+        expires_after: chrono::Utc::now()
+            + chrono::Duration::from_std(
+                token
+                    .expires_in()
+                    .unwrap_or(std::time::Duration::from_secs(3600)),
+            )
+            .expect("expires in too large"),
+    };
+
+    let saved_data = SavedPatreonData {
+        site_id: patreon_campaign_id.to_string(),
+        credentials: credentials.clone(),
+        campaign: None,
+    };
+
     let linked_account = match models::LinkedAccount::lookup_by_site_id(
         &conn,
         user.id,
@@ -175,9 +227,14 @@ async fn callback(
                 .map(|attributes| attributes.full_name)
                 .unwrap_or_else(|| "Unknown campaign".to_string());
 
-            let account =
-                models::LinkedAccount::create(&conn, user.id, Site::Patreon, &full_name, None)
-                    .await?;
+            let account = models::LinkedAccount::create(
+                &conn,
+                user.id,
+                Site::Patreon,
+                &full_name,
+                Some(serde_json::to_value(saved_data)?),
+            )
+            .await?;
 
             faktory
                 .enqueue_job(
@@ -262,7 +319,8 @@ async fn callback(
             linked_account.id,
             Some(serde_json::to_value(SavedPatreonData {
                 site_id: patreon_campaign_id.to_string(),
-                patreon: current_campaign,
+                credentials,
+                campaign: Some(current_campaign),
             })?),
         )
         .await?;
@@ -348,16 +406,17 @@ async fn webhook_post(
     Ok(HttpResponse::Ok().body("OK"))
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-struct SavedPatreonData {
-    site_id: String,
-    patreon: Campaign,
+#[derive(Deserialize, Serialize)]
+pub struct SavedPatreonData {
+    pub site_id: String,
+    pub credentials: PatreonCredentials,
+    pub campaign: Option<Campaign>,
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
-struct Campaign {
-    webhook_id: String,
-    webhook_secret: String,
+#[derive(Deserialize, Serialize, PartialEq)]
+pub struct Campaign {
+    pub webhook_id: String,
+    pub webhook_secret: String,
 }
 
 fn extract_campaign(data: Option<serde_json::Value>) -> Result<Option<Campaign>, Error> {
@@ -369,9 +428,8 @@ fn extract_campaign(data: Option<serde_json::Value>) -> Result<Option<Campaign>,
     };
 
     let data: Option<SavedPatreonData> = serde_json::from_value(data)?;
-    tracing::debug!("got saved campaign data: {:?}", data);
 
-    Ok(data.map(|data| data.patreon))
+    Ok(data.and_then(|data| data.campaign))
 }
 
 pub fn service() -> Scope {

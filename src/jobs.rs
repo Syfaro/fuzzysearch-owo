@@ -687,6 +687,42 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
                 }
             }
             models::Site::Patreon => {
+                use crate::patreon::*;
+
+                models::LinkedAccount::update_loading_state(
+                    &ctx.conn,
+                    &ctx.redis,
+                    user_id,
+                    account_id,
+                    models::LoadingState::DiscoveringItems,
+                )
+                .await?;
+
+                let data: SavedPatreonData =
+                    serde_json::from_value(account.data.ok_or(Error::Missing)?)?;
+
+                if data.credentials.expires_after < chrono::Utc::now() {
+                    return Err(Error::UnknownMessage("patreon credentials expired".into()));
+                }
+
+                let client = get_authenticated_client(&ctx.config, &data.credentials.access_token)?;
+
+                let posts: PatreonData<Vec<PatreonDataItem<PatreonPostAttributes>>> = client
+                    .get(format!(
+                        "https://www.patreon.com/api/oauth2/v2/campaigns/{}/posts",
+                        data.site_id
+                    ))
+                    .query(&[(
+                        "fields[post]",
+                        "embed_data,embed_url,published_at,title,url",
+                    )])
+                    .send()
+                    .await?
+                    .json()
+                    .await?;
+
+                tracing::info!("got page of posts: {:?}", posts);
+
                 tracing::warn!("setting patreon to complete without loading");
 
                 models::LinkedAccount::update_loading_state(
