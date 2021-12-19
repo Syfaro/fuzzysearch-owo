@@ -458,34 +458,49 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
                 Error::LoadingError(format!("Could not load FurAffinity submission {}", sub_id))
             })?
             .ok_or(Error::Missing)?;
-        let sub = fa.calc_image_hash(sub).await.map_err(|_err| {
-            Error::LoadingError(format!(
-                "Could not load FurAffinity submission content {}",
-                sub_id
-            ))
-        })?;
 
-        let sha256_hash: [u8; 32] = sub
-            .file_sha256
-            .ok_or(Error::Missing)?
-            .try_into()
-            .expect("sha256 hash was wrong length");
+        if sub.content.url().contains("/stories/") {
+            tracing::debug!("submission was story, skipping");
+        } else {
+            let sub = fa.calc_image_hash(sub).await.map_err(|_err| {
+                Error::LoadingError(format!(
+                    "Could not load FurAffinity submission content {}",
+                    sub_id
+                ))
+            })?;
 
-        let item_id = models::OwnedMediaItem::add_item(
-            &ctx.conn,
-            user_id,
-            account_id,
-            sub_id,
-            sub.hash_num,
-            sha256_hash,
-            Some(format!("https://www.furaffinity.net/view/{}/", sub_id)),
-            Some(sub.title),
-            Some(sub.posted_at),
-        )
-        .await?;
+            let sha256_hash: [u8; 32] = sub
+                .file_sha256
+                .ok_or(Error::Missing)?
+                .try_into()
+                .expect("sha256 hash was wrong length");
 
-        let im = image::load_from_memory(&sub.file.ok_or(Error::Missing)?)?;
-        models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im).await?;
+            let item_id = models::OwnedMediaItem::add_item(
+                &ctx.conn,
+                user_id,
+                account_id,
+                sub_id,
+                sub.hash_num,
+                sha256_hash,
+                Some(format!("https://www.furaffinity.net/view/{}/", sub_id)),
+                Some(sub.title),
+                Some(sub.posted_at),
+            )
+            .await?;
+
+            let im = image::load_from_memory(&sub.file.ok_or(Error::Missing)?)?;
+            models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im)
+                .await?;
+
+            if was_import {
+                ctx.faktory
+                    .enqueue_job(
+                        JobInitiator::User { user_id },
+                        search_existing_submissions_job(user_id, item_id)?,
+                    )
+                    .await?;
+            }
+        }
 
         if was_import {
             let mut redis = ctx.redis.clone();
@@ -539,13 +554,6 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
                 )
                 .await?;
         }
-
-        ctx.faktory
-            .enqueue_job(
-                JobInitiator::User { user_id },
-                search_existing_submissions_job(user_id, item_id)?,
-            )
-            .await?;
 
         Ok(())
     });
