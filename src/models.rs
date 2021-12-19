@@ -391,6 +391,9 @@ async fn upload_image(
 ) -> Result<(String, usize), Error> {
     tracing::debug!("uploading image to s3");
 
+    // Remove transparency before attempting to save as JPEG.
+    let im = image::DynamicImage::ImageRgb8(im.to_rgb8());
+
     let mut buf = Vec::new();
     im.write_to(&mut buf, image::ImageOutputFormat::Jpeg(80))?;
     let size = buf.len();
