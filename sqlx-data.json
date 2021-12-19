@@ -370,8 +370,21 @@
       ]
     }
   },
-  "4f6f6ef9bade4bc0c2e54649e095248a05839fae970ba198b54427788cb1e166": {
-    "query": "INSERT INTO\n    owned_media_item (\n        owner_id,\n        account_id,\n        source_id,\n        perceptual_hash,\n        sha256_hash,\n        link,\n        title,\n        posted_at,\n        last_modified\n    )\nVALUES\n    ($1, $2, $3, $4, $5, $6, $7, $8, current_timestamp) RETURNING id;\n",
+  "530670baabea0aade25a8c44559c04eaeeed20c4accedef1e502a2c87c4fd563": {
+    "query": "DELETE FROM\n    linked_account\nWHERE\n    owner_id = $1\n    AND id = $2;\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "544eba5c80249fa942b7a0b70854ae3f15b200e1923cb954bd2f5a30a85dd329": {
+    "query": "INSERT INTO\n    owned_media_item (\n        owner_id,\n        account_id,\n        source_id,\n        perceptual_hash,\n        sha256_hash,\n        link,\n        title,\n        posted_at,\n        last_modified\n    )\nVALUES\n    (\n        $1,\n        $2,\n        $3,\n        $4,\n        $5,\n        $6,\n        $7,\n        $8,\n        current_timestamp\n    ) ON CONFLICT (account_id, source_id) DO\nUPDATE\nSET\n    perceptual_hash = EXCLUDED.perceptual_hash,\n    sha256_hash = EXCLUDED.sha256_hash,\n    link = EXCLUDED.link,\n    title = EXCLUDED.link,\n    posted_at = EXCLUDED.posted_at,\n    last_modified = EXCLUDED.last_modified RETURNING id;\n",
     "describe": {
       "columns": [
         {
@@ -395,19 +408,6 @@
       "nullable": [
         false
       ]
-    }
-  },
-  "530670baabea0aade25a8c44559c04eaeeed20c4accedef1e502a2c87c4fd563": {
-    "query": "DELETE FROM\n    linked_account\nWHERE\n    owner_id = $1\n    AND id = $2;\n",
-    "describe": {
-      "columns": [],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Uuid"
-        ]
-      },
-      "nullable": []
     }
   },
   "56ffbb01633cc4e31edf84afa38aca7494d2e414715fa6856f47615560f869bb": {
