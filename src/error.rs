@@ -51,6 +51,14 @@ pub enum Error {
 }
 
 impl Error {
+    pub fn unknown_message<M: Into<Cow<'static, str>>>(message: M) -> Self {
+        Self::UnknownMessage(message.into())
+    }
+
+    pub fn user_error<M: Into<Cow<'static, str>>>(message: M) -> Self {
+        Self::UserError(message.into())
+    }
+
     fn error_message(&self) -> Cow<'static, str> {
         match self {
             Self::Unknown | Self::UnknownMessage(_) => "An unknown error occured.".into(),

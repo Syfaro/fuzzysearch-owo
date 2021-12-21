@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt::Display,
     net::TcpStream,
     sync::{Arc, Mutex},
@@ -9,13 +9,11 @@ use std::{
 use futures::Future;
 use opentelemetry::propagation::TextMapPropagator;
 use prometheus::{register_counter_vec, register_histogram_vec, CounterVec, HistogramVec};
-use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
-use sha2::Digest;
 use tracing::Instrument;
 use uuid::Uuid;
 
-use crate::{models, Error};
+use crate::{models, site, Error};
 
 #[derive(Clone, Debug, clap::ArgEnum)]
 pub enum FaktoryQueue {
@@ -52,12 +50,19 @@ impl JobFuzzyQueue for faktory::Job {
 
 pub mod job {
     pub const ADD_ACCOUNT: &str = "add_account";
-    pub const ADD_SUBMISSION_FURAFFINITY: &str = "add_submission_furaffinity";
+
     pub const NEW_SUBMISSION: &str = "new_submission";
+
+    pub const ADD_SUBMISSION_FURAFFINITY: &str = "add_submission_furaffinity";
+    pub const ADD_SUBMISSION_DEVIANTART: &str = "add_submission_deviantart";
+
     pub const SEARCH_EXISTING_SUBMISSIONS: &str = "search_existing_submissions";
 
     pub const FLIST_COLLECT_GALLERY_IMAGES: &str = "flist_gallery";
     pub const FLIST_HASH_IMAGE: &str = "flist_hash";
+
+    pub const DEVIANTART_COLLECT_ACCOUNTS: &str = "deviantart_accounts";
+    pub const DEVIANTART_UPDATE_ACCOUNT: &str = "deviantart_account_update";
 }
 
 lazy_static::lazy_static! {
@@ -71,7 +76,7 @@ macro_rules! extract_args {
         {
             (
                 $(
-                    get_arg::<$x>(&mut $args)?,
+                    crate::jobs::get_arg::<$x>(&mut $args)?,
                 )*
             )
         }
@@ -180,6 +185,23 @@ pub fn flist_hash_image_job(id: i32) -> faktory::Job {
     faktory::Job::new(job::FLIST_HASH_IMAGE, args).fuzzy_queue(FaktoryQueue::Outgoing)
 }
 
+pub fn add_submission_deviantart_job(
+    user_id: Uuid,
+    account_id: Uuid,
+    sub: site::DeviantArtSubmission,
+    import: bool,
+) -> Result<faktory::Job, Error> {
+    let args = serialize_args!(user_id, account_id, sub, import);
+
+    Ok(faktory::Job::new(job::ADD_SUBMISSION_DEVIANTART, args).fuzzy_queue(FaktoryQueue::Outgoing))
+}
+
+pub fn deviantart_update_account_job(account_id: Uuid) -> Result<faktory::Job, Error> {
+    let args = serialize_args!(account_id);
+
+    Ok(faktory::Job::new(job::DEVIANTART_UPDATE_ACCOUNT, args).fuzzy_queue(FaktoryQueue::Outgoing))
+}
+
 #[derive(Clone)]
 pub struct FaktoryClient {
     client: Arc<Mutex<faktory::Producer<TcpStream>>>,
@@ -228,7 +250,7 @@ impl FaktoryClient {
     }
 }
 
-fn get_arg_opt<T: serde::de::DeserializeOwned>(
+pub fn get_arg_opt<T: serde::de::DeserializeOwned>(
     args: &mut core::slice::Iter<serde_json::Value>,
 ) -> Result<Option<T>, Error> {
     let arg = match args.next() {
@@ -240,7 +262,7 @@ fn get_arg_opt<T: serde::de::DeserializeOwned>(
     Ok(Some(data))
 }
 
-fn get_arg<T: serde::de::DeserializeOwned>(
+pub fn get_arg<T: serde::de::DeserializeOwned>(
     args: &mut core::slice::Iter<serde_json::Value>,
 ) -> Result<T, Error> {
     get_arg_opt(args)?.ok_or(Error::Missing)
@@ -404,7 +426,7 @@ struct SimilarTemplate<'a> {
     similar_link: &'a str,
 }
 
-pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::JoinError> {
+pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
     let queues: Vec<String> = ctx
         .config
         .faktory_queues
@@ -439,124 +461,9 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
         ctx: Arc::new(ctx.clone()),
     };
 
-    environment.register(job::ADD_SUBMISSION_FURAFFINITY, |ctx, job| async move {
-        let mut args = job.args().iter();
-        let (user_id, account_id, sub_id) = extract_args!(args, Uuid, Uuid, i32);
-        let was_import: bool = get_arg_opt(&mut args)?.unwrap_or(false);
-
-        let fa = furaffinity_rs::FurAffinity::new(
-            ctx.config.furaffinity_cookie_a.clone(),
-            ctx.config.furaffinity_cookie_b.clone(),
-            ctx.config.user_agent.clone(),
-            None,
-        );
-
-        let sub = fa
-            .get_submission(sub_id)
-            .await
-            .map_err(|_err| {
-                Error::LoadingError(format!("Could not load FurAffinity submission {}", sub_id))
-            })?
-            .ok_or(Error::Missing)?;
-
-        if sub.content.url().contains("/stories/") {
-            tracing::debug!("submission was story, skipping");
-        } else {
-            let sub = fa.calc_image_hash(sub).await.map_err(|_err| {
-                Error::LoadingError(format!(
-                    "Could not load FurAffinity submission content {}",
-                    sub_id
-                ))
-            })?;
-
-            let sha256_hash: [u8; 32] = sub
-                .file_sha256
-                .ok_or(Error::Missing)?
-                .try_into()
-                .expect("sha256 hash was wrong length");
-
-            let item_id = models::OwnedMediaItem::add_item(
-                &ctx.conn,
-                user_id,
-                account_id,
-                sub_id,
-                sub.hash_num,
-                sha256_hash,
-                Some(format!("https://www.furaffinity.net/view/{}/", sub_id)),
-                Some(sub.title),
-                Some(sub.posted_at),
-            )
-            .await?;
-
-            let im = image::load_from_memory(&sub.file.ok_or(Error::Missing)?)?;
-            models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im)
-                .await?;
-
-            if was_import {
-                ctx.faktory
-                    .enqueue_job(
-                        JobInitiator::User { user_id },
-                        search_existing_submissions_job(user_id, item_id)?,
-                    )
-                    .await?;
-            }
-        }
-
-        if was_import {
-            let mut redis = ctx.redis.clone();
-            let loading_key = format!("account-import-ids:loading:{}", account_id);
-            let completed_key = format!("account-import-ids:completed:{}", account_id);
-
-            redis
-                .smove::<_, _, ()>(&loading_key, &completed_key, sub_id)
-                .await?;
-
-            redis
-                .expire::<_, ()>(&loading_key, 60 * 60 * 24 * 7)
-                .await?;
-            redis
-                .expire::<_, ()>(&completed_key, 60 * 60 * 24 * 7)
-                .await?;
-
-            let (remaining, completed): (i32, i32) = redis::pipe()
-                .atomic()
-                .scard(loading_key)
-                .scard(completed_key)
-                .query_async(&mut redis)
-                .await?;
-
-            tracing::debug!(
-                "submission was part of import, {} items remaining",
-                remaining
-            );
-
-            if remaining == 0 {
-                tracing::info!("marking account import complete");
-
-                models::LinkedAccount::update_loading_state(
-                    &ctx.conn,
-                    &redis,
-                    user_id,
-                    account_id,
-                    models::LoadingState::Complete,
-                )
-                .await?;
-            }
-
-            redis
-                .publish(
-                    format!("user-events:{}", user_id.to_string()),
-                    serde_json::to_string(&crate::api::EventMessage::LoadingProgress {
-                        account_id,
-                        loaded: completed,
-                        total: remaining + completed,
-                    })?,
-                )
-                .await?;
-        }
-
-        Ok(())
-    });
+    for (name, job_fn) in site::jobs(&ctx.config).await? {
+        environment.register(name, job_fn);
+    }
 
     environment.register(job::SEARCH_EXISTING_SUBMISSIONS, |ctx, job| async move {
         let mut args = job.args().iter();
@@ -644,97 +551,10 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
         )
         .await?;
 
-        match account.source_site {
-            models::Site::FurAffinity => {
-                let ids = discover_furaffinity_submissions(&account.username, &ctx.config)
-                    .await
-                    .map_err(Error::from_displayable)?;
-
-                if ids.is_empty() {
-                    models::LinkedAccount::update_loading_state(
-                        &ctx.conn,
-                        &ctx.redis,
-                        user_id,
-                        account_id,
-                        models::LoadingState::Complete,
-                    )
-                    .await?;
-                } else {
-                    let known = ids.len() as i32;
-
-                    let mut redis = ctx.redis.clone();
-                    let key = format!("account-import-ids:loading:{}", account_id);
-                    redis.sadd::<_, _, ()>(&key, &ids).await?;
-                    redis.expire::<_, ()>(key, 60 * 60 * 24 * 7).await?;
-
-                    for id in ids {
-                        ctx.faktory
-                            .enqueue_job(
-                                JobInitiator::User { user_id },
-                                add_furaffinity_submission_job(user_id, account_id, id, true)?,
-                            )
-                            .await?;
-                    }
-
-                    models::LinkedAccount::update_loading_state(
-                        &ctx.conn,
-                        &ctx.redis,
-                        user_id,
-                        account_id,
-                        models::LoadingState::LoadingItems { known },
-                    )
-                    .await?;
-                }
-            }
-            models::Site::Patreon => {
-                use crate::patreon::*;
-
-                models::LinkedAccount::update_loading_state(
-                    &ctx.conn,
-                    &ctx.redis,
-                    user_id,
-                    account_id,
-                    models::LoadingState::DiscoveringItems,
-                )
-                .await?;
-
-                let data: SavedPatreonData =
-                    serde_json::from_value(account.data.ok_or(Error::Missing)?)?;
-
-                if data.credentials.expires_after < chrono::Utc::now() {
-                    return Err(Error::UnknownMessage("patreon credentials expired".into()));
-                }
-
-                let client = get_authenticated_client(&ctx.config, &data.credentials.access_token)?;
-
-                let posts: PatreonData<Vec<PatreonDataItem<PatreonPostAttributes>>> = client
-                    .get(format!(
-                        "https://www.patreon.com/api/oauth2/v2/campaigns/{}/posts",
-                        data.site_id
-                    ))
-                    .query(&[(
-                        "fields[post]",
-                        "embed_data,embed_url,published_at,title,url",
-                    )])
-                    .send()
-                    .await?
-                    .json()
-                    .await?;
-
-                tracing::info!("got page of posts: {:?}", posts);
-
-                tracing::warn!("setting patreon to complete without loading");
-
-                models::LinkedAccount::update_loading_state(
-                    &ctx.conn,
-                    &ctx.redis,
-                    user_id,
-                    account_id,
-                    models::LoadingState::Complete,
-                )
-                .await?;
-            }
-            _ => unimplemented!(),
+        match account.source_site.collected_site(&ctx.config).await {
+            Ok(Some(collected_site)) => collected_site.add_account(&ctx, account).await?,
+            Ok(None) => return Err(Error::user_error("Account cannot be added on this site.")),
+            Err(err) => return Err(err),
         }
 
         Ok(())
@@ -764,18 +584,14 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
             {
                 tracing::info!("new submission belongs to known account");
 
-                let sha256_hash: [u8; 32] = data
-                    .sha256
-                    .ok_or(Error::Missing)?
-                    .try_into()
-                    .expect("sha256 hash was wrong length");
+                let sha256_hash = data.sha256.ok_or(Error::Missing)?;
 
                 let item = models::OwnedMediaItem::add_item(
                     &ctx.conn,
                     user_id,
                     account_id,
                     data.site_id,
-                    data.perceptual_hash.map(|hash| i64::from_be_bytes(hash)),
+                    data.perceptual_hash.map(i64::from_be_bytes),
                     sha256_hash,
                     data.page_url.clone(),
                     None, // TODO: collect title
@@ -881,130 +697,6 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
         Ok(())
     });
 
-    environment.register(job::FLIST_COLLECT_GALLERY_IMAGES, |ctx, _job| async move {
-        let previous_run = models::FListImportRun::previous_run(&ctx.conn).await?;
-        let previous_max = match previous_run {
-            Some(run) if run.finished_at.is_none() => {
-                tracing::info!("previous run has not yet finished, skipping");
-                return Ok(());
-            }
-            Some(run) => run.max_id.unwrap_or(0),
-            None => 0,
-        };
-
-        let id = models::FListImportRun::start(&ctx.conn, previous_max + 1).await?;
-
-        let mut flist = crate::flist::FList::new(&ctx.config.user_agent);
-        flist
-            .sign_in(&ctx.config.flist_username, &ctx.config.flist_password)
-            .await?;
-
-        let mut offset = None;
-        let mut max_id = previous_max;
-        loop {
-            tracing::info!("loading flist gallery with offset {:?}", offset);
-
-            let items = flist.get_latest_gallery_items(offset).await?;
-            if items.is_empty() {
-                tracing::info!("found no new items, ending");
-                break;
-            }
-
-            let mut tx = ctx.conn.begin().await?;
-
-            for item in items.iter() {
-                models::FListFile::insert_item(&mut tx, item.id, &item.ext, &item.character_name)
-                    .await?;
-            }
-
-            tx.commit().await?;
-
-            let ids: HashSet<_> = items.iter().map(|item| item.id).collect();
-            let max = ids.iter().copied().max().unwrap_or(0);
-
-            // Only enqueue jobs after changes have been committed
-            for id in ids.iter().copied() {
-                ctx.faktory
-                    .enqueue_job(JobInitiator::external("flist"), flist_hash_image_job(id))
-                    .await?;
-            }
-
-            if max_id < max {
-                max_id = max;
-            }
-
-            if ids.contains(&previous_max) {
-                tracing::info!("found previous max, ending");
-                break;
-            }
-
-            offset = Some(offset.unwrap_or(0) + items.len() as i32);
-        }
-
-        models::FListImportRun::complete(&ctx.conn, id, max_id).await?;
-
-        Ok(())
-    });
-
-    environment.register(job::FLIST_HASH_IMAGE, |ctx, job| async move {
-        let mut args = job.args().iter();
-        let (id,) = extract_args!(args, i32);
-
-        let file = models::FListFile::get_by_id(&ctx.conn, id)
-            .await?
-            .ok_or(Error::Missing)?;
-
-        if file.sha256.is_some() {
-            tracing::info!("file already had hash, skipping");
-
-            return Ok(());
-        }
-
-        let url = format!(
-            "https://static.f-list.net/images/charimage/{}.{}",
-            file.id, file.ext
-        );
-        let bytes = ctx.client.get(&url).send().await?.bytes().await?;
-
-        let mut sha256 = sha2::Sha256::new();
-        sha256.update(&bytes);
-        let sha256: [u8; 32] = sha256
-            .finalize()
-            .try_into()
-            .expect("sha256 was wrong length");
-        let size = bytes.len();
-
-        let perceptual_hash = tokio::task::spawn_blocking(move || -> Option<i64> {
-            let im = image::load_from_memory(&bytes).ok()?;
-
-            let hasher = fuzzysearch_common::get_hasher();
-            let bytes = hasher.hash_image(&im).as_bytes().try_into().ok()?;
-            Some(i64::from_be_bytes(bytes))
-        })
-        .await
-        .map_err(Error::from_displayable)?;
-
-        models::FListFile::update(&ctx.conn, id, size as i32, sha256.to_vec(), perceptual_hash)
-            .await?;
-
-        let data = IncomingSubmission {
-            site: models::Site::FList,
-            site_id: id.to_string(),
-            page_url: Some(format!("https://www.f-list.net/c/{}/", file.character_name)),
-            posted_by: Some(file.character_name),
-            sha256: Some(sha256),
-            perceptual_hash: perceptual_hash.map(|hash| hash.to_be_bytes()),
-            content_url: url,
-            posted_at: None,
-        };
-
-        ctx.faktory
-            .enqueue_job(JobInitiator::external("flist"), new_submission_job(data)?)
-            .await?;
-
-        Ok(())
-    });
-
     let client = environment.finalize();
 
     tokio::task::spawn_blocking(move || {
@@ -1017,60 +709,5 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), tokio::task::Jo
         }
     })
     .await
-}
-
-async fn discover_furaffinity_submissions(
-    user: &str,
-    config: &crate::Config,
-) -> anyhow::Result<Vec<i32>> {
-    // TODO: handle scraps?
-
-    let client = reqwest::Client::default();
-    let id_selector =
-        scraper::Selector::parse(".submission-list u a").expect("known good selector failed");
-
-    let mut ids = Vec::new();
-
-    let mut page = 1;
-    loop {
-        tracing::info!(page, "loading gallery page");
-
-        let body = client
-            .get(format!(
-                "https://www.furaffinity.net/gallery/{}/{}/",
-                user, page
-            ))
-            .header(
-                reqwest::header::COOKIE,
-                format!(
-                    "a={}; b={}",
-                    config.furaffinity_cookie_a, config.furaffinity_cookie_b
-                ),
-            )
-            .send()
-            .await?
-            .text()
-            .await?;
-
-        let body = scraper::Html::parse_document(&body);
-
-        let mut new_ids = body
-            .select(&id_selector)
-            .into_iter()
-            .filter_map(|element| element.value().attr("href"))
-            .filter_map(|href| href.split('/').nth(2))
-            .filter_map(|id| id.parse::<i32>().ok())
-            .peekable();
-
-        if new_ids.peek().is_none() {
-            tracing::debug!("no new ids found");
-
-            break;
-        }
-
-        ids.extend(new_ids);
-        page += 1;
-    }
-
-    Ok(ids)
+    .map_err(Error::from_displayable)
 }

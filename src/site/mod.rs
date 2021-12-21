@@ -1,0 +1,259 @@
+use async_trait::async_trait;
+use oauth2::AccessToken;
+use redis::AsyncCommands;
+use std::collections::{HashMap, HashSet};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+use uuid::Uuid;
+
+use crate::Error;
+use crate::{jobs, models};
+
+mod deviantart;
+mod flist;
+mod furaffinity;
+mod patreon;
+
+pub use deviantart::{types::DeviantArtSubmission, DeviantArt};
+pub use flist::FList;
+pub use furaffinity::FurAffinity;
+pub use patreon::Patreon;
+
+/// A function that is executed to handle a job.
+pub type SiteJob = Box<dyn Fn(Arc<jobs::JobContext>, faktory::Job) -> SiteJobFut + Send + Sync>;
+
+/// A future returned by a job handler function.
+pub type SiteJobFut = Pin<Box<dyn Future<Output = Result<(), Error>>>>;
+
+/// Initialize a site from the global config.
+#[async_trait(?Send)]
+pub trait SiteFromConfig: Sized {
+    /// Initialize a site from the global config.
+    async fn site_from_config(config: &crate::Config) -> Result<Self, Error>;
+}
+
+/// A site that is watched for owned submissions.
+#[async_trait(?Send)]
+pub trait WatchedSite {
+    /// Jobs to register for this site.
+    fn jobs(&self) -> HashMap<&'static str, SiteJob>;
+}
+
+/// A site that can create owned submissions.
+#[async_trait(?Send)]
+pub trait CollectedSite {
+    /// If the site uses OAuth for login, what URL to redirect to for authentication.
+    fn oauth_page(&self) -> Option<&'static str>;
+
+    /// Jobs to register for this site.
+    fn jobs(&self) -> HashMap<&'static str, SiteJob>;
+
+    /// Actions to perform when the account is added.
+    ///
+    /// This is responsible for setting information about the state of submission loading.
+    async fn add_account(
+        &self,
+        ctx: &jobs::JobContext,
+        account: models::LinkedAccount,
+    ) -> Result<(), Error>;
+}
+
+/// The actix-web services needed for this site.
+pub trait SiteServices {
+    fn services() -> Vec<actix_web::Scope>;
+}
+
+/// Get all services for all sites.
+pub fn services() -> Vec<actix_web::Scope> {
+    deviantart::DeviantArt::services()
+        .into_iter()
+        .chain(patreon::Patreon::services().into_iter())
+        .collect()
+}
+
+/// Get all jobs for all watched and collected sites.
+pub async fn jobs(config: &crate::Config) -> Result<HashMap<&'static str, SiteJob>, Error> {
+    let watched_site_jobs = watched_sites(config)
+        .await?
+        .into_iter()
+        .map(|site| site.jobs())
+        .flatten();
+    let collected_site_jobs = collected_sites(config)
+        .await?
+        .into_iter()
+        .map(|site| site.jobs())
+        .flatten();
+
+    Ok(watched_site_jobs.chain(collected_site_jobs).collect())
+}
+
+/// Get all watched sites.
+pub async fn watched_sites(config: &crate::Config) -> Result<Vec<Box<dyn WatchedSite>>, Error> {
+    Ok(vec![Box::new(
+        flist::FList::site_from_config(config).await?,
+    )])
+}
+
+/// Get all collected sites.
+pub async fn collected_sites(config: &crate::Config) -> Result<Vec<Box<dyn CollectedSite>>, Error> {
+    Ok(vec![
+        Box::new(deviantart::DeviantArt::site_from_config(config).await?),
+        Box::new(furaffinity::FurAffinity::site_from_config(config).await?),
+        Box::new(patreon::Patreon::site_from_config(config).await?),
+    ])
+}
+
+/// Get a reqwest client that uses a given bearer token with the default user agent.
+fn get_authenticated_client(
+    config: &crate::Config,
+    token: &AccessToken,
+) -> Result<reqwest::Client, Error> {
+    use reqwest::header;
+
+    let mut headers = header::HeaderMap::new();
+
+    let mut auth_value = header::HeaderValue::from_str(&format!("Bearer {}", token.secret()))
+        .map_err(Error::from_displayable)?;
+    auth_value.set_sensitive(true);
+    headers.insert(header::AUTHORIZATION, auth_value);
+
+    let client = reqwest::ClientBuilder::default()
+        .default_headers(headers)
+        .user_agent(&config.user_agent)
+        .build()?;
+
+    Ok(client)
+}
+
+/// Set IDs of submissions that are still loading for a given account. Used to send progress events
+/// to the user.
+async fn set_loading_submissions<S, I>(
+    conn: &sqlx::Pool<sqlx::Postgres>,
+    redis: &mut redis::aio::ConnectionManager,
+    user_id: Uuid,
+    account_id: Uuid,
+    ids: I,
+) -> Result<usize, Error>
+where
+    S: ToString,
+    I: Iterator<Item = S>,
+{
+    let ids: HashSet<String> = ids.into_iter().map(|item| item.to_string()).collect();
+    let len = ids.len();
+
+    if len == 0 {
+        tracing::info!("user had no submissions");
+
+        models::LinkedAccount::update_loading_state(
+            conn,
+            redis,
+            user_id,
+            account_id,
+            models::LoadingState::Complete,
+        )
+        .await?;
+    } else {
+        tracing::info!("user has {} submissions to load", len);
+
+        let key = format!("account-import-ids:loading:{}", account_id);
+        redis.sadd::<_, _, ()>(&key, ids).await?;
+        redis.expire::<_, ()>(key, 60 * 60 * 24 * 7).await?;
+
+        models::LinkedAccount::update_loading_state(
+            conn,
+            redis,
+            user_id,
+            account_id,
+            models::LoadingState::LoadingItems { known: len as i32 },
+        )
+        .await?;
+    }
+
+    Ok(len)
+}
+
+/// Queue newly discovered submissions for evaluation.
+async fn queue_new_submissions<S, Sub, F>(
+    faktory: &crate::jobs::FaktoryClient,
+    user_id: Uuid,
+    account_id: Uuid,
+    submissions: S,
+    job_fn: F,
+) -> Result<(), Error>
+where
+    S: IntoIterator<Item = Sub>,
+    F: Fn(Uuid, Uuid, Sub) -> Result<faktory::Job, Error>,
+{
+    for sub in submissions {
+        let job = job_fn(user_id, account_id, sub)?;
+
+        faktory
+            .enqueue_job(jobs::JobInitiator::User { user_id }, job)
+            .await?;
+    }
+
+    Ok(())
+}
+
+async fn update_import_progress<S: ToString>(
+    conn: &sqlx::Pool<sqlx::Postgres>,
+    redis: &mut redis::aio::ConnectionManager,
+    user_id: Uuid,
+    account_id: Uuid,
+    site_id: S,
+) -> Result<(), Error> {
+    let loading_key = format!("account-import-ids:loading:{}", account_id);
+    let completed_key = format!("account-import-ids:completed:{}", account_id);
+
+    let site_id = site_id.to_string();
+
+    redis
+        .smove::<_, _, ()>(&loading_key, &completed_key, &site_id)
+        .await?;
+
+    redis
+        .expire::<_, ()>(&loading_key, 60 * 60 * 24 * 7)
+        .await?;
+    redis
+        .expire::<_, ()>(&completed_key, 60 * 60 * 24 * 7)
+        .await?;
+
+    let (remaining, completed): (i32, i32) = redis::pipe()
+        .atomic()
+        .scard(loading_key)
+        .scard(completed_key)
+        .query_async(redis)
+        .await?;
+
+    tracing::debug!(
+        "submission was part of import, {} items remaining",
+        remaining
+    );
+
+    if remaining == 0 {
+        tracing::info!("marking account import complete");
+
+        models::LinkedAccount::update_loading_state(
+            conn,
+            redis,
+            user_id,
+            account_id,
+            models::LoadingState::Complete,
+        )
+        .await?;
+    }
+
+    redis
+        .publish(
+            format!("user-events:{}", user_id.to_string()),
+            serde_json::to_string(&crate::api::EventMessage::LoadingProgress {
+                account_id,
+                loaded: completed,
+                total: remaining + completed,
+            })?,
+        )
+        .await?;
+
+    Ok(())
+}

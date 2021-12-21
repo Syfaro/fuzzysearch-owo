@@ -11,7 +11,8 @@ use serde::{Deserialize, Serialize};
 use sha2::Digest;
 use uuid::Uuid;
 
-use crate::{api, Error};
+use crate::site::SiteFromConfig;
+use crate::{api, site, Error};
 
 pub struct User {
     pub id: Uuid,
@@ -204,6 +205,40 @@ impl OwnedMediaItem {
             })
             .fetch_optional(conn)
             .await?;
+
+        Ok(item)
+    }
+
+    pub async fn lookup_by_site_id<S: ToString>(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        site: Site,
+        site_id: S,
+    ) -> Result<Option<Self>, Error> {
+        let item = sqlx::query_file!(
+            "queries/owned_media/lookup_by_site_id.sql",
+            site.to_string(),
+            site_id.to_string()
+        )
+        .map(|row| OwnedMediaItem {
+            id: row.id,
+            owner_id: row.owner_id,
+            account_id: row.account_id,
+            source_id: row.source_id,
+            perceptual_hash: row.perceptual_hash,
+            sha256_hash: row
+                .sha256_hash
+                .try_into()
+                .expect("sha256 data was not valid"),
+            link: row.link,
+            title: row.title,
+            posted_at: row.posted_at,
+            last_modified: row.last_modified,
+            content_url: row.content_url,
+            content_size: row.content_size,
+            thumb_url: row.thumb_url,
+        })
+        .fetch_optional(conn)
+        .await?;
 
         Ok(item)
     }
@@ -443,7 +478,7 @@ pub enum LoadingState {
 impl LoadingState {
     pub fn message(&self) -> String {
         match self {
-            LoadingState::Unknown => "Loading Starting".to_string(),
+            LoadingState::Unknown => "Starting Loading".to_string(),
             LoadingState::DiscoveringItems => "Discovering Items".to_string(),
             LoadingState::LoadingItems { known } => format!("Processing {} Items", known),
             LoadingState::Complete => "Loading Complete".to_string(),
@@ -666,6 +701,20 @@ impl LinkedAccount {
         Ok(account)
     }
 
+    pub async fn all_site_accounts(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        site: Site,
+    ) -> Result<Vec<Uuid>, Error> {
+        let accounts = sqlx::query_file_scalar!(
+            "queries/linked_account/all_site_accounts.sql",
+            site.to_string()
+        )
+        .fetch_all(conn)
+        .await?;
+
+        Ok(accounts)
+    }
+
     pub fn verification_key(&self) -> Option<&str> {
         self.data
             .as_ref()
@@ -685,6 +734,23 @@ pub enum Site {
     Twitter,
     Patreon,
     FList,
+    DeviantArt,
+}
+
+impl Site {
+    pub async fn collected_site(
+        &self,
+        config: &crate::Config,
+    ) -> Result<Option<Box<dyn crate::site::CollectedSite>>, Error> {
+        let site: Option<Box<dyn crate::site::CollectedSite>> = match self {
+            Site::FurAffinity => Some(Box::new(site::FurAffinity::site_from_config(config).await?)),
+            Site::DeviantArt => Some(Box::new(site::DeviantArt::site_from_config(config).await?)),
+            Site::Patreon => Some(Box::new(site::Patreon::site_from_config(config).await?)),
+            _ => None,
+        };
+
+        Ok(site)
+    }
 }
 
 impl Display for Site {
@@ -696,6 +762,7 @@ impl Display for Site {
             Site::Twitter => write!(f, "Twitter"),
             Site::Patreon => write!(f, "Patreon"),
             Site::FList => write!(f, "F-list"),
+            Site::DeviantArt => write!(f, "DeviantArt"),
         }
     }
 }
@@ -711,6 +778,7 @@ impl FromStr for Site {
             "Twitter" => Site::Twitter,
             "Patreon" => Site::Patreon,
             "F-list" => Site::FList,
+            "DeviantArt" => Site::DeviantArt,
             _ => return Err("unknown source site"),
         };
 

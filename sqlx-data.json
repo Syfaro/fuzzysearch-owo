@@ -21,6 +21,99 @@
       ]
     }
   },
+  "01be4938b9fc074955d569ca587ace85cdd10876ed5e0764c12d2316f5ffd8a6": {
+    "query": "SELECT\n  owned_media_item.*\nFROM\n  owned_media_item\n  JOIN linked_account on owned_media_item.account_id = linked_account.id\nWHERE\n  linked_account.source_site = $1\n  AND source_id = $2;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "account_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 3,
+          "name": "source_id",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "perceptual_hash",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 5,
+          "name": "sha256_hash",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 6,
+          "name": "link",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "title",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "posted_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 9,
+          "name": "last_modified",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 10,
+          "name": "content_url",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 11,
+          "name": "content_size",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 12,
+          "name": "thumb_url",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
   "01c7c249ded3d2620a52f0e1dae36f7495f5038f624a0cfed0b1c89a5c56dc5a": {
     "query": "SELECT\n    coalesce(count(*), 0) \"count!\",\n    coalesce(sum(content_size)::bigint, 0) \"total_content_size!\"\nFROM\n    owned_media_item\nWHERE\n    owner_id = $1\n    AND account_id = $2;\n",
     "describe": {
@@ -127,6 +220,26 @@
         ]
       },
       "nullable": []
+    }
+  },
+  "16eaab434285da83fc7156e52f59e4007d8db3ff41b56d91479943a75fb3a030": {
+    "query": "SELECT\n    id\nFROM\n    linked_account\nWHERE\n    source_site = $1;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        false
+      ]
     }
   },
   "18c35d01397d679654539e68df0e145812a821a57c860e8f0a220aa6124d8bb9": {

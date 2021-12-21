@@ -6,11 +6,10 @@ use clap::Parser;
 mod api;
 mod auth;
 mod error;
-mod flist;
 mod jobs;
 mod models;
-mod patreon;
 mod routes;
+mod site;
 mod user;
 
 pub use error::Error;
@@ -106,6 +105,13 @@ pub struct Config {
     /// F-list password.
     #[clap(long, env("FLIST_PASSWORD"))]
     pub flist_password: String,
+
+    /// DeviantArt client ID.
+    #[clap(long, env("DEVIANTART_CLIENT_ID"))]
+    pub deviantart_client_id: String,
+    /// DeviantArt client secret.
+    #[clap(long, env("DEVIANTART_CLIENT_SECRET"))]
+    pub deviantart_client_secret: String,
 
     /// SMTP hostname.
     #[clap(long, env("SMTP_HOST"))]
@@ -273,7 +279,7 @@ async fn main() {
                     .service(auth::service())
                     .service(user::service())
                     .service(api::service())
-                    .service(patreon::service())
+                    .service(site::services())
                     .service(files)
                     .service(index)
                     .default_service(web::to(not_found))

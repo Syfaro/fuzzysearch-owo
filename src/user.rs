@@ -181,6 +181,7 @@ struct AccountLinkForm {
 
 #[post("/link")]
 async fn account_link_post(
+    config: web::Data<crate::Config>,
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
     user: models::User,
     form: web::Form<AccountLinkForm>,
@@ -191,13 +192,12 @@ async fn account_link_post(
         ));
     }
 
-    match form.site {
-        Site::Patreon => {
+    if let Ok(Some(collected_site)) = form.site.collected_site(&config).await {
+        if let Some(location) = collected_site.oauth_page() {
             return Ok(HttpResponse::Found()
-                .insert_header(("Location", "/patreon/auth"))
-                .finish())
+                .insert_header(("Location", location))
+                .finish());
         }
-        _ => (),
     }
 
     let username = form.username.as_deref().ok_or(Error::Missing)?;
