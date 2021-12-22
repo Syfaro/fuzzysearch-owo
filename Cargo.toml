@@ -3,6 +3,11 @@ name = "fuzzysearch-owo"
 version = "0.1.0"
 edition = "2021"
 authors = ["Syfaro <syfaro@huefox.com>"]
+publish = false
+
+[package.metadata.release]
+allow-branch = ["main"]
+sign-tag = true
 
 [features]
 env = ["dotenv"]
