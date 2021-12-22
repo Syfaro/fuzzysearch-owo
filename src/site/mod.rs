@@ -14,11 +14,13 @@ mod deviantart;
 mod flist;
 mod furaffinity;
 mod patreon;
+mod reddit;
 
 pub use deviantart::{types::DeviantArtSubmission, DeviantArt};
 pub use flist::FList;
 pub use furaffinity::FurAffinity;
 pub use patreon::Patreon;
+pub use reddit::{types::RedditPost, Reddit};
 
 /// A function that is executed to handle a job.
 pub type SiteJob = Box<dyn Fn(Arc<jobs::JobContext>, faktory::Job) -> SiteJobFut + Send + Sync>;
@@ -98,9 +100,10 @@ pub async fn jobs(config: &crate::Config) -> Result<HashMap<&'static str, SiteJo
 
 /// Get all watched sites.
 pub async fn watched_sites(config: &crate::Config) -> Result<Vec<Box<dyn WatchedSite>>, Error> {
-    Ok(vec![Box::new(
-        flist::FList::site_from_config(config).await?,
-    )])
+    Ok(vec![
+        Box::new(flist::FList::site_from_config(config).await?),
+        Box::new(reddit::Reddit::site_from_config(config).await?),
+    ])
 }
 
 /// Get all collected sites.

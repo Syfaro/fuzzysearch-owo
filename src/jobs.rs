@@ -63,6 +63,10 @@ pub mod job {
 
     pub const DEVIANTART_COLLECT_ACCOUNTS: &str = "deviantart_accounts";
     pub const DEVIANTART_UPDATE_ACCOUNT: &str = "deviantart_account_update";
+
+    pub const REDDIT_CHECK_SUBREDDITS: &str = "reddit_check";
+    pub const REDDIT_UPDATE_SUBREDDIT: &str = "reddit_subreddit";
+    pub const REDDIT_LOAD_POST: &str = "reddit_post";
 }
 
 lazy_static::lazy_static! {
@@ -200,6 +204,18 @@ pub fn deviantart_update_account_job(account_id: Uuid) -> Result<faktory::Job, E
     let args = serialize_args!(account_id);
 
     Ok(faktory::Job::new(job::DEVIANTART_UPDATE_ACCOUNT, args).fuzzy_queue(FaktoryQueue::Outgoing))
+}
+
+pub fn reddit_update_subreddit_job(name: &str) -> faktory::Job {
+    let args = vec![serde_json::Value::from(name)];
+
+    faktory::Job::new(job::REDDIT_UPDATE_SUBREDDIT, args).fuzzy_queue(FaktoryQueue::Outgoing)
+}
+
+pub fn reddit_post_job(subreddit: &str, post: site::RedditPost) -> Result<faktory::Job, Error> {
+    let args = serialize_args!(subreddit, post);
+
+    Ok(faktory::Job::new(job::REDDIT_LOAD_POST, args).fuzzy_queue(FaktoryQueue::Outgoing))
 }
 
 #[derive(Clone)]
@@ -502,8 +518,8 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
         let flist_items = models::FListFile::similar_images(&ctx.conn, perceptual_hash)
             .await?
             .into_iter()
-            .flat_map(|file| {
-                Some((
+            .map(|file| {
+                (
                     models::SimilarImage {
                         site: models::Site::FList,
                         page_url: Some(format!(
@@ -517,10 +533,22 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                         ),
                     },
                     None,
-                ))
+                )
             });
 
-        for (similar_image, created_at) in fuzzysearch_items.chain(flist_items) {
+        let reddit_items = sqlx::query!("SELECT permalink, author, posted_at, content_link FROM reddit_image JOIN reddit_post ON reddit_image.post_fullname = reddit_post.fullname WHERE perceptual_hash <@ ($1, 3)", perceptual_hash).map(|row| {
+            (
+                models::SimilarImage {
+                    site: models::Site::Reddit,
+                    page_url: row.permalink,
+                    posted_by: row.author,
+                    content_url: row.content_link.unwrap(),
+                },
+                row.posted_at
+            )
+        }).fetch_all(&ctx.conn).await?;
+
+        for (similar_image, created_at) in fuzzysearch_items.chain(flist_items).chain(reddit_items) {
             models::UserEvent::similar_found(
                 &ctx.conn,
                 &ctx.redis,

@@ -113,6 +113,19 @@ pub struct Config {
     #[clap(long, env("DEVIANTART_CLIENT_SECRET"))]
     pub deviantart_client_secret: String,
 
+    /// Reddit client ID (or username).
+    #[clap(long, env("REDDIT_CLIENT_ID"))]
+    pub reddit_client_id: String,
+    /// Reddit client secret (or password).
+    #[clap(long, env("REDDIT_CLIENT_SECRET"))]
+    pub reddit_client_secret: String,
+    /// Reddit username.
+    #[clap(long, env("REDDIT_USERNAME"))]
+    pub reddit_username: String,
+    /// Reddit password.
+    #[clap(long, env("REDDIT_PASSWORD"))]
+    pub reddit_password: String,
+
     /// SMTP hostname.
     #[clap(long, env("SMTP_HOST"))]
     pub smtp_host: String,

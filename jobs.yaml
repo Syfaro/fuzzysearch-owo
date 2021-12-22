@@ -6,6 +6,13 @@ jobs:
     args: []
     custom:
       initiator: schedule
+  - name: check reddit
+    every: "*/5 * * * *"
+    job_type: reddit_check
+    queue: fuzzysearch_owo_outgoing
+    args: []
+    custom:
+      initiator: schedule
   - name: collect deviantart
     every: "0 4 * * *"
     job_type: deviantart_accounts

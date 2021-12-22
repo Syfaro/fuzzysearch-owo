@@ -735,6 +735,7 @@ pub enum Site {
     Patreon,
     FList,
     DeviantArt,
+    Reddit,
 }
 
 impl Site {
@@ -763,6 +764,7 @@ impl Display for Site {
             Site::Patreon => write!(f, "Patreon"),
             Site::FList => write!(f, "F-list"),
             Site::DeviantArt => write!(f, "DeviantArt"),
+            Site::Reddit => write!(f, "Reddit"),
         }
     }
 }
@@ -779,6 +781,7 @@ impl FromStr for Site {
             "Patreon" => Site::Patreon,
             "F-list" => Site::FList,
             "DeviantArt" => Site::DeviantArt,
+            "Reddit" => Site::Reddit,
             _ => return Err("unknown source site"),
         };
 
