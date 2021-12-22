@@ -323,7 +323,7 @@ async fn update_account(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(), E
         ctx.faktory
             .enqueue_job(
                 JobInitiator::Schedule,
-                jobs::add_submission_deviantart_job(account.owner_id, account_id, sub, true)?,
+                jobs::add_submission_deviantart_job(account.owner_id, account_id, sub, false)?,
             )
             .await?;
     }
