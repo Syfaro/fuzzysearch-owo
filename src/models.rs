@@ -1157,3 +1157,127 @@ impl FListImportRun {
         Ok(())
     }
 }
+
+pub struct RedditSubreddit {
+    pub name: String,
+    pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
+    pub last_page: Option<String>,
+}
+
+impl RedditSubreddit {
+    pub async fn needing_update(conn: &sqlx::Pool<sqlx::Postgres>) -> Result<Vec<Self>, Error> {
+        let subs = sqlx::query_file_as!(Self, "queries/reddit/needing_update.sql")
+            .fetch_all(conn)
+            .await?;
+
+        Ok(subs)
+    }
+
+    pub async fn get_by_name(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        name: &str,
+    ) -> Result<Option<Self>, Error> {
+        let sub = sqlx::query_file_as!(Self, "queries/reddit/get_by_name.sql", name)
+            .fetch_optional(conn)
+            .await?;
+
+        Ok(sub)
+    }
+
+    pub async fn update_position(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        name: &str,
+        position: &str,
+    ) -> Result<(), Error> {
+        sqlx::query_file!("queries/reddit/update_position.sql", name, position)
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
+}
+
+pub struct RedditPost {
+    pub fullname: String,
+    pub subreddit_name: String,
+    pub posted_at: chrono::DateTime<chrono::Utc>,
+    pub author: String,
+    pub permalink: String,
+    pub content_link: String,
+}
+
+impl RedditPost {
+    pub async fn create(conn: &sqlx::Pool<sqlx::Postgres>, post: Self) -> Result<(), Error> {
+        sqlx::query_file!(
+            "queries/reddit/create_post.sql",
+            post.fullname,
+            post.subreddit_name,
+            post.posted_at,
+            post.author,
+            post.permalink,
+            post.content_link
+        )
+        .execute(conn)
+        .await?;
+
+        Ok(())
+    }
+}
+
+pub struct RedditImage {
+    pub post: RedditPost,
+
+    pub id: Uuid,
+    pub post_fullname: String,
+    pub size: i32,
+    pub sha256: [u8; 32],
+    pub perceptual_hash: Option<[u8; 8]>,
+}
+
+impl RedditImage {
+    pub async fn create(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        post_fullname: &str,
+        size: i32,
+        sha256: [u8; 32],
+        perceptual_hash: Option<[u8; 8]>,
+    ) -> Result<Option<Uuid>, Error> {
+        let id = sqlx::query_file_scalar!(
+            "queries/reddit/create_image.sql",
+            post_fullname,
+            size,
+            sha256.to_vec(),
+            perceptual_hash.map(|hash| i64::from_be_bytes(hash))
+        )
+        .fetch_optional(conn)
+        .await?;
+
+        Ok(id)
+    }
+
+    pub async fn similar_images(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        perceptual_hash: i64,
+    ) -> Result<Vec<Self>, Error> {
+        let images = sqlx::query_file!("queries/reddit/similar_images.sql", perceptual_hash, 3)
+            .map(|row| Self {
+                post: RedditPost {
+                    fullname: row.fullname,
+                    subreddit_name: row.subreddit_name,
+                    posted_at: row.posted_at,
+                    author: row.author,
+                    permalink: row.permalink,
+                    content_link: row.content_link,
+                },
+                id: row.id,
+                post_fullname: row.post_fullname,
+                size: row.size,
+                sha256: row.sha256.try_into().expect("sha256 was wrong length"),
+                perceptual_hash: row.perceptual_hash.map(|hash| hash.to_be_bytes()),
+            })
+            .fetch_all(conn)
+            .await?;
+
+        Ok(images)
+    }
+}

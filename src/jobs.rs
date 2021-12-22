@@ -536,19 +536,23 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                 )
             });
 
-        let reddit_items = sqlx::query!("SELECT permalink, author, posted_at, content_link FROM reddit_image JOIN reddit_post ON reddit_image.post_fullname = reddit_post.fullname WHERE perceptual_hash <@ ($1, 3)", perceptual_hash).map(|row| {
-            (
-                models::SimilarImage {
-                    site: models::Site::Reddit,
-                    page_url: row.permalink,
-                    posted_by: row.author,
-                    content_url: row.content_link.unwrap(),
-                },
-                row.posted_at
-            )
-        }).fetch_all(&ctx.conn).await?;
+        let reddit_items = models::RedditImage::similar_images(&ctx.conn, perceptual_hash)
+            .await?
+            .into_iter()
+            .map(|image| {
+                (
+                    models::SimilarImage {
+                        site: models::Site::Reddit,
+                        page_url: Some(image.post.permalink),
+                        posted_by: Some(image.post.author),
+                        content_url: image.post.content_link,
+                    },
+                    Some(image.post.posted_at),
+                )
+            });
 
-        for (similar_image, created_at) in fuzzysearch_items.chain(flist_items).chain(reddit_items) {
+        for (similar_image, created_at) in fuzzysearch_items.chain(flist_items).chain(reddit_items)
+        {
             models::UserEvent::similar_found(
                 &ctx.conn,
                 &ctx.redis,

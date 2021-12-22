@@ -292,6 +292,36 @@
       ]
     }
   },
+  "283976d5cc56bb044af4e2d946737a6d8cec4180cf7ecec80d8f45ce3b65ab4d": {
+    "query": "SELECT\n    *\nFROM\n    reddit_subreddit\nWHERE\n    last_updated IS NULL\n    OR last_updated < now() + interval '15 minutes';\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 1,
+          "name": "last_updated",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 2,
+          "name": "last_page",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": [
+        false,
+        true,
+        true
+      ]
+    }
+  },
   "2dc224affa78594b67af913a2d4cdf143d6a1869bcd9d3e0bfa63cd2842d1458": {
     "query": "UPDATE\n    user_account\nSET\n    email_verifier = null\nWHERE\n    id = $1\n    AND email_verifier = $2 RETURNING id;\n",
     "describe": {
@@ -830,6 +860,55 @@
       ]
     }
   },
+  "8bc70522b20fac68bb26aa42e5f8f7bf9da678ddfcedf9dfdf416df61ca3be38": {
+    "query": "SELECT\n    *\nFROM\n    reddit_subreddit\nWHERE\n    name = $1;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 1,
+          "name": "last_updated",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 2,
+          "name": "last_page",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        true,
+        true
+      ]
+    }
+  },
+  "8ecca7bdf1355882cde2d9586363390532b68de510da9677f92fec09360ee037": {
+    "query": "INSERT INTO\n    reddit_post (\n        fullname,\n        subreddit_name,\n        posted_at,\n        author,\n        permalink,\n        content_link\n    )\nVALUES\n    ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING;\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text",
+          "Timestamptz",
+          "Text",
+          "Text",
+          "Text"
+        ]
+      },
+      "nullable": []
+    }
+  },
   "90c93803db8af98fd8ad7d9ff14b66890504953e3f8d77e502827011885ee428": {
     "query": "SELECT\n    *\nFROM\n    owned_media_item\nWHERE\n    owner_id = $1\nORDER BY\n    last_modified DESC\nLIMIT\n    30;\n",
     "describe": {
@@ -1079,6 +1158,29 @@
       ]
     }
   },
+  "a6d44684de329c52d1ba4a69b866421d2da14e92e0fe1f7ebba411d1163d5cd4": {
+    "query": "INSERT INTO\n    reddit_image (post_fullname, size, sha256, perceptual_hash)\nVALUES\n    ($1, $2, $3, $4) ON CONFLICT DO NOTHING RETURNING id;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Int4",
+          "Bytea",
+          "Int8"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
   "c5d2ab0824d09910f1e20bac7fefdcde7e309af236bb0856bc49c626f40221cb": {
     "query": "DELETE FROM\n    owned_media_item\nWHERE\n    owner_id = $1\n    AND id = $2;\n",
     "describe": {
@@ -1090,6 +1192,87 @@
         ]
       },
       "nullable": []
+    }
+  },
+  "c8efc19c9cd02ebbe4cc4fd306ae08559ced8cad833bee9054a4497c46c1cac2": {
+    "query": "SELECT\n    fullname \"fullname!\",\n    subreddit_name \"subreddit_name!\",\n    posted_at \"posted_at!\",\n    author \"author!\",\n    permalink \"permalink!\",\n    content_link \"content_link!\",\n    id \"id!\",\n    post_fullname \"post_fullname!\",\n    size \"size!\",\n    sha256 \"sha256!\",\n    perceptual_hash\nFROM\n    reddit_image\n    LEFT JOIN reddit_post ON reddit_image.post_fullname = reddit_post.fullname\nWHERE\n    perceptual_hash <@ ($1, $2)\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "fullname!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 1,
+          "name": "subreddit_name!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "posted_at!",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 3,
+          "name": "author!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "permalink!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 5,
+          "name": "content_link!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 6,
+          "name": "id!",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 7,
+          "name": "post_fullname!",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "size!",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 9,
+          "name": "sha256!",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 10,
+          "name": "perceptual_hash",
+          "type_info": "Int8"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Int8",
+          "Int8"
+        ]
+      },
+      "nullable": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        true
+      ]
     }
   },
   "d323b8bbcee14a2712722f63fe7d5fbdcd9ee5589640eb1679779e8eeecd70ea": {
@@ -1439,6 +1622,19 @@
         false,
         false
       ]
+    }
+  },
+  "fca0aea222f5466ab9e8786e8ac88afd72b87980d8bd498170a5a844d19bc573": {
+    "query": "UPDATE\n    reddit_subreddit\nSET\n    last_updated = current_timestamp,\n    last_page = $2\nWHERE\n    name = $1;\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text"
+        ]
+      },
+      "nullable": []
     }
   }
 }

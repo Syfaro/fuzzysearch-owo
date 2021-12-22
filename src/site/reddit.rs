@@ -1,7 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
-use futures::TryStreamExt;
 use sha2::Digest;
 
 use super::{SiteFromConfig, SiteJob, WatchedSite};
@@ -45,9 +44,9 @@ impl WatchedSite for Reddit {
 }
 
 async fn check_subreddits(ctx: Arc<JobContext>, _job: faktory::Job) -> Result<(), Error> {
-    let mut stream = sqlx::query!("SELECT name FROM reddit_subreddit WHERE last_updated IS NULL OR last_updated < now() + interval '15 minutes'").fetch(&ctx.conn);
+    let subs = models::RedditSubreddit::needing_update(&ctx.conn).await?;
 
-    while let Some(sub) = stream.try_next().await? {
+    for sub in subs {
         tracing::info!("queueing subreddit {}", sub.name);
 
         ctx.faktory
@@ -65,9 +64,9 @@ async fn update_subreddit(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(),
     let mut args = job.args().iter();
     let (name,) = crate::extract_args!(args, String);
 
-    let data = sqlx::query!("SELECT * FROM reddit_subreddit WHERE name = $1", name)
-        .fetch_one(&ctx.conn)
-        .await?;
+    let data = models::RedditSubreddit::get_by_name(&ctx.conn, &name)
+        .await?
+        .ok_or(Error::Missing)?;
 
     if matches!(data.last_updated, Some(last_updated) if chrono::Utc::now() < last_updated + chrono::Duration::minutes(15))
     {
@@ -141,7 +140,7 @@ async fn update_subreddit(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(),
     tracing::debug!("setting max_id to {}", max_id);
     let last_page = radix_fmt::radix(max_id, 36).to_string();
 
-    sqlx::query!("UPDATE reddit_subreddit SET last_updated = current_timestamp, last_page = $2 WHERE name = $1", sub.name, last_page).execute(&ctx.conn).await?;
+    models::RedditSubreddit::update_position(&ctx.conn, &sub.name, &last_page).await?;
 
     Ok(())
 }
@@ -176,25 +175,37 @@ async fn load_post(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(), Error>
             .try_into()
             .expect("perceptual hash was wrong length");
 
-        Some(i64::from_be_bytes(hash))
+        Some(hash)
     } else {
         tracing::warn!("could not calculate perceptual hash");
 
         None
     };
 
-    sqlx::query!("INSERT INTO reddit_post (fullname, subreddit_name, permalink, author, content_link, posted_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING", post.id, subreddit_name, post.permalink, post.author, url, post.posted_at).execute(&ctx.conn).await?;
+    models::RedditPost::create(
+        &ctx.conn,
+        models::RedditPost {
+            fullname: post.id.clone(),
+            subreddit_name,
+            posted_at: post.posted_at,
+            author: post.author.clone(),
+            permalink: post.permalink.clone(),
+            content_link: url.clone(),
+        },
+    )
+    .await?;
 
-    let id = sqlx::query_scalar!("INSERT INTO reddit_image (post_fullname, size, sha256, perceptual_hash) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING RETURNING id", post.id, data.len() as i32, sha256.to_vec(), hash).fetch_optional(&ctx.conn).await?;
+    let new_image_id =
+        models::RedditImage::create(&ctx.conn, &post.id, data.len() as i32, sha256, hash).await?;
 
-    if let Some(id) = id {
+    if let Some(id) = new_image_id {
         let data = jobs::IncomingSubmission {
             site: models::Site::Reddit,
             site_id: id.to_string(),
             page_url: Some(post.permalink),
             posted_by: Some(post.author),
             sha256: Some(sha256),
-            perceptual_hash: hash.map(|hash| hash.to_be_bytes()),
+            perceptual_hash: hash,
             content_url: url,
             posted_at: None,
         };

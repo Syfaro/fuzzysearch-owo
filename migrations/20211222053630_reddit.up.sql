@@ -16,8 +16,8 @@ CREATE TABLE reddit_post (
 CREATE TABLE reddit_image (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     post_fullname text NOT NULL REFERENCES reddit_post (fullname) ON DELETE CASCADE,
-    size int,
-    sha256 bytea,
+    size int NOT NULL,
+    sha256 bytea NOT NULL,
     perceptual_hash bigint,
     UNIQUE (post_fullname, sha256)
 );
