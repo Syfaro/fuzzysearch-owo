@@ -221,6 +221,8 @@ async fn main() {
         .await
         .expect("could not create redis connection manager");
 
+    let redlock = redlock::RedLock::new(vec![config.redis_dsn.as_ref()]);
+
     let fuzzysearch = fuzzysearch::FuzzySearch::new_with_opts(fuzzysearch::FuzzySearchOpts {
         endpoint: Some(config.fuzzysearch_host.clone()),
         api_key: config.fuzzysearch_api_key.clone(),
@@ -239,10 +241,11 @@ async fn main() {
     match config.service_mode {
         ServiceMode::BackgroundWorker => {
             jobs::start_job_processing(jobs::JobContext {
-                faktory: faktory.clone(),
-                conn: pool.clone(),
-                redis: redis_manager.clone(),
-                s3: s3.clone(),
+                faktory,
+                conn: pool,
+                redis: redis_manager,
+                redlock: std::sync::Arc::new(redlock),
+                s3,
                 fuzzysearch: std::sync::Arc::new(fuzzysearch),
                 config: std::sync::Arc::new(config.clone()),
                 client,

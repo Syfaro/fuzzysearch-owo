@@ -334,9 +334,10 @@ pub struct JobContext {
     pub faktory: FaktoryClient,
     pub conn: sqlx::Pool<sqlx::Postgres>,
     pub redis: redis::aio::ConnectionManager,
+    pub redlock: Arc<redlock::RedLock>,
     pub s3: rusoto_s3::S3Client,
-    pub fuzzysearch: std::sync::Arc<fuzzysearch::FuzzySearch>,
-    pub config: std::sync::Arc<crate::Config>,
+    pub fuzzysearch: Arc<fuzzysearch::FuzzySearch>,
+    pub config: Arc<crate::Config>,
     pub client: reqwest::Client,
 }
 

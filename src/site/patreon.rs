@@ -7,6 +7,7 @@ use oauth2::{
     AccessToken, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, RedirectUrl,
     TokenResponse, TokenUrl,
 };
+use uuid::Uuid;
 
 use crate::jobs::JobContext;
 use crate::models::{LinkedAccount, Site};
@@ -55,6 +56,53 @@ impl Patreon {
         )
         .set_redirect_uri(self.redirect_url.clone())
     }
+
+    async fn refresh_credentials(
+        &self,
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        redlock: &redlock::RedLock,
+        data: &types::SavedPatreonData,
+        account_id: Uuid,
+    ) -> Result<AccessToken, Error> {
+        super::refresh_credentials(
+            redlock,
+            account_id,
+            data,
+            || self.get_oauth_client(),
+            |item| {
+                Some((
+                    item.credentials.refresh_token.clone(),
+                    item.credentials.refresh_token.clone(),
+                    item.credentials.expires_after,
+                ))
+            },
+            || async {
+                let account = models::LinkedAccount::lookup_by_id(conn, account_id)
+                    .await?
+                    .ok_or(Error::Missing)?;
+
+                let data = account.data.ok_or(Error::Missing)?;
+                let data: types::SavedPatreonData = serde_json::from_value(data)?;
+
+                Ok(data)
+            },
+            |data, access_token, refresh_token, expires_after| async move {
+                let data = serde_json::to_value(types::SavedPatreonData {
+                    credentials: types::PatreonCredentials {
+                        access_token,
+                        refresh_token,
+                        expires_after,
+                    },
+                    ..data
+                })?;
+
+                models::LinkedAccount::update_data(conn, account_id, Some(data)).await?;
+
+                Ok(())
+            },
+        )
+        .await
+    }
 }
 
 #[async_trait(?Send)]
@@ -92,11 +140,9 @@ impl CollectedSite for Patreon {
         let data: types::SavedPatreonData =
             serde_json::from_value(account.data.ok_or(Error::Missing)?)?;
 
-        if data.credentials.expires_after < chrono::Utc::now() {
-            return Err(Error::UnknownMessage("patreon credentials expired".into()));
-        }
-
-        let token = AccessToken::new(data.credentials.access_token);
+        let token = self
+            .refresh_credentials(&ctx.conn, &ctx.redlock, &data, account.id)
+            .await?;
         let client = super::get_authenticated_client(&ctx.config, &token)?;
 
         let posts: types::PatreonData<Vec<types::PatreonDataItem<types::PatreonPostAttributes>>> =

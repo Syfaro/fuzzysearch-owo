@@ -57,6 +57,7 @@ rusoto_credential = "0.47"
 rusoto_s3 = "0.47"
 
 redis = { version = "0.21", features = ["tokio-comp", "aio", "connection-manager"] }
+redlock = { git = "https://github.com/Syfaro/redlock-rs.git" }
 faktory = "0.11"
 
 lettre = { version = "0.10.0-rc.4", features = ["tokio1-native-tls", "tracing", "serde"] }

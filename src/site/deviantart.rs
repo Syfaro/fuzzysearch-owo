@@ -56,6 +56,50 @@ impl DeviantArt {
         )
         .set_redirect_uri(self.redirect_url.clone())
     }
+
+    async fn refresh_credentials(
+        &self,
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        redlock: &redlock::RedLock,
+        data: &types::DeviantArtData,
+        account_id: Uuid,
+    ) -> Result<AccessToken, Error> {
+        super::refresh_credentials(
+            redlock,
+            account_id,
+            data,
+            || self.get_oauth_client(),
+            |item| {
+                Some((
+                    item.access_token.clone(),
+                    item.refresh_token.clone(),
+                    item.expires_after,
+                ))
+            },
+            || async {
+                let account = models::LinkedAccount::lookup_by_id(conn, account_id)
+                    .await?
+                    .ok_or(Error::Missing)?;
+
+                let data = account.data.ok_or(Error::Missing)?;
+                let data: types::DeviantArtData = serde_json::from_value(data)?;
+
+                Ok(data)
+            },
+            |_data, access_token, refresh_token, expires_after| async move {
+                let data = serde_json::to_value(types::DeviantArtData {
+                    access_token,
+                    refresh_token,
+                    expires_after,
+                })?;
+
+                models::LinkedAccount::update_data(conn, account_id, Some(data)).await?;
+
+                Ok(())
+            },
+        )
+        .await
+    }
 }
 
 #[async_trait(?Send)]
@@ -115,11 +159,9 @@ impl CollectedSite for DeviantArt {
                 .ok_or_else(|| Error::unknown_message("account missing data"))?,
         )?;
 
-        if data.expires_after < chrono::Utc::now() {
-            return Err(Error::unknown_message("deviantart credentials expired"));
-        }
-
-        let token = AccessToken::new(data.access_token);
+        let token = self
+            .refresh_credentials(&ctx.conn, &ctx.redlock, &data, account.id)
+            .await?;
         let client = super::get_authenticated_client(&ctx.config, &token)?;
 
         let subs = collect_gallery_items(&client, &account.username).await?;
@@ -260,13 +302,11 @@ async fn update_account(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(), E
 
     let data: types::DeviantArtData = serde_json::from_value(account.data.ok_or(Error::Missing)?)?;
 
-    if data.expires_after < chrono::Utc::now() {
-        return Err(Error::UnknownMessage(
-            "deviantart credentials expired".into(),
-        ));
-    }
+    let da = DeviantArt::site_from_config(&ctx.config).await?;
 
-    let token = AccessToken::new(data.access_token);
+    let token = da
+        .refresh_credentials(&ctx.conn, &ctx.redlock, &data, account.id)
+        .await?;
     let client = super::get_authenticated_client(&ctx.config, &token)?;
 
     let subs = collect_gallery_items(&client, &account.username).await?;

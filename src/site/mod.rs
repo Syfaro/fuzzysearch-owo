@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use oauth2::AccessToken;
+use oauth2::{AccessToken, RefreshToken, TokenResponse};
 use redis::AsyncCommands;
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
@@ -264,4 +264,83 @@ async fn update_import_progress<S: ToString>(
         .await?;
 
     Ok(())
+}
+
+#[tracing::instrument(skip(redlock, data, client_fn, extract_fn, data_fn, update_fn))]
+async fn refresh_credentials<C, E, D, DFut, Item, U, UFut>(
+    redlock: &redlock::RedLock,
+    account_id: Uuid,
+    data: &Item,
+    client_fn: C,
+    extract_fn: E,
+    data_fn: D,
+    update_fn: U,
+) -> Result<AccessToken, Error>
+where
+    C: FnOnce() -> oauth2::basic::BasicClient,
+    E: Fn(&Item) -> Option<(String, String, chrono::DateTime<chrono::Utc>)>,
+    D: FnOnce() -> DFut,
+    DFut: Future<Output = Result<Item, Error>>,
+    U: FnOnce(Item, String, String, chrono::DateTime<chrono::Utc>) -> UFut,
+    UFut: Future<Output = Result<(), Error>>,
+{
+    tracing::debug!("checking oauth credentials");
+
+    let (initial_access_token, _initial_refresh_token, initial_expires_at) =
+        extract_fn(data).ok_or(Error::Missing)?;
+
+    if initial_expires_at >= chrono::Utc::now() {
+        tracing::trace!("credentials have not expired");
+        return Ok(AccessToken::new(initial_access_token));
+    }
+
+    let lock_key = format!("refresh-credentials:{}", account_id);
+    let lock_key = lock_key.as_bytes();
+    let lock = loop {
+        if let Some(lock) = redlock.lock(lock_key, 10 * 1000).await {
+            tracing::trace!("locked credentials for update");
+            break lock;
+        }
+    };
+
+    let current_data = data_fn().await?;
+    let (current_access_token, current_refresh_token, current_expires_at) =
+        extract_fn(&current_data).ok_or(Error::Missing)?;
+
+    if current_expires_at >= chrono::Utc::now() {
+        tracing::debug!("credentials were already updated");
+        redlock.unlock(&lock).await;
+        return Ok(AccessToken::new(current_access_token));
+    }
+
+    let client = client_fn();
+    let refresh_token = RefreshToken::new(current_refresh_token);
+
+    tracing::info!("refreshing credentials");
+
+    let refresh = client
+        .exchange_refresh_token(&refresh_token)
+        .request_async(oauth2::reqwest::async_http_client)
+        .await
+        .map_err(Error::from_displayable)?;
+
+    let access_token = refresh.access_token().secret().to_string();
+    let refresh_token = refresh
+        .refresh_token()
+        .ok_or(Error::Missing)?
+        .secret()
+        .to_string();
+
+    let expires_at = chrono::Utc::now()
+        + refresh
+            .expires_in()
+            .map(|dur| chrono::Duration::from_std(dur).unwrap())
+            .unwrap_or_else(|| chrono::Duration::seconds(3600));
+
+    update_fn(current_data, access_token, refresh_token, expires_at).await?;
+    redlock.unlock(&lock).await;
+
+    tracing::info!("credential refresh complete");
+
+    Ok(refresh.access_token().to_owned())
 }
