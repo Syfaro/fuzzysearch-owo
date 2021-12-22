@@ -1,6 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -31,12 +29,9 @@ impl WatchedSite for FList {
         [
             (
                 jobs::job::FLIST_COLLECT_GALLERY_IMAGES,
-                Box::new(_collect_gallery_images) as SiteJob,
+                super::wrap_job(collect_gallery_images),
             ),
-            (
-                jobs::job::FLIST_HASH_IMAGE,
-                Box::new(_hash_image) as SiteJob,
-            ),
+            (jobs::job::FLIST_HASH_IMAGE, super::wrap_job(hash_image)),
         ]
         .into_iter()
         .collect()
@@ -184,13 +179,6 @@ impl FListClient {
     }
 }
 
-fn _collect_gallery_images(
-    ctx: Arc<JobContext>,
-    job: faktory::Job,
-) -> Pin<Box<dyn Future<Output = Result<(), Error>>>> {
-    Box::pin(collect_gallery_images(ctx, job))
-}
-
 async fn collect_gallery_images(ctx: Arc<JobContext>, _job: faktory::Job) -> Result<(), Error> {
     let previous_run = models::FListImportRun::previous_run(&ctx.conn).await?;
     let previous_max = match previous_run {
@@ -257,13 +245,6 @@ async fn collect_gallery_images(ctx: Arc<JobContext>, _job: faktory::Job) -> Res
     models::FListImportRun::complete(&ctx.conn, id, max_id).await?;
 
     Ok(())
-}
-
-fn _hash_image(
-    ctx: Arc<JobContext>,
-    job: faktory::Job,
-) -> Pin<Box<dyn Future<Output = Result<(), Error>>>> {
-    Box::pin(hash_image(ctx, job))
 }
 
 async fn hash_image(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(), Error> {

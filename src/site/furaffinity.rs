@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -106,7 +104,7 @@ impl CollectedSite for FurAffinity {
     fn jobs(&self) -> HashMap<&'static str, SiteJob> {
         [(
             jobs::job::ADD_SUBMISSION_FURAFFINITY,
-            Box::new(_add_submission_furaffinity) as SiteJob,
+            super::wrap_job(add_submission_furaffinity),
         )]
         .into_iter()
         .collect()
@@ -152,13 +150,6 @@ impl CollectedSite for FurAffinity {
 
         Ok(())
     }
-}
-
-fn _add_submission_furaffinity(
-    ctx: Arc<JobContext>,
-    job: faktory::Job,
-) -> Pin<Box<dyn Future<Output = Result<(), Error>>>> {
-    Box::pin(add_submission_furaffinity(ctx, job))
 }
 
 #[tracing::instrument(skip(ctx, job), fields(job_id = job.id()))]

@@ -64,6 +64,14 @@ pub trait SiteServices {
     fn services() -> Vec<actix_web::Scope>;
 }
 
+pub fn wrap_job<F, Fut>(job_fn: F) -> SiteJob
+where
+    F: Fn(Arc<jobs::JobContext>, faktory::Job) -> Fut + Sync + Send + 'static,
+    Fut: Future<Output = Result<(), Error>> + 'static,
+{
+    Box::new(move |ctx, job| Box::pin(job_fn(ctx, job)))
+}
+
 /// Get all services for all sites.
 pub fn services() -> Vec<actix_web::Scope> {
     deviantart::DeviantArt::services()

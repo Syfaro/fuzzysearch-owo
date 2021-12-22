@@ -6,8 +6,6 @@ use oauth2::{
 };
 use sha2::Digest;
 use std::collections::{HashMap, HashSet};
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -81,15 +79,15 @@ impl CollectedSite for DeviantArt {
         [
             (
                 jobs::job::ADD_SUBMISSION_DEVIANTART,
-                Box::new(_add_submission_deviantart) as SiteJob,
+                super::wrap_job(add_submission_deviantart),
             ),
             (
                 jobs::job::DEVIANTART_COLLECT_ACCOUNTS,
-                Box::new(_collect_accounts) as SiteJob,
+                super::wrap_job(collect_accounts),
             ),
             (
                 jobs::job::DEVIANTART_UPDATE_ACCOUNT,
-                Box::new(_update_account) as SiteJob,
+                super::wrap_job(update_account),
             ),
         ]
         .into_iter()
@@ -155,13 +153,6 @@ impl SiteServices for DeviantArt {
     fn services() -> Vec<Scope> {
         vec![web::scope("/deviantart").service(services![auth, callback])]
     }
-}
-
-fn _add_submission_deviantart(
-    ctx: Arc<JobContext>,
-    job: faktory::Job,
-) -> Pin<Box<dyn Future<Output = Result<(), Error>>>> {
-    Box::pin(add_submission_deviantart(ctx, job))
 }
 
 #[tracing::instrument(skip(ctx, job), fields(job_id = job.id()))]
@@ -240,13 +231,6 @@ async fn add_submission_deviantart(ctx: Arc<JobContext>, job: faktory::Job) -> R
     Ok(())
 }
 
-fn _collect_accounts(
-    ctx: Arc<JobContext>,
-    job: faktory::Job,
-) -> Pin<Box<dyn Future<Output = Result<(), Error>>>> {
-    Box::pin(collect_accounts(ctx, job))
-}
-
 async fn collect_accounts(ctx: Arc<JobContext>, _job: faktory::Job) -> Result<(), Error> {
     let accounts = models::LinkedAccount::all_site_accounts(&ctx.conn, Site::DeviantArt).await?;
 
@@ -264,13 +248,6 @@ async fn collect_accounts(ctx: Arc<JobContext>, _job: faktory::Job) -> Result<()
     }
 
     Ok(())
-}
-
-fn _update_account(
-    ctx: Arc<JobContext>,
-    job: faktory::Job,
-) -> Pin<Box<dyn Future<Output = Result<(), Error>>>> {
-    Box::pin(update_account(ctx, job))
 }
 
 async fn update_account(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(), Error> {
