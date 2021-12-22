@@ -17,17 +17,12 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Cache target
-        uses: actions/cache@v2
-        with:
-          path: |
-            target/
-          key: ${{ runner.os }}-release-${{ hashFiles('Cargo.lock') }}
-
       - name: Get stable toolchain
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+
+      - uses: Swatinem/rust-cache@v1
 
       - name: Build binary
         uses: actions-rs/cargo@v1
