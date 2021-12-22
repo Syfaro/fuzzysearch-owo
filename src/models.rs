@@ -1222,6 +1222,14 @@ impl RedditPost {
 
         Ok(())
     }
+
+    pub async fn exists(conn: &sqlx::Pool<sqlx::Postgres>, id: &str) -> Result<bool, Error> {
+        let exists = sqlx::query_file_scalar!("queries/reddit/exists.sql", id)
+            .fetch_one(conn)
+            .await?;
+
+        Ok(exists)
+    }
 }
 
 pub struct RedditImage {

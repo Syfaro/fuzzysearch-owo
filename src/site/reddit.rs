@@ -121,6 +121,11 @@ async fn update_subreddit(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(),
         }
 
         for post in posts.data.children {
+            if models::RedditPost::exists(&ctx.conn, &post.data.name).await? {
+                tracing::info!("post had already been loaded, skipping");
+                continue;
+            }
+
             ctx.faktory
                 .enqueue_job(
                     jobs::JobInitiator::external("reddit"),
@@ -149,7 +154,25 @@ async fn load_post(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(), Error>
     let mut args = job.args().iter();
     let (subreddit_name, post) = crate::extract_args!(args, String, types::RedditPost);
 
+    if models::RedditPost::exists(&ctx.conn, &post.id).await? {
+        tracing::info!("post had already been loaded, skipping");
+        return Ok(());
+    }
+
     tracing::info!("wanting to load post: {:?}", post);
+
+    models::RedditPost::create(
+        &ctx.conn,
+        models::RedditPost {
+            fullname: post.id.clone(),
+            subreddit_name,
+            posted_at: post.posted_at,
+            author: post.author.clone(),
+            permalink: post.permalink.clone(),
+            content_link: post.url.clone().unwrap_or_else(|| post.permalink.clone()),
+        },
+    )
+    .await?;
 
     let url = match post.url {
         Some(url) => url,
@@ -181,19 +204,6 @@ async fn load_post(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(), Error>
 
         None
     };
-
-    models::RedditPost::create(
-        &ctx.conn,
-        models::RedditPost {
-            fullname: post.id.clone(),
-            subreddit_name,
-            posted_at: post.posted_at,
-            author: post.author.clone(),
-            permalink: post.permalink.clone(),
-            content_link: url.clone(),
-        },
-    )
-    .await?;
 
     let new_image_id =
         models::RedditImage::create(&ctx.conn, &post.id, data.len() as i32, sha256, hash).await?;

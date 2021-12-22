@@ -1181,6 +1181,26 @@
       ]
     }
   },
+  "b1b84cd0b9e61c88710c4d3062c6cc6b0a50c1a458da4f14df563f385c1cc206": {
+    "query": "SELECT\n    exists(\n        SELECT\n            1\n        FROM\n            reddit_post\n        WHERE\n            fullname = $1\n    ) \"exists!\";\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "exists!",
+          "type_info": "Bool"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        null
+      ]
+    }
+  },
   "c5d2ab0824d09910f1e20bac7fefdcde7e309af236bb0856bc49c626f40221cb": {
     "query": "DELETE FROM\n    owned_media_item\nWHERE\n    owner_id = $1\n    AND id = $2;\n",
     "describe": {
