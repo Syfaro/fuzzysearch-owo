@@ -228,11 +228,18 @@ async fn add_submission_deviantart(ctx: Arc<JobContext>, job: faktory::Job) -> R
 
     let mut sha256 = sha2::Sha256::new();
     sha256.update(&image_data);
-    let sha256: [u8; 32] = sha256.finalize().try_into().unwrap();
+    let sha256: [u8; 32] = sha256
+        .finalize()
+        .try_into()
+        .expect("sha256 was wrong length");
 
     let (im, perceptual_hash) = if let Ok(im) = image::load_from_memory(&image_data) {
         let hasher = fuzzysearch_common::get_hasher();
-        let hash: [u8; 8] = hasher.hash_image(&im).as_bytes().try_into().unwrap();
+        let hash: [u8; 8] = hasher
+            .hash_image(&im)
+            .as_bytes()
+            .try_into()
+            .expect("perceptual hash was wrong length");
         let perceptual_hash = i64::from_be_bytes(hash);
 
         (Some(im), Some(perceptual_hash))
