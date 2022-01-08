@@ -156,6 +156,82 @@ impl User {
     }
 }
 
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", tag = "source", content = "source_data")]
+pub enum UserSessionSource {
+    Registration(Option<std::net::IpAddr>),
+    Login(Option<std::net::IpAddr>),
+    EmailVerification(Option<std::net::IpAddr>),
+}
+
+impl UserSessionSource {
+    fn from_remote_addr(remote_addr: Option<&str>) -> Option<std::net::IpAddr> {
+        remote_addr.and_then(|addr| addr.parse().ok())
+    }
+
+    pub fn registration(remote_addr: Option<&str>) -> Self {
+        Self::Registration(Self::from_remote_addr(remote_addr))
+    }
+
+    pub fn login(remote_addr: Option<&str>) -> Self {
+        Self::Login(Self::from_remote_addr(remote_addr))
+    }
+
+    pub fn email_verification(remote_addr: Option<&str>) -> Self {
+        Self::EmailVerification(Self::from_remote_addr(remote_addr))
+    }
+}
+
+#[allow(dead_code)]
+pub struct UserSession {
+    id: Uuid,
+    user_id: Uuid,
+    created_at: chrono::DateTime<chrono::Utc>,
+    source: UserSessionSource,
+}
+
+impl UserSession {
+    pub async fn create(
+        conn: &sqlx::Pool<sqlx::Postgres>,
+        user_id: Uuid,
+        source: UserSessionSource,
+    ) -> Result<Uuid, Error> {
+        let id = sqlx::query_file_scalar!(
+            "queries/user_session/create.sql",
+            user_id,
+            serde_json::to_value(source)?
+        )
+        .fetch_one(conn)
+        .await?;
+
+        Ok(id)
+    }
+
+    pub async fn check(
+        conn: &sqlx::PgPool,
+        id: Uuid,
+        user_id: Uuid,
+    ) -> Result<Option<User>, Error> {
+        let user_id = match sqlx::query_file_scalar!("queries/user_session/check.sql", user_id, id)
+            .fetch_optional(conn)
+            .await?
+        {
+            Some(user_id) => user_id,
+            None => return Ok(None),
+        };
+
+        User::lookup_by_id(conn, user_id).await
+    }
+
+    pub async fn destroy(conn: &sqlx::PgPool, id: Uuid, user_id: Uuid) -> Result<(), Error> {
+        sqlx::query_file!("queries/user_session/destroy.sql", user_id, id)
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OwnedMediaItem {
     pub id: Uuid,

@@ -1,3 +1,4 @@
+use actix_web::dev::ConnectionInfo;
 use actix_web::{get, post, services, web, HttpResponse, Scope};
 use askama::Template;
 use futures::TryStreamExt;
@@ -7,6 +8,7 @@ use sha2::Digest;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use uuid::Uuid;
 
+use crate::auth::FuzzySearchSessionToken;
 use crate::models::Site;
 use crate::{jobs, models, routes::*, Error};
 
@@ -483,6 +485,7 @@ struct EmailVerifyQuery {
 
 #[get("/verify")]
 async fn verify_email(
+    conn_info: ConnectionInfo,
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
     query: web::Query<EmailVerifyQuery>,
     user: Option<models::User>,
@@ -493,7 +496,13 @@ async fn verify_email(
     };
 
     if user.is_none() {
-        session.insert("user-id", query.user_id)?;
+        let session_id = models::UserSession::create(
+            &conn,
+            query.user_id,
+            models::UserSessionSource::email_verification(conn_info.realip_remote_addr()),
+        )
+        .await?;
+        session.set_session_token(query.user_id, session_id)?;
     }
 
     Ok(HttpResponse::Found()

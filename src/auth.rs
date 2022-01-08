@@ -2,13 +2,40 @@ use std::future::Future;
 use std::pin::Pin;
 
 use actix_session::Session;
-use actix_web::{get, post, services, web, FromRequest, HttpResponse, Scope};
+use actix_web::{dev::ConnectionInfo, get, post, services, web, FromRequest, HttpResponse, Scope};
 use askama::Template;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use zxcvbn::zxcvbn;
 
 use crate::{models, routes::*, Error};
+
+pub trait FuzzySearchSessionToken {
+    const TOKEN_NAME: &'static str;
+
+    fn get_session_token(&self) -> Result<Option<SessionToken>, Error>;
+    fn set_session_token(&self, user_id: Uuid, session_id: Uuid) -> Result<(), Error>;
+}
+
+impl FuzzySearchSessionToken for Session {
+    const TOKEN_NAME: &'static str = "user-token";
+
+    fn get_session_token(&self) -> Result<Option<SessionToken>, Error> {
+        self.get::<SessionToken>(Self::TOKEN_NAME)
+            .map_err(Into::into)
+    }
+
+    fn set_session_token(&self, user_id: Uuid, session_id: Uuid) -> Result<(), Error> {
+        self.insert(
+            Self::TOKEN_NAME,
+            SessionToken {
+                user_id,
+                session_id,
+            },
+        )
+        .map_err(Into::into)
+    }
+}
 
 #[derive(Template)]
 #[template(path = "auth/register.html")]
@@ -35,6 +62,7 @@ struct RegisterFormData {
 
 #[post("/register")]
 async fn register_post(
+    conn_info: ConnectionInfo,
     session: Session,
     pool: web::Data<sqlx::Pool<sqlx::Postgres>>,
     form: web::Form<RegisterFormData>,
@@ -76,8 +104,14 @@ async fn register_post(
     }
 
     let user_id = models::User::create(&pool, &form.username, &form.password).await?;
+    let session_id = models::UserSession::create(
+        &pool,
+        user_id,
+        models::UserSessionSource::registration(conn_info.realip_remote_addr()),
+    )
+    .await?;
 
-    session.insert("user-id", user_id)?;
+    session.set_session_token(user_id, session_id)?;
 
     Ok(HttpResponse::Found()
         .insert_header(("Location", USER_HOME))
@@ -92,7 +126,7 @@ struct Login<'a> {
 
 #[get("/login")]
 async fn login_get(session: Session) -> Result<HttpResponse, Error> {
-    if session.get::<Uuid>("user-id")?.is_some() {
+    if session.get_session_token()?.is_some() {
         return Ok(HttpResponse::Found()
             .insert_header(("Location", USER_HOME))
             .finish());
@@ -113,6 +147,7 @@ struct LoginFormData {
 
 #[post("/login")]
 async fn login_post(
+    conn_info: ConnectionInfo,
     session: Session,
     pool: web::Data<sqlx::Pool<sqlx::Postgres>>,
     form: web::Form<LoginFormData>,
@@ -120,7 +155,13 @@ async fn login_post(
     let user = models::User::lookup_by_login(&pool, &form.username, &form.password).await?;
 
     if let Some(user) = user {
-        session.insert("user-id", user.id)?;
+        let session_id = models::UserSession::create(
+            &pool,
+            user.id,
+            models::UserSessionSource::login(conn_info.realip_remote_addr()),
+        )
+        .await?;
+        session.set_session_token(user.id, session_id)?;
 
         Ok(HttpResponse::Found()
             .insert_header(("Location", USER_HOME))
@@ -136,12 +177,16 @@ async fn login_post(
 }
 
 #[post("/logout")]
-async fn logout(session: Session) -> HttpResponse {
+async fn logout(session: Session, conn: web::Data<sqlx::PgPool>) -> Result<HttpResponse, Error> {
+    if let Ok(Some(token)) = session.get_session_token() {
+        models::UserSession::destroy(&conn, token.session_id, token.user_id).await?;
+    }
+
     session.purge();
 
-    HttpResponse::Found()
+    Ok(HttpResponse::Found()
         .insert_header(("Location", AUTH_LOGIN))
-        .finish()
+        .finish())
 }
 
 pub fn service() -> Scope {
@@ -152,6 +197,12 @@ pub fn service() -> Scope {
         login_post,
         logout
     ])
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SessionToken {
+    pub user_id: Uuid,
+    pub session_id: Uuid,
 }
 
 impl FromRequest for models::User {
@@ -171,13 +222,13 @@ impl FromRequest for models::User {
         Box::pin(async move {
             let session = session.await.map_err(Error::from)?;
 
-            let user_id = match session.get::<Uuid>("user-id") {
-                Ok(Some(user_id)) => user_id,
+            let token = match session.get_session_token() {
+                Ok(Some(token)) => token,
                 Ok(None) => return Err(Error::Unauthorized),
-                Err(err) => return Err(err.into()),
+                Err(err) => return Err(err),
             };
 
-            match models::User::lookup_by_id(&db, user_id).await {
+            match models::UserSession::check(&db, token.session_id, token.user_id).await {
                 Ok(Some(user)) => Ok(user),
                 Ok(None) => {
                     session.purge();

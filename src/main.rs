@@ -278,8 +278,13 @@ async fn main() {
             tracing::info!("starting fuzzysearch-owo on http://{}", http_host);
 
             HttpServer::new(move || {
-                let session =
-                    CookieSession::private(&cookie_private_key).secure(!config.cookie_insecure);
+                let session = CookieSession::private(&cookie_private_key)
+                    .name("owo-session")
+                    .secure(!config.cookie_insecure)
+                    .http_only(true)
+                    .same_site(actix_web::cookie::SameSite::Strict)
+                    .max_age(60 * 60 * 24 * 365);
+
                 let files =
                     actix_files::Files::new("/static", &config.assets_dir).prefer_utf8(true);
 

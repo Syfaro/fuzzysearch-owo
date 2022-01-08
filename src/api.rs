@@ -73,7 +73,7 @@ struct WsEventSession {
 }
 
 impl WsEventSession {
-    async fn new(user_id: Uuid, redis: redis::Client) -> Self {
+    fn new(user_id: Uuid, redis: redis::Client) -> Self {
         Self {
             user_id,
             redis,
@@ -224,7 +224,7 @@ async fn events(
     redis: web::Data<redis::Client>,
 ) -> Result<HttpResponse, Error> {
     if let Some(user) = user {
-        let session = WsEventSession::new(user.id, (*redis.into_inner()).clone()).await;
+        let session = WsEventSession::new(user.id, (*redis.into_inner()).clone());
         ws::start(session, &req, stream).map_err(Into::into)
     } else {
         ws::start(UnauthorizedWsEventSession, &req, stream).map_err(Into::into)
