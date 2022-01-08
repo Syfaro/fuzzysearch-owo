@@ -1,0 +1,68 @@
+version: "3.6"
+
+services:
+  fuzzysearch-owo-web:
+    image: ghcr.io/syfaro/fuzzysearch-owo
+    command: /bin/fuzzysearch-owo --run-migrations web
+    env_file: .env
+    environment:
+      - "RUST_LOG=info"
+      - "DATABASE_URL=postgres://postgres:postgres@postgres/postgres?sslmode=disable"
+      - "REDIS_DSN=redis://redis:6379"
+      - "FAKTORY_HOST=tcp://faktory:7419"
+      - "METRICS_HOST=0.0.0.0:8081"
+      - "JAEGER_COLLECTOR=localhost:6831"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      faktory:
+        condition: service_started
+
+  fuzzysearch-owo-worker:
+    image: ghcr.io/syfaro/fuzzysearch-owo
+    command: /bin/fuzzysearch-owo --run-migrations background-worker
+    env_file: .env
+    environment:
+      - "RUST_LOG=info"
+      - "DATABASE_URL=postgres://postgres:postgres@postgres/postgres?sslmode=disable"
+      - "REDIS_DSN=redis://redis:6379"
+      - "FAKTORY_HOST=tcp://faktory:7419"
+      - "FAKTORY_QUEUES=core,outgoing"
+      - "METRICS_HOST=0.0.0.0:8082"
+      - "JAEGER_COLLECTOR=localhost:6831"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      faktory:
+        condition: service_started
+
+  postgres:
+    build:
+      context: .
+      dockerfile: Dockerfile-postgres-bktree
+    environment:
+      - "POSTGRES_PASSWORD=postgres"
+    healthcheck:
+      test: pg_isready -U postgres
+
+  redis:
+    image: redis
+
+  faktory:
+    image: contribsys/faktory
+    command: /faktory -b :7419 -w :7420
+
+  faktory-cron:
+    image: ghcr.io/syfaro/faktory-cron:main
+    command: /bin/faktory-cron -config /config.yaml
+    volumes:
+      - ./jobs.yaml:/config.yaml:ro
+    environment:
+      - "FAKTORY_URL=tcp://faktory:7419"
+    depends_on:
+      faktory:
+        condition: service_started

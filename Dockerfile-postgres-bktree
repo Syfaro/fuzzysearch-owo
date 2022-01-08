@@ -1,0 +1,2 @@
+FROM postgres:14-alpine
+RUN apk update && apk add alpine-sdk clang llvm && git clone https://github.com/fake-name/pg-spgist_hamming.git && cd pg-spgist_hamming/bktree && make && make install
