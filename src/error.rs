@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
-use actix_http::{http, StatusCode};
-use actix_web::{HttpResponse, HttpResponseBuilder};
+use actix_http::StatusCode;
+use actix_web::{http, HttpResponse, HttpResponseBuilder};
 use askama::Template;
 
 #[derive(Debug, thiserror::Error)]

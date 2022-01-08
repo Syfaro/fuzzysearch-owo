@@ -1,5 +1,4 @@
 use actix_web::{get, post, services, web, HttpResponse, Scope};
-use actix_web::{HttpRequest, Responder};
 use askama::Template;
 use futures::TryStreamExt;
 use rand::Rng;
@@ -49,11 +48,10 @@ async fn home(
 async fn events(
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
     user: models::User,
-    req: HttpRequest,
-) -> Result<HttpResponse, Error> {
+) -> Result<web::Json<Vec<models::UserEvent>>, Error> {
     let events = models::UserEvent::recent_events(&conn, user.id).await?;
 
-    Ok(web::Json(events).respond_to(&req))
+    Ok(web::Json(events))
 }
 
 #[post("/single")]
