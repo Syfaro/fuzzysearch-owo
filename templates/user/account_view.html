@@ -67,12 +67,9 @@
               </p>
 
               <div class="block">
-                <form method="POST" action="/user/account/verify">
-                  <input type="hidden" name="account_id" value="{{ account.id }}">
-                  <div class="control">
-                    <button class="button is-fullwidth is-primary">Verify Account</button>
-                  </div>
-                </form>
+                <div class="control">
+                  <button class="button is-fullwidth is-primary" id="verify-account">Verify Account</button>
+                </div>
               </div>
             </div>
             </message>
@@ -110,6 +107,27 @@
           type: 'is-info',
         });
       });
+    });
+  }
+
+  const verifyAccountButton = document.getElementById('verify-account');
+  if (verifyAccountButton) {
+    const accountID = document.querySelector('section[data-account-id]').dataset.accountId;
+
+    verifyAccountButton.addEventListener('click', (ev) => {
+      verifyAccountButton.classList.add('is-loading');
+
+      fetch('/user/account/verify', {
+        method: 'post',
+        body: new URLSearchParams({
+          'account_id': accountID,
+        }),
+        credentials: 'same-origin',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+      })
+      .then((resp) => console.debug(resp));
     });
   }
 </script>

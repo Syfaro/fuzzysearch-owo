@@ -96,13 +96,14 @@ function subscribeToEvents() {
         break;
 
       case 'account_verified':
-        if (document.matches(`section[data-account-id="${accountID}"]`)) {
+        if (document.querySelector(`section[data-account-id="${accountID}"]`)) {
           if (payload['verified'] === false) {
             alert('Account could not be verified, please try again.');
           } else {
             alert('Account verified!');
-            window.location.reload();
           }
+
+          window.location.reload();
         }
 
         break;
