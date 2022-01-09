@@ -120,8 +120,14 @@
 
         <div class="block">
           <form method="POST" action="/auth/logout">
-            <div class="control">
-              <button class="button is-danger is-outlined is-fullwidth">Sign Out</button>
+            <div class="field is-grouped">
+              <div class="control is-flex-grow-1">
+                <button class="button is-danger is-outlined is-fullwidth">Sign Out</button>
+              </div>
+
+              <div class="control is-flex-grow-1">
+                <a class="button is-info is-outlined is-fullwidth" href="/auth/sessions">Active Sessions</a>
+              </div>
             </div>
           </form>
         </div>
