@@ -373,6 +373,7 @@ pub struct JobContext {
     pub fuzzysearch: Arc<fuzzysearch::FuzzySearch>,
     pub mailer: crate::Mailer,
     pub config: Arc<crate::Config>,
+    pub worker_config: Arc<crate::WorkerConfig>,
     pub client: reqwest::Client,
 }
 
@@ -471,14 +472,14 @@ struct SimilarTemplate<'a> {
 
 pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
     let queues: Vec<String> = ctx
-        .config
+        .worker_config
         .faktory_queues
         .iter()
         .map(|queue| queue.as_str().to_string())
         .collect();
 
     let labels: Vec<String> = ctx
-        .config
+        .worker_config
         .faktory_queues
         .iter()
         .flat_map(|queue| queue.label())
@@ -494,7 +495,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
 
     let mut client = faktory::ConsumerBuilder::default();
     client.labels(labels);
-    client.workers(ctx.config.faktory_workers);
+    client.workers(ctx.worker_config.faktory_workers);
 
     let handle = tokio::runtime::Handle::current();
 

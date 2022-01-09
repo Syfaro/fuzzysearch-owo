@@ -16,17 +16,53 @@ pub use error::Error;
 
 type Mailer = lettre::AsyncSmtpTransport<lettre::Tokio1Executor>;
 
+#[derive(Clone, Parser)]
+pub struct WebConfig {
+    /// Number of worker threads for HTTP server.
+    #[clap(long, env("HTTP_WORKERS"), default_value = "4")]
+    pub http_workers: usize,
+    /// Address to bind HTTP server to.
+    #[clap(long, env("HTTP_HOST"), default_value = "127.0.0.1:8080")]
+    pub http_host: String,
+
+    /// Private key to sign and encrypt cookies, in hexadecimal. Must be at
+    /// least 32 bytes.
+    #[clap(long, env("COOKIE_PRIVATE_KEY"))]
+    pub cookie_private_key: String,
+    /// If the cookies should be accessible over http.
+    #[clap(long, env("COOKIE_INSECURE"))]
+    pub cookie_insecure: bool,
+
+    /// Path to static files.
+    #[clap(long, env("ASSETS_DIR"), default_value = "./assets")]
+    pub assets_dir: String,
+}
+
+#[derive(Clone, Parser)]
+pub struct WorkerConfig {
+    /// Number of workers for background jobs.
+    #[clap(long, env("FAKTORY_WORKERS"), default_value = "2")]
+    pub faktory_workers: usize,
+    /// Queues to fetch jobs from.
+    #[clap(long, env("FAKTORY_QUEUES"), arg_enum, use_delimiter = true)]
+    pub faktory_queues: Vec<jobs::FaktoryQueue>,
+}
+
 #[derive(Clone, clap::Subcommand)]
 pub enum ServiceMode {
     /// Run background tasks. Make sure to also set labels as needed.
-    BackgroundWorker,
+    BackgroundWorker(WorkerConfig),
     /// Serve website.
-    Web,
+    Web(WebConfig),
 }
 
 #[derive(Clone, Parser)]
 #[clap(about, version, author)]
 pub struct Config {
+    /// Full URL to site, including https and excluding trailing slash.
+    #[clap(long, env("HOST_URL"))]
+    pub host_url: String,
+
     /// Database URL, in the format `postgres://user:password@host/database`.
     #[clap(long, env("DATABASE_URL"))]
     pub database_url: String,
@@ -68,65 +104,6 @@ pub struct Config {
     /// Faktory host, in the format `tcp://host`.
     #[clap(long, env("FAKTORY_HOST"))]
     pub faktory_host: String,
-    /// Number of workers for background jobs.
-    #[clap(long, env("FAKTORY_WORKERS"), default_value = "2")]
-    pub faktory_workers: usize,
-    /// Queues to fetch jobs from.
-    #[clap(long, env("FAKTORY_QUEUES"), arg_enum, use_delimiter = true)]
-    pub faktory_queues: Vec<jobs::FaktoryQueue>,
-
-    /// Private key to sign and encrypt cookies, in hexadecimal. Must be at
-    /// least 32 bytes.
-    #[clap(long, env("COOKIE_PRIVATE_KEY"))]
-    pub cookie_private_key: String,
-    /// If the cookies should be accessible over http.
-    #[clap(long, env("COOKIE_INSECURE"))]
-    pub cookie_insecure: bool,
-
-    /// User agent to use for outgoing requests.
-    #[clap(long, env("USER_AGENT"))]
-    pub user_agent: String,
-
-    /// FurAffinity cookie a.
-    #[clap(long, env("FURAFFINITY_COOKIE_A"))]
-    pub furaffinity_cookie_a: String,
-    /// FurAffinity cookie b.
-    #[clap(long, env("FURAFFINITY_COOKIE_B"))]
-    pub furaffinity_cookie_b: String,
-
-    /// Patreon client ID.
-    #[clap(long, env("PATREON_CLIENT_ID"))]
-    pub patreon_client_id: String,
-    /// Patreon client secret.
-    #[clap(long, env("PATREON_CLIENT_SECRET"))]
-    pub patreon_client_secret: String,
-
-    /// F-list username.
-    #[clap(long, env("FLIST_USERNAME"))]
-    pub flist_username: String,
-    /// F-list password.
-    #[clap(long, env("FLIST_PASSWORD"))]
-    pub flist_password: String,
-
-    /// DeviantArt client ID.
-    #[clap(long, env("DEVIANTART_CLIENT_ID"))]
-    pub deviantart_client_id: String,
-    /// DeviantArt client secret.
-    #[clap(long, env("DEVIANTART_CLIENT_SECRET"))]
-    pub deviantart_client_secret: String,
-
-    /// Reddit client ID (or username).
-    #[clap(long, env("REDDIT_CLIENT_ID"))]
-    pub reddit_client_id: String,
-    /// Reddit client secret (or password).
-    #[clap(long, env("REDDIT_CLIENT_SECRET"))]
-    pub reddit_client_secret: String,
-    /// Reddit username.
-    #[clap(long, env("REDDIT_USERNAME"))]
-    pub reddit_username: String,
-    /// Reddit password.
-    #[clap(long, env("REDDIT_PASSWORD"))]
-    pub reddit_password: String,
 
     /// SMTP hostname.
     #[clap(long, env("SMTP_HOST"))]
@@ -148,19 +125,50 @@ pub struct Config {
     #[clap(long, env("SMTP_REPLY_TO"))]
     pub smtp_reply_to: lettre::message::Mailbox,
 
-    /// Full URL to site, including https and excluding trailing slash.
-    #[clap(long, env("HOST_URL"))]
-    pub host_url: String,
-    /// Number of worker threads for HTTP server.
-    #[clap(long, env("HTTP_WORKERS"), default_value = "4")]
-    pub http_workers: usize,
-    /// Address to bind HTTP server to.
-    #[clap(long, env("HTTP_HOST"), default_value = "127.0.0.1:8080")]
-    pub http_host: String,
+    /// User agent to use for outgoing requests.
+    #[clap(long, env("USER_AGENT"))]
+    pub user_agent: String,
 
-    /// Path to static files.
-    #[clap(long, env("ASSETS_DIR"), default_value = "./assets")]
-    pub assets_dir: String,
+    /// DeviantArt client ID.
+    #[clap(long, env("DEVIANTART_CLIENT_ID"))]
+    pub deviantart_client_id: String,
+    /// DeviantArt client secret.
+    #[clap(long, env("DEVIANTART_CLIENT_SECRET"))]
+    pub deviantart_client_secret: String,
+
+    /// Patreon client ID.
+    #[clap(long, env("PATREON_CLIENT_ID"))]
+    pub patreon_client_id: String,
+    /// Patreon client secret.
+    #[clap(long, env("PATREON_CLIENT_SECRET"))]
+    pub patreon_client_secret: String,
+
+    /// FurAffinity cookie a.
+    #[clap(long, env("FURAFFINITY_COOKIE_A"))]
+    pub furaffinity_cookie_a: String,
+    /// FurAffinity cookie b.
+    #[clap(long, env("FURAFFINITY_COOKIE_B"))]
+    pub furaffinity_cookie_b: String,
+
+    /// F-list username.
+    #[clap(long, env("FLIST_USERNAME"))]
+    pub flist_username: String,
+    /// F-list password.
+    #[clap(long, env("FLIST_PASSWORD"))]
+    pub flist_password: String,
+
+    /// Reddit client ID (or username).
+    #[clap(long, env("REDDIT_CLIENT_ID"))]
+    pub reddit_client_id: String,
+    /// Reddit client secret (or password).
+    #[clap(long, env("REDDIT_CLIENT_SECRET"))]
+    pub reddit_client_secret: String,
+    /// Reddit username.
+    #[clap(long, env("REDDIT_USERNAME"))]
+    pub reddit_username: String,
+    /// Reddit password.
+    #[clap(long, env("REDDIT_PASSWORD"))]
+    pub reddit_password: String,
 
     /// Mode to run service.
     #[clap(subcommand)]
@@ -248,24 +256,24 @@ async fn main() {
         .await
         .expect("could not connect to faktory");
 
-    let creds = lettre::transport::smtp::authentication::Credentials::new(
-        config.smtp_username.clone(),
-        config.smtp_password.clone(),
-    );
-
-    let mailer: Mailer =
-        lettre::AsyncSmtpTransport::<lettre::Tokio1Executor>::relay(&config.smtp_host)
-            .unwrap()
-            .credentials(creds)
-            .build();
-
     let client = reqwest::ClientBuilder::default()
         .user_agent(&config.user_agent)
         .build()
         .expect("could not create http client");
 
-    match config.service_mode {
-        ServiceMode::BackgroundWorker => {
+    match config.service_mode.clone() {
+        ServiceMode::BackgroundWorker(worker_config) => {
+            let creds = lettre::transport::smtp::authentication::Credentials::new(
+                config.smtp_username.clone(),
+                config.smtp_password.clone(),
+            );
+
+            let mailer: Mailer =
+                lettre::AsyncSmtpTransport::<lettre::Tokio1Executor>::relay(&config.smtp_host)
+                    .unwrap()
+                    .credentials(creds)
+                    .build();
+
             jobs::start_job_processing(jobs::JobContext {
                 faktory,
                 conn: pool,
@@ -275,32 +283,33 @@ async fn main() {
                 fuzzysearch: std::sync::Arc::new(fuzzysearch),
                 mailer,
                 config: std::sync::Arc::new(config.clone()),
+                worker_config: std::sync::Arc::new(worker_config.clone()),
                 client,
             })
             .await
             .expect("could not run background worker");
         }
-        ServiceMode::Web => {
-            let cookie_private_key =
-                hex::decode(&config.cookie_private_key).expect("cookie secret was not hex data");
+        ServiceMode::Web(web_config) => {
+            let cookie_private_key = hex::decode(&web_config.cookie_private_key)
+                .expect("cookie secret was not hex data");
             assert!(
                 cookie_private_key.len() >= 32,
                 "cookie private key must be greater than 32 bytes"
             );
 
-            let (http_host, http_workers) = (config.http_host.clone(), config.http_workers);
+            let (http_host, http_workers) = (web_config.http_host.clone(), web_config.http_workers);
             tracing::info!("starting fuzzysearch-owo on http://{}", http_host);
 
             HttpServer::new(move || {
                 let session = CookieSession::private(&cookie_private_key)
                     .name("owo-session")
-                    .secure(!config.cookie_insecure)
+                    .secure(!web_config.cookie_insecure)
                     .http_only(true)
                     .same_site(actix_web::cookie::SameSite::Strict)
                     .max_age(60 * 60 * 24 * 365);
 
                 let files =
-                    actix_files::Files::new("/static", &config.assets_dir).prefer_utf8(true);
+                    actix_files::Files::new("/static", &web_config.assets_dir).prefer_utf8(true);
 
                 App::new()
                     .wrap(tracing_actix_web::TracingLogger::default())
@@ -311,7 +320,6 @@ async fn main() {
                     .app_data(web::Data::new(redis_manager.clone()))
                     .app_data(web::Data::new(faktory.clone()))
                     .app_data(web::Data::new(config.clone()))
-                    .app_data(web::Data::new(mailer.clone()))
                     .service(auth::service())
                     .service(user::service())
                     .service(api::service())
