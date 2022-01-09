@@ -274,7 +274,6 @@ async fn account_view(
 
 #[post("/verify")]
 async fn account_verify(
-    config: web::Data<crate::Config>,
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
     faktory: web::Data<jobs::FaktoryClient>,
     user: models::User,
@@ -288,51 +287,12 @@ async fn account_verify(
         return Err(Error::Missing);
     }
 
-    let key = match account.verification_key() {
-        Some(key) => key,
-        None => return Err(Error::Missing),
-    };
-
-    // TODO: this should be moved to a job
-    let enqueue_new_job = match account.source_site {
-        Site::FurAffinity => {
-            let client = reqwest::Client::default();
-
-            let body = client
-                .get(format!(
-                    "https://www.furaffinity.net/user/{}/",
-                    account.username,
-                ))
-                .header(
-                    reqwest::header::COOKIE,
-                    format!(
-                        "a={}; b={}",
-                        config.furaffinity_cookie_a, config.furaffinity_cookie_b
-                    ),
-                )
-                .send()
-                .await?
-                .text()
-                .await?;
-
-            if body.contains(key) {
-                models::LinkedAccount::update_data(&conn, account.id, None).await?;
-                true
-            } else {
-                false
-            }
-        }
-        _ => unimplemented!(),
-    };
-
-    if enqueue_new_job {
-        faktory
-            .enqueue_job(
-                jobs::JobInitiator::user(user.id),
-                jobs::add_account_job(user.id, account.id)?,
-            )
-            .await?;
-    }
+    faktory
+        .enqueue_job(
+            jobs::JobInitiator::user(user.id),
+            jobs::verify_account_job(user.id, account.id)?,
+        )
+        .await?;
 
     Ok(HttpResponse::Found()
         .insert_header((

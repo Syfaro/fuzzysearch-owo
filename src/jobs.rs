@@ -9,11 +9,12 @@ use std::{
 use futures::Future;
 use opentelemetry::propagation::TextMapPropagator;
 use prometheus::{register_counter_vec, register_histogram_vec, CounterVec, HistogramVec};
+use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use tracing::Instrument;
 use uuid::Uuid;
 
-use crate::{models, site, Error};
+use crate::{api, models, site, Error};
 
 #[derive(Clone, Debug, clap::ArgEnum)]
 pub enum FaktoryQueue {
@@ -50,6 +51,7 @@ impl JobFuzzyQueue for faktory::Job {
 
 pub mod job {
     pub const ADD_ACCOUNT: &str = "add_account";
+    pub const VERIFY_ACCOUNT: &str = "verify_account";
 
     pub const NEW_SUBMISSION: &str = "new_submission";
 
@@ -149,6 +151,12 @@ pub fn add_account_job(user_id: Uuid, account_id: Uuid) -> Result<faktory::Job, 
     let args = serialize_args!(user_id, account_id);
 
     Ok(faktory::Job::new(job::ADD_ACCOUNT, args).fuzzy_queue(FaktoryQueue::Outgoing))
+}
+
+pub fn verify_account_job(user_id: Uuid, account_id: Uuid) -> Result<faktory::Job, Error> {
+    let args = serialize_args!(user_id, account_id);
+
+    Ok(faktory::Job::new(job::VERIFY_ACCOUNT, args).fuzzy_queue(FaktoryQueue::Outgoing))
 }
 
 pub fn add_furaffinity_submission_job(
@@ -588,6 +596,89 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
             Ok(Some(collected_site)) => collected_site.add_account(&ctx, account).await?,
             Ok(None) => return Err(Error::user_error("Account cannot be added on this site.")),
             Err(err) => return Err(err),
+        }
+
+        Ok(())
+    });
+
+    environment.register(job::VERIFY_ACCOUNT, |ctx, job| async move {
+        let mut args = job.args().iter();
+        let (user_id, account_id) = extract_args!(args, Uuid, Uuid);
+
+        let account = models::LinkedAccount::lookup_by_id(&ctx.conn, account_id)
+            .await?
+            .ok_or(Error::Missing)?;
+
+        let key = match account.verification_key() {
+            Some(key) => key,
+            None => return Err(Error::Missing),
+        };
+
+        let account_was_verified = match account.source_site {
+            models::Site::FurAffinity => {
+                let client = reqwest::Client::default();
+
+                let body = client
+                    .get(format!(
+                        "https://www.furaffinity.net/user/{}/",
+                        account.username,
+                    ))
+                    .header(
+                        reqwest::header::COOKIE,
+                        format!(
+                            "a={}; b={}",
+                            ctx.config.furaffinity_cookie_a, ctx.config.furaffinity_cookie_b
+                        ),
+                    )
+                    .send()
+                    .await?
+                    .text()
+                    .await?;
+
+                let page = scraper::Html::parse_document(&body);
+                let profile = scraper::Selector::parse(".userpage-layout-profile").unwrap();
+
+                let text = page
+                    .select(&profile)
+                    .next()
+                    .map(|elem| elem.text().collect::<String>())
+                    .unwrap_or_default();
+
+                let verifier_found = text.contains(key);
+
+                if verifier_found {
+                    models::LinkedAccount::update_data(&ctx.conn, account.id, None).await?;
+                }
+
+                verifier_found
+            }
+            _ => {
+                return Err(Error::unknown_message(
+                    "attempted to verify unsupported account",
+                ))
+            }
+        };
+
+        tracing::info!(account_was_verified, "checked verification");
+
+        let mut redis = ctx.redis.clone();
+        redis
+            .publish(
+                format!("user-events:{}", user_id.to_string()),
+                serde_json::to_string(&api::EventMessage::AccountVerified {
+                    account_id,
+                    verified: account_was_verified,
+                })?,
+            )
+            .await?;
+
+        if account_was_verified {
+            ctx.faktory
+                .enqueue_job(
+                    JobInitiator::user(user_id),
+                    add_account_job(user_id, account.id)?,
+                )
+                .await?;
         }
 
         Ok(())

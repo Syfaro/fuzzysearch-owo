@@ -45,6 +45,10 @@ pub enum EventMessage {
     SessionEnded {
         session_id: Uuid,
     },
+    AccountVerified {
+        account_id: Uuid,
+        verified: bool,
+    },
 }
 
 struct UnauthorizedWsEventSession;
