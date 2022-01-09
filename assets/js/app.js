@@ -128,6 +128,11 @@ function getRelativeTime(toDate, fromDate = new Date()) {
 
 function updateRelativeTimes() {
   [...document.querySelectorAll('.relative-time[data-timestamp]')].forEach((elem) => {
+    if (!elem.dataset.replacedText) {
+      elem.title = elem.textContent.trim();
+      elem.dataset.replacedText = true;
+    }
+
     const timestamp = parseInt(elem.dataset.timestamp, 10);
     const date = new Date(timestamp * 1000);
 

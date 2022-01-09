@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="section">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-one-third">
+        <h1 class="title has-text-centered">FuzzySearch OwO</h1>
+        <h2 class="subtitle has-text-centered">Sessions</h2>
+
+        {% for session in sessions %}
+        <div class="block">
+          <div class="card">
+            <div class="card-content">
+              <div class="content">
+                Session created by {{ session.source.name() }}
+                <span class="relative-time" data-timestamp="{{ session.created_at.timestamp() }}">
+                  {{ session.created_at }}
+                </span>.
+
+                Last used
+                <span class="relative-time" data-timestamp="{{ session.last_used.timestamp() }}">
+                  {{ session.last_used }}
+                </span>.
+
+                Action originated from {{ session.source.display_ip_addr() }}.
+              </div>
+            </div>
+
+            <footer class="card-footer">
+              {% if session.id == current_session_id %}
+              <span class="card-footer-item">Current Session</span>
+              {% else %}
+              <form method="POST" action="/auth/sessions/remove" class="card-footer-item is-paddingless">
+                <input type="hidden" name="session_id" value="{{ session.id }}">
+                <button class="button is-fullwidth is-danger">Remove Session</button>
+              </form>
+              {% endif %}
+            </footer>
+          </div>
+        </div>
+        {% endfor %}
+
+        <div class="control">
+          <a href="/user/home" class="button is-link is-fullwidth">Return Home</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

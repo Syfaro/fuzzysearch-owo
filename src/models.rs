@@ -159,12 +159,39 @@ impl User {
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", tag = "source", content = "source_data")]
 pub enum UserSessionSource {
+    Unknown,
     Registration(Option<std::net::IpAddr>),
     Login(Option<std::net::IpAddr>),
     EmailVerification(Option<std::net::IpAddr>),
 }
 
 impl UserSessionSource {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Unknown => "unknown",
+            Self::Registration(_) => "registration",
+            Self::Login(_) => "login",
+            Self::EmailVerification(_) => "email verification",
+        }
+    }
+
+    pub fn ip_addr(&self) -> Option<std::net::IpAddr> {
+        match *self {
+            Self::Registration(ip) => ip,
+            Self::Login(ip) => ip,
+            Self::EmailVerification(ip) => ip,
+            _ => None,
+        }
+    }
+
+    pub fn display_ip_addr(&self) -> String {
+        if let Some(ip) = self.ip_addr() {
+            ip.to_string()
+        } else {
+            "unknown".to_string()
+        }
+    }
+
     fn from_remote_addr(remote_addr: Option<&str>) -> Option<std::net::IpAddr> {
         remote_addr.and_then(|addr| addr.parse().ok())
     }
@@ -182,12 +209,12 @@ impl UserSessionSource {
     }
 }
 
-#[allow(dead_code)]
 pub struct UserSession {
-    id: Uuid,
-    user_id: Uuid,
-    created_at: chrono::DateTime<chrono::Utc>,
-    source: UserSessionSource,
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub last_used: chrono::DateTime<chrono::Utc>,
+    pub source: UserSessionSource,
 }
 
 impl UserSession {
@@ -229,6 +256,21 @@ impl UserSession {
             .await?;
 
         Ok(())
+    }
+
+    pub async fn list(conn: &sqlx::PgPool, user_id: Uuid) -> Result<Vec<Self>, Error> {
+        let sessions = sqlx::query_file!("queries/user_session/list.sql", user_id)
+            .map(|row| Self {
+                id: row.id,
+                user_id: row.user_id,
+                created_at: row.created_at,
+                last_used: row.last_used,
+                source: serde_json::from_value(row.source).unwrap_or(UserSessionSource::Unknown),
+            })
+            .fetch_all(conn)
+            .await?;
+
+        Ok(sessions)
     }
 }
 

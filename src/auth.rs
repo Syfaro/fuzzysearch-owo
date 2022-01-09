@@ -189,13 +189,69 @@ async fn logout(session: Session, conn: web::Data<sqlx::PgPool>) -> Result<HttpR
         .finish())
 }
 
+#[derive(Template)]
+#[template(path = "auth/sessions.html")]
+struct Sessions {
+    current_session_id: Uuid,
+    sessions: Vec<models::UserSession>,
+}
+
+#[get("/sessions")]
+async fn sessions(
+    session: Session,
+    user: models::User,
+    conn: web::Data<sqlx::PgPool>,
+) -> Result<HttpResponse, Error> {
+    let session_token = session
+        .get_session_token()?
+        .ok_or_else(|| Error::unknown_message("session must exist"))?;
+
+    let sessions = models::UserSession::list(&conn, user.id).await?;
+
+    let body = Sessions {
+        current_session_id: session_token.session_id,
+        sessions,
+    }
+    .render()?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[derive(Deserialize)]
+struct SessionsRemoveForm {
+    session_id: Uuid,
+}
+
+#[post("/sessions/remove")]
+async fn sessions_remove(
+    session: Session,
+    user: models::User,
+    conn: web::Data<sqlx::PgPool>,
+    form: web::Form<SessionsRemoveForm>,
+) -> Result<HttpResponse, Error> {
+    let session_token = session
+        .get_session_token()?
+        .ok_or_else(|| Error::unknown_message("session must exist"))?;
+
+    if session_token.session_id == form.session_id {
+        return Err(Error::user_error("You cannot remove the current session."));
+    }
+
+    models::UserSession::destroy(&conn, form.session_id, user.id).await?;
+
+    Ok(HttpResponse::Found()
+        .insert_header(("Location", AUTH_SESSIONS))
+        .finish())
+}
+
 pub fn service() -> Scope {
     web::scope("/auth").service(services![
         register_get,
         register_post,
         login_get,
         login_post,
-        logout
+        logout,
+        sessions,
+        sessions_remove,
     ])
 }
 

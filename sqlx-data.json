@@ -242,6 +242,50 @@
       ]
     }
   },
+  "16f7262fba553df30055709a9a51f4eb353dce7aa3ec8c361ce0b61e70ef63eb": {
+    "query": "SELECT\n    *\nFROM\n    user_session\nWHERE\n    user_id = $1\nORDER BY\n    last_used DESC;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "user_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "created_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 3,
+          "name": "last_used",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 4,
+          "name": "source",
+          "type_info": "Jsonb"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    }
+  },
   "18c35d01397d679654539e68df0e145812a821a57c860e8f0a220aa6124d8bb9": {
     "query": "SELECT\n    *\nFROM\n    flist_file\nWHERE\n    id = $1;\n",
     "describe": {
@@ -860,6 +904,27 @@
       ]
     }
   },
+  "8bc6979ea098c101a062b14542bb9b0f5ddfe871649c6144b23c4832d9ddf1cc": {
+    "query": "UPDATE\n    user_session\nSET\n    last_used = current_timestamp\nWHERE\n    user_id = $1\n    AND id = $2 RETURNING user_id;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "user_id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
   "8bc70522b20fac68bb26aa42e5f8f7bf9da678ddfcedf9dfdf416df61ca3be38": {
     "query": "SELECT\n    *\nFROM\n    reddit_subreddit\nWHERE\n    name = $1;\n",
     "describe": {
@@ -1181,6 +1246,19 @@
       ]
     }
   },
+  "ad4466be049c757e7b4b7a9d65a04e80cdd01ab9a42f97cb03190d16c37bef86": {
+    "query": "DELETE FROM\n    user_session\nWHERE\n    user_id = $1\n    AND id = $2;\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      },
+      "nullable": []
+    }
+  },
   "b1b84cd0b9e61c88710c4d3062c6cc6b0a50c1a458da4f14df563f385c1cc206": {
     "query": "SELECT\n    exists(\n        SELECT\n            1\n        FROM\n            reddit_post\n        WHERE\n            fullname = $1\n    ) \"exists!\";\n",
     "describe": {
@@ -1292,6 +1370,27 @@
         false,
         false,
         true
+      ]
+    }
+  },
+  "cdae457cecd94db4aa519b8d230466eea08bb0783348aabcc09a9fcef8364c25": {
+    "query": "INSERT INTO\n    user_session (user_id, source)\nVALUES\n    ($1, $2) RETURNING id;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Jsonb"
+        ]
+      },
+      "nullable": [
+        false
       ]
     }
   },
