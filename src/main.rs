@@ -187,7 +187,7 @@ fn load_config() -> Config {
 }
 
 #[derive(Template)]
-#[template(path = "home.html")]
+#[template(path = "index.html")]
 struct Home;
 
 #[actix_web::get("/")]

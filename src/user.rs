@@ -13,7 +13,7 @@ use crate::models::Site;
 use crate::{jobs, models, routes::*, Error};
 
 #[derive(Template)]
-#[template(path = "user/home.html")]
+#[template(path = "user/index.html")]
 struct Home {
     user: models::User,
 
@@ -158,7 +158,7 @@ async fn single(
 }
 
 #[derive(Template)]
-#[template(path = "user/account_link.html")]
+#[template(path = "user/account/link.html")]
 struct AccountLink;
 
 #[get("/link")]
@@ -242,7 +242,7 @@ async fn account_remove(
 }
 
 #[derive(Template)]
-#[template(path = "user/account_view.html")]
+#[template(path = "user/account/view.html")]
 struct AccountView {
     account: models::LinkedAccount,
 
@@ -303,7 +303,7 @@ async fn account_verify(
 }
 
 #[derive(Template)]
-#[template(path = "user/media_view.html")]
+#[template(path = "user/media/view.html")]
 struct MediaView {
     media: models::OwnedMediaItem,
     recent_events: Vec<models::UserEvent>,
@@ -349,7 +349,7 @@ async fn media_remove(
 }
 
 #[derive(Template)]
-#[template(path = "user/add_email.html")]
+#[template(path = "user/email/add.html")]
 struct AddEmail {
     error_message: Option<String>,
 }
