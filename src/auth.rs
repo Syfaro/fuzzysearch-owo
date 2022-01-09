@@ -177,9 +177,13 @@ async fn login_post(
 }
 
 #[post("/logout")]
-async fn logout(session: Session, conn: web::Data<sqlx::PgPool>) -> Result<HttpResponse, Error> {
+async fn logout(
+    session: Session,
+    conn: web::Data<sqlx::PgPool>,
+    redis: web::Data<redis::aio::ConnectionManager>,
+) -> Result<HttpResponse, Error> {
     if let Ok(Some(token)) = session.get_session_token() {
-        models::UserSession::destroy(&conn, token.session_id, token.user_id).await?;
+        models::UserSession::destroy(&conn, &redis, token.session_id, token.user_id).await?;
     }
 
     session.purge();
@@ -226,6 +230,7 @@ async fn sessions_remove(
     session: Session,
     user: models::User,
     conn: web::Data<sqlx::PgPool>,
+    redis: web::Data<redis::aio::ConnectionManager>,
     form: web::Form<SessionsRemoveForm>,
 ) -> Result<HttpResponse, Error> {
     let session_token = session
@@ -236,7 +241,7 @@ async fn sessions_remove(
         return Err(Error::user_error("You cannot remove the current session."));
     }
 
-    models::UserSession::destroy(&conn, form.session_id, user.id).await?;
+    models::UserSession::destroy(&conn, &redis, form.session_id, user.id).await?;
 
     Ok(HttpResponse::Found()
         .insert_header(("Location", AUTH_SESSIONS))

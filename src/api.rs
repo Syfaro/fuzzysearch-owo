@@ -5,13 +5,14 @@ use actix::{
     Handler, Message, StreamHandler, WrapFuture,
 };
 use actix_http::ws::CloseCode;
+use actix_session::Session;
 use actix_web::{get, post, services, web, HttpRequest, HttpResponse, Scope};
 use actix_web_actors::ws;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{jobs, models, Error};
+use crate::{auth::FuzzySearchSessionToken, jobs, models, Error};
 
 const HEARTHEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -41,6 +42,9 @@ pub enum EventMessage {
         media_id: Uuid,
         link: String,
     },
+    SessionEnded {
+        session_id: Uuid,
+    },
 }
 
 struct UnauthorizedWsEventSession;
@@ -68,14 +72,16 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for UnauthorizedWsEve
 
 struct WsEventSession {
     user_id: Uuid,
+    session_id: Uuid,
     redis: redis::Client,
     hb: Instant,
 }
 
 impl WsEventSession {
-    fn new(user_id: Uuid, redis: redis::Client) -> Self {
+    fn new(user_id: Uuid, session_id: Uuid, redis: redis::Client) -> Self {
         Self {
             user_id,
+            session_id,
             redis,
             hb: Instant::now(),
         }
@@ -211,20 +217,42 @@ impl Handler<EventMessage> for WsEventSession {
     type Result = ();
 
     fn handle(&mut self, msg: EventMessage, ctx: &mut Self::Context) -> Self::Result {
+        // Suppress session ended events for unrelated sessions. This way the
+        // client does not need to know it's own session ID to handle the event.
+        let session_ended = match msg {
+            EventMessage::SessionEnded { session_id } if session_id != self.session_id => return,
+            EventMessage::SessionEnded { session_id } if session_id == self.session_id => true,
+            _ => false,
+        };
+
         let data = serde_json::to_string(&msg).expect("could not serialize essential data");
-        ctx.text(data)
+        ctx.text(data);
+
+        if session_ended {
+            ctx.close(Some((CloseCode::Normal, "session ended").into()));
+        }
     }
 }
 
 #[get("/events")]
 async fn events(
     user: Option<models::User>,
+    session: Session,
     req: HttpRequest,
     stream: web::Payload,
     redis: web::Data<redis::Client>,
 ) -> Result<HttpResponse, Error> {
     if let Some(user) = user {
-        let session = WsEventSession::new(user.id, (*redis.into_inner()).clone());
+        let session_token = session
+            .get_session_token()?
+            .ok_or_else(|| Error::unknown_message("token must exist"))?;
+
+        let session = WsEventSession::new(
+            user.id,
+            session_token.session_id,
+            (*redis.into_inner()).clone(),
+        );
+
         ws::start(session, &req, stream).map_err(Into::into)
     } else {
         ws::start(UnauthorizedWsEventSession, &req, stream).map_err(Into::into)

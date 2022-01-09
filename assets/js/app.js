@@ -27,6 +27,15 @@ function subscribeToEvents() {
 
         break;
 
+      case 'session_ended':
+        console.info('Session was ended');
+        isUnauthorized = true;
+        ws.close();
+
+        window.location.reload();
+
+        break;
+
       case 'simple_message':
         bulmaToast.toast({
           message: payload['message'],

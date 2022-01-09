@@ -250,9 +250,22 @@ impl UserSession {
         User::lookup_by_id(conn, user_id).await
     }
 
-    pub async fn destroy(conn: &sqlx::PgPool, id: Uuid, user_id: Uuid) -> Result<(), Error> {
+    pub async fn destroy(
+        conn: &sqlx::PgPool,
+        redis: &redis::aio::ConnectionManager,
+        id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), Error> {
         sqlx::query_file!("queries/user_session/destroy.sql", user_id, id)
             .execute(conn)
+            .await?;
+
+        let mut redis = redis.clone();
+        redis
+            .publish(
+                format!("user-events:{}", user_id.to_string()),
+                serde_json::to_string(&api::EventMessage::SessionEnded { session_id: id })?,
+            )
             .await?;
 
         Ok(())
