@@ -14,6 +14,8 @@ mod user;
 
 pub use error::Error;
 
+type Mailer = lettre::AsyncSmtpTransport<lettre::Tokio1Executor>;
+
 #[derive(Clone, clap::Subcommand)]
 pub enum ServiceMode {
     /// Run background tasks. Make sure to also set labels as needed.
@@ -246,6 +248,17 @@ async fn main() {
         .await
         .expect("could not connect to faktory");
 
+    let creds = lettre::transport::smtp::authentication::Credentials::new(
+        config.smtp_username.clone(),
+        config.smtp_password.clone(),
+    );
+
+    let mailer: Mailer =
+        lettre::AsyncSmtpTransport::<lettre::Tokio1Executor>::relay(&config.smtp_host)
+            .unwrap()
+            .credentials(creds)
+            .build();
+
     let client = reqwest::ClientBuilder::default()
         .user_agent(&config.user_agent)
         .build()
@@ -260,6 +273,7 @@ async fn main() {
                 redlock: std::sync::Arc::new(redlock),
                 s3,
                 fuzzysearch: std::sync::Arc::new(fuzzysearch),
+                mailer,
                 config: std::sync::Arc::new(config.clone()),
                 client,
             })
@@ -297,6 +311,7 @@ async fn main() {
                     .app_data(web::Data::new(redis_manager.clone()))
                     .app_data(web::Data::new(faktory.clone()))
                     .app_data(web::Data::new(config.clone()))
+                    .app_data(web::Data::new(mailer.clone()))
                     .service(auth::service())
                     .service(user::service())
                     .service(api::service())

@@ -6,7 +6,9 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use askama::Template;
 use futures::Future;
+use lettre::AsyncTransport;
 use opentelemetry::propagation::TextMapPropagator;
 use prometheus::{register_counter_vec, register_histogram_vec, CounterVec, HistogramVec};
 use redis::AsyncCommands;
@@ -50,6 +52,8 @@ impl JobFuzzyQueue for faktory::Job {
 }
 
 pub mod job {
+    pub const EMAIL_VERIFICATION: &str = "email_verification";
+
     pub const ADD_ACCOUNT: &str = "add_account";
     pub const VERIFY_ACCOUNT: &str = "verify_account";
 
@@ -145,6 +149,12 @@ impl From<fuzzysearch_common::faktory::WebHookData> for IncomingSubmission {
             posted_at: None,
         }
     }
+}
+
+pub fn email_verification_job(user_id: Uuid) -> Result<faktory::Job, Error> {
+    let args = serialize_args!(user_id);
+
+    Ok(faktory::Job::new(job::EMAIL_VERIFICATION, args).fuzzy_queue(FaktoryQueue::Outgoing))
 }
 
 pub fn add_account_job(user_id: Uuid, account_id: Uuid) -> Result<faktory::Job, Error> {
@@ -361,6 +371,7 @@ pub struct JobContext {
     pub redlock: Arc<redlock::RedLock>,
     pub s3: rusoto_s3::S3Client,
     pub fuzzysearch: Arc<fuzzysearch::FuzzySearch>,
+    pub mailer: crate::Mailer,
     pub config: Arc<crate::Config>,
     pub client: reqwest::Client,
 }
@@ -442,6 +453,13 @@ impl WorkerEnvironment {
 }
 
 #[derive(askama::Template)]
+#[template(path = "email/verify.txt")]
+struct EmailVerify<'a> {
+    username: &'a str,
+    link: &'a str,
+}
+
+#[derive(askama::Template)]
 #[template(path = "email/similar.txt")]
 struct SimilarTemplate<'a> {
     username: &'a str,
@@ -489,6 +507,43 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
     for (name, job_fn) in site::jobs(&ctx.config).await? {
         environment.register(name, job_fn);
     }
+
+    environment.register(job::EMAIL_VERIFICATION, |ctx, job| async move {
+        let mut args = job.args().iter();
+        let (user_id,) = extract_args!(args, Uuid);
+
+        let user = models::User::lookup_by_id(&ctx.conn, user_id)
+            .await?
+            .ok_or(Error::Missing)?;
+
+        let email = user
+            .email
+            .ok_or(Error::Missing)?
+            .parse()
+            .map_err(Error::from_displayable)?;
+
+        let body = EmailVerify {
+            username: &user.username,
+            link: &format!(
+                "{}/user/email/verify?u={}&v={}",
+                ctx.config.host_url,
+                user.id,
+                user.email_verifier.unwrap_or_else(Uuid::new_v4)
+            ),
+        }
+        .render()?;
+
+        let email = lettre::Message::builder()
+            .from(ctx.config.smtp_from.clone())
+            .reply_to(ctx.config.smtp_reply_to.clone())
+            .to(lettre::message::Mailbox::new(Some(user.username), email))
+            .subject("Verify your FuzzySearch OwO account email address")
+            .body(body)?;
+
+        ctx.mailer.send(email).await.unwrap();
+
+        Ok(())
+    });
 
     environment.register(job::SEARCH_EXISTING_SUBMISSIONS, |ctx, job| async move {
         let mut args = job.args().iter();
@@ -758,6 +813,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
             content_url: data.content_url.clone(),
         };
 
+        // TODO: this loop should split each item into a new job
         for item in similar_items {
             tracing::debug!("found similar item owned by {}", item.owner_id);
 
@@ -780,7 +836,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
             {
                 tracing::debug!("user had email, sending notification");
 
-                let body = askama::Template::render(&SimilarTemplate {
+                let body = SimilarTemplate {
                     username: &username,
                     source_link: item
                         .link
@@ -789,7 +845,8 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                     site_name: &data.site.to_string(),
                     poster_name: data.posted_by.as_deref().unwrap_or("unknown"),
                     similar_link: data.page_url.as_deref().unwrap_or(&data.content_url),
-                })?;
+                }
+                .render()?;
 
                 let email = lettre::Message::builder()
                     .from(ctx.config.smtp_from.clone())
@@ -801,20 +858,9 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                     .subject(format!("Similar image found on {}", data.site.to_string()))
                     .body(body)?;
 
-                let creds = lettre::transport::smtp::authentication::Credentials::new(
-                    ctx.config.smtp_username.clone(),
-                    ctx.config.smtp_password.clone(),
-                );
-
-                let mailer: lettre::AsyncSmtpTransport<lettre::Tokio1Executor> =
-                    lettre::AsyncSmtpTransport::<lettre::Tokio1Executor>::relay(
-                        &ctx.config.smtp_host,
-                    )
-                    .unwrap()
-                    .credentials(creds)
-                    .build();
-
-                lettre::AsyncTransport::send(&mailer, email).await.unwrap();
+                if let Err(err) = ctx.mailer.send(email).await {
+                    tracing::error!("could not send email: {:?}", err);
+                };
             }
         }
 

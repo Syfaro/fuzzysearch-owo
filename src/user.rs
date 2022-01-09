@@ -368,31 +368,13 @@ struct AddEmailForm {
     email: lettre::Address,
 }
 
-#[derive(askama::Template)]
-#[template(path = "email/verify.txt")]
-struct EmailVerify<'a> {
-    username: &'a str,
-    link: &'a str,
-}
-
 #[post("/add")]
 async fn email_add_post(
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
-    config: web::Data<crate::Config>,
+    faktory: web::Data<jobs::FaktoryClient>,
     user: models::User,
     form: web::Form<AddEmailForm>,
 ) -> Result<HttpResponse, Error> {
-    let body = EmailVerify {
-        username: &user.username,
-        link: &format!(
-            "{}/user/email/verify?u={}&v={}",
-            config.host_url,
-            user.id,
-            user.email_verifier.unwrap_or_else(Uuid::new_v4)
-        ),
-    }
-    .render()?;
-
     let email = form.email.to_string();
 
     if email.len() > 120 {
@@ -407,28 +389,12 @@ async fn email_add_post(
 
     models::User::set_email(&conn, user.id, &email).await?;
 
-    let email = lettre::Message::builder()
-        .from(config.smtp_from.clone())
-        .reply_to(config.smtp_reply_to.clone())
-        .to(lettre::message::Mailbox::new(
-            Some(user.username),
-            form.email.clone(),
-        ))
-        .subject("Verify your FuzzySearch OwO account email address")
-        .body(body)?;
-
-    let creds = lettre::transport::smtp::authentication::Credentials::new(
-        config.smtp_username.clone(),
-        config.smtp_password.clone(),
-    );
-
-    let mailer: lettre::AsyncSmtpTransport<lettre::Tokio1Executor> =
-        lettre::AsyncSmtpTransport::<lettre::Tokio1Executor>::relay(&config.smtp_host)
-            .unwrap()
-            .credentials(creds)
-            .build();
-
-    lettre::AsyncTransport::send(&mailer, email).await.unwrap();
+    faktory
+        .enqueue_job(
+            jobs::JobInitiator::user(user.id),
+            jobs::email_verification_job(user.id)?,
+        )
+        .await?;
 
     Ok(HttpResponse::Found()
         .insert_header(("Location", USER_HOME))
