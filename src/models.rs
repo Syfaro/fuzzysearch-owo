@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fmt::{Debug, Display},
     str::FromStr,
 };
@@ -288,6 +289,30 @@ impl UserSession {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Sha256Hash([u8; 32]);
+
+impl<'r> sqlx::Decode<'r, sqlx::Postgres> for Sha256Hash {
+    fn decode(
+        value: <sqlx::Postgres as sqlx::database::HasValueRef<'r>>::ValueRef,
+    ) -> Result<Self, sqlx::error::BoxDynError> {
+        let value = <Vec<u8> as sqlx::Decode<sqlx::Postgres>>::decode(value)?;
+        let data = value
+            .try_into()
+            .map_err(|_err| anyhow::anyhow!("data could not be converted"))?;
+
+        Ok(Self(data))
+    }
+}
+
+impl std::ops::Deref for Sha256Hash {
+    type Target = [u8; 32];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OwnedMediaItem {
     pub id: Uuid,
     pub owner_id: Uuid,
@@ -296,7 +321,7 @@ pub struct OwnedMediaItem {
     pub source_id: Option<String>,
 
     pub perceptual_hash: Option<i64>,
-    pub sha256_hash: [u8; 32],
+    pub sha256_hash: Sha256Hash,
 
     pub link: Option<String>,
     pub title: Option<String>,
@@ -315,25 +340,7 @@ impl OwnedMediaItem {
         id: Uuid,
         user_id: Uuid,
     ) -> Result<Option<Self>, Error> {
-        let item = sqlx::query_file!("queries/owned_media/get_by_id.sql", id, user_id)
-            .map(|row| OwnedMediaItem {
-                id: row.id,
-                owner_id: row.owner_id,
-                account_id: row.account_id,
-                source_id: row.source_id,
-                perceptual_hash: row.perceptual_hash,
-                sha256_hash: row
-                    .sha256_hash
-                    .try_into()
-                    .expect("sha256 data was not valid"),
-                link: row.link,
-                title: row.title,
-                posted_at: row.posted_at,
-                last_modified: row.last_modified,
-                content_url: row.content_url,
-                content_size: row.content_size,
-                thumb_url: row.thumb_url,
-            })
+        let item = sqlx::query_file_as!(Self, "queries/owned_media/get_by_id.sql", id, user_id)
             .fetch_optional(conn)
             .await?;
 
@@ -345,29 +352,12 @@ impl OwnedMediaItem {
         site: Site,
         site_id: S,
     ) -> Result<Option<Self>, Error> {
-        let item = sqlx::query_file!(
+        let item = sqlx::query_file_as!(
+            Self,
             "queries/owned_media/lookup_by_site_id.sql",
             site.to_string(),
             site_id.to_string()
         )
-        .map(|row| OwnedMediaItem {
-            id: row.id,
-            owner_id: row.owner_id,
-            account_id: row.account_id,
-            source_id: row.source_id,
-            perceptual_hash: row.perceptual_hash,
-            sha256_hash: row
-                .sha256_hash
-                .try_into()
-                .expect("sha256 data was not valid"),
-            link: row.link,
-            title: row.title,
-            posted_at: row.posted_at,
-            last_modified: row.last_modified,
-            content_url: row.content_url,
-            content_size: row.content_size,
-            thumb_url: row.thumb_url,
-        })
         .fetch_optional(conn)
         .await?;
 
@@ -472,25 +462,7 @@ impl OwnedMediaItem {
         conn: &sqlx::Pool<sqlx::Postgres>,
         user_id: Uuid,
     ) -> Result<Vec<Self>, Error> {
-        let items = sqlx::query_file!("queries/owned_media/recent_media.sql", user_id)
-            .map(|row| OwnedMediaItem {
-                id: row.id,
-                owner_id: row.owner_id,
-                account_id: row.account_id,
-                source_id: row.source_id,
-                perceptual_hash: row.perceptual_hash,
-                sha256_hash: row
-                    .sha256_hash
-                    .try_into()
-                    .expect("sha256 data was not valid"),
-                link: row.link,
-                title: row.title,
-                posted_at: row.posted_at,
-                last_modified: row.last_modified,
-                content_url: row.content_url,
-                content_size: row.content_size,
-                thumb_url: row.thumb_url,
-            })
+        let items = sqlx::query_file_as!(Self, "queries/owned_media/recent_media.sql", user_id)
             .fetch_all(conn)
             .await?;
 
@@ -512,27 +484,14 @@ impl OwnedMediaItem {
         conn: &sqlx::Pool<sqlx::Postgres>,
         perceptual_hash: i64,
     ) -> Result<Vec<Self>, Error> {
-        let items = sqlx::query_file!("queries/owned_media/find_similar.sql", perceptual_hash, 3)
-            .map(|row| OwnedMediaItem {
-                id: row.id,
-                owner_id: row.owner_id,
-                account_id: row.account_id,
-                source_id: row.source_id,
-                perceptual_hash: row.perceptual_hash,
-                sha256_hash: row
-                    .sha256_hash
-                    .try_into()
-                    .expect("sha256 data was not valid"),
-                link: row.link,
-                title: row.title,
-                posted_at: row.posted_at,
-                last_modified: row.last_modified,
-                content_url: row.content_url,
-                content_size: row.content_size,
-                thumb_url: row.thumb_url,
-            })
-            .fetch_all(conn)
-            .await?;
+        let items = sqlx::query_file_as!(
+            Self,
+            "queries/owned_media/find_similar.sql",
+            perceptual_hash,
+            3
+        )
+        .fetch_all(conn)
+        .await?;
 
         Ok(items)
     }
@@ -547,6 +506,46 @@ impl OwnedMediaItem {
             .await?;
 
         Ok(())
+    }
+
+    pub async fn media_page(
+        conn: &sqlx::PgPool,
+        user_id: Uuid,
+        page: u32,
+    ) -> Result<Vec<Self>, Error> {
+        let media = sqlx::query_file_as!(
+            Self,
+            "queries/owned_media/media_before.sql",
+            user_id,
+            page as i64,
+        )
+        .fetch_all(conn)
+        .await?;
+
+        Ok(media)
+    }
+
+    pub async fn count(conn: &sqlx::PgPool, user_id: Uuid) -> Result<i64, Error> {
+        let count = sqlx::query_file_scalar!("queries/owned_media/count.sql", user_id)
+            .fetch_one(conn)
+            .await?
+            .unwrap_or_default();
+
+        Ok(count)
+    }
+
+    pub async fn event_counts(
+        conn: &sqlx::PgPool,
+        event_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, i64>, Error> {
+        let counts = sqlx::query_file!("queries/owned_media/event_counts.sql", event_ids)
+            .map(|row| (row.id, row.count))
+            .fetch_all(conn)
+            .await?
+            .into_iter()
+            .collect();
+
+        Ok(counts)
     }
 }
 

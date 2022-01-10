@@ -15,4 +15,8 @@ SELECT
 FROM
     owned_media_item
 WHERE
-    perceptual_hash <@ ($1, $2);
+    owner_id = $1
+ORDER BY
+    last_modified DESC
+LIMIT
+    25 OFFSET ($2 * 25);

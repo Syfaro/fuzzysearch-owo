@@ -1,0 +1,140 @@
+{% extends "_base.html" %}
+
+{% macro pagination(data) %}
+<nav class="pagination">
+  {% let last_page = data.last_page() %}
+
+  {% match data.previous_page() %}
+  {% when Some with (previous_page) %}
+  <a class="pagination-previous" href="{{ data.url(previous_page) }}">Previous</a>
+  {% else %}
+  <a class="pagination-previous is-disabled" href="{{ data.url(0) }}" title="This is the first page" disabled>
+    Previous
+  </a>
+  {% endmatch %}
+
+  {% match data.next_page() %}
+  {% when Some with (next_page) %}
+  <a class="pagination-next" href="{{ data.url(next_page) }}">Next page</a>
+  {% else %}
+  <a class="pagination-next is-disabled" href="{{ data.url(last_page) }}" title="This is the last page" disabled>
+    Next page
+  </a>
+  {% endmatch %}
+
+  <ul class="pagination-list">
+    <li>
+      <a class="pagination-link {% if data.current_page == 0 %}is-current{% endif %}" href="{{ data.url(0) }}">1</a>
+    </li>
+
+    {% if data.current_page > 2 %}
+    <li class="is-hidden-touch">
+      <span class="pagination-ellipsis">&hellip;</span>
+    </li>
+    {% endif %}
+
+    {% for page_number in data.display_lower()..data.display_upper() %}
+    <li>
+      <a class="pagination-link {% if page_number == data.current_page %}is-current{% endif %}" href="{{ data.url(page_number) }}">{{ page_number + 1 }}</a>
+    </li>
+    {% endfor %}
+
+    {% if data.current_page < last_page - 3 %}
+    <li class="is-hidden-touch">
+      <span class="pagination-ellipsis">&hellip;</span>
+    </li>
+    {% endif %}
+
+    <li>
+      <a class="pagination-link {% if data.current_page == last_page %}is-current{% endif %}" href="{{ data.url(last_page) }}">{{ last_page + 1 }}</a>
+    </li>
+  </ul>
+</nav>
+{% endmacro %}
+
+{% block content %}
+<section class="section">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column">
+        <h1 class="title has-text-centered">FuzzySearch OwO</h1>
+        <h2 class="subtitle has-text-centered">All Media</h2>
+
+        {% if !media.is_empty() %}
+        <div class="table-container">
+          <table class="table is-fullwidth">
+            <thead class="has-text-left">
+              <tr>
+                <th>Preview</th>
+                <th>Title</th>
+                <th>Uploaded</th>
+                <th>Events</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in media %}
+              <tr>
+                <td>
+                  {% match item.thumb_url %}
+                  {% when Some with (thumb_url) %}
+                  <figure class="image is-128x128 is-inline-block" style="overflow: hidden;">
+                    <a href="/user/media/view/{{ item.id }}">
+                      <img src="{{ thumb_url }}" alt="{{ item.alt_text() }}">
+                    </a>
+                  </figure>
+                  {% else %}
+                  <p class="image is-128x128 has-text-centered">
+                    <a href="/user/media/view/{{ item.id }}">
+                      No preview available
+                    </a>
+                  </p>
+                  {% endmatch %}
+                </td>
+                <td>
+                  <a href="/user/media/view/{{ item.id }}">
+                    {% match item.title %}
+                    {% when Some with (title) %}
+                    {{ title }}
+                    {% else %}
+                    <span class="has-text-grey">Untitled</span>
+                    {% endmatch %}
+                  </a>
+                </td>
+                <td>
+                  <span class="relative-time" data-timestamp="{{ item.last_modified.timestamp() }}">
+                    {{ item.last_modified }}
+                  </span>
+                </td>
+                <td>
+                  {% match event_counts.get(item.id) %}
+                  {% when Some with (count) %}
+                  {{ count }}
+                  {% else %}
+                  <span class="has-text-grey">No&nbsp;events</span>
+                  {% endmatch %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="notification is-warning">
+          No more items were found.
+        </div>
+        {% endif %}
+
+        {% call pagination(pagination_data) %}
+      </div>
+    </div>
+
+    <div class="columns is-centered">
+      <div class="column is-one-third">
+        <div class="control">
+          <a href="/user/home" class="button is-link is-fullwidth is-outlined">Return Home</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

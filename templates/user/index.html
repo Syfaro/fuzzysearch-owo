@@ -98,7 +98,7 @@
         {% match item.thumb_url %}
         {% when Some with (thumb_url) %}
         <figure class="image is-128x128 is-inline-block" style="overflow: hidden;">
-          <a href="/user/media/{{ item.id }}">
+          <a href="/user/media/view/{{ item.id }}">
             {% match item.content_url %}
             {% when Some with (content_url) %}
             <img src="{{ thumb_url }}" alt="{{ item.alt_text() }}">
@@ -116,6 +116,12 @@
 
     <div class="columns is-centered">
       <div class="column is-one-third">
+        {% if item_count > 20 %}
+        <div class="control">
+          <a href="/user/media/list" class="button is-link is-fullwidth">View All Media</a>
+        </div>
+        {% endif %}
+
         <hr>
 
         <div class="block">

@@ -305,7 +305,6 @@ async fn main() {
                     .name("owo-session")
                     .secure(!web_config.cookie_insecure)
                     .http_only(true)
-                    .same_site(actix_web::cookie::SameSite::Strict)
                     .max_age(60 * 60 * 24 * 365);
 
                 let files =

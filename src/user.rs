@@ -1,3 +1,6 @@
+use std::borrow::Cow;
+use std::collections::HashMap;
+
 use actix_web::dev::ConnectionInfo;
 use actix_web::{get, post, services, web, HttpResponse, Scope};
 use askama::Template;
@@ -8,9 +11,13 @@ use sha2::Digest;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use uuid::Uuid;
 
-use crate::auth::FuzzySearchSessionToken;
-use crate::models::Site;
-use crate::{jobs, models, routes::*, Error};
+use crate::{
+    auth::FuzzySearchSessionToken,
+    jobs,
+    models::{self, Site},
+    routes::*,
+    Error,
+};
 
 #[derive(Template)]
 #[template(path = "user/index.html")]
@@ -309,7 +316,7 @@ struct MediaView {
     recent_events: Vec<models::UserEvent>,
 }
 
-#[get("/{media_id}")]
+#[get("/view/{media_id}")]
 async fn media_view(
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
     path: web::Path<(Uuid,)>,
@@ -346,6 +353,97 @@ async fn media_remove(
     Ok(HttpResponse::Found()
         .insert_header(("Location", USER_HOME))
         .finish())
+}
+
+#[derive(Deserialize)]
+struct MediaListPage {
+    page: u32,
+}
+
+pub struct PaginationData {
+    pub url: Cow<'static, str>,
+    pub page_size: u32,
+    pub item_count: u32,
+
+    pub current_page: u32,
+}
+
+impl PaginationData {
+    pub fn new<U>(url: U, page_size: u32, item_count: u32, current_page: u32) -> Self
+    where
+        U: Into<Cow<'static, str>>,
+    {
+        Self {
+            url: url.into(),
+            page_size,
+            item_count,
+            current_page,
+        }
+    }
+
+    pub fn url<P: std::fmt::Display>(&self, page: P) -> String {
+        format!("{}?page={}", self.url, page)
+    }
+
+    pub fn last_page(&self) -> u32 {
+        self.item_count / self.page_size
+    }
+
+    pub fn previous_page(&self) -> Option<u32> {
+        if self.current_page == 0 {
+            None
+        } else {
+            Some(self.current_page - 1)
+        }
+    }
+
+    pub fn next_page(&self) -> Option<u32> {
+        if (self.current_page + 1) * 25 >= self.item_count {
+            None
+        } else {
+            Some(self.current_page + 1)
+        }
+    }
+
+    pub fn display_lower(&self) -> u32 {
+        std::cmp::max(1, self.current_page.saturating_sub(2))
+    }
+
+    pub fn display_upper(&self) -> u32 {
+        std::cmp::min(self.last_page(), self.current_page + 3)
+    }
+}
+
+#[derive(Template)]
+#[template(path = "user/media/list.html")]
+struct MediaList {
+    media: Vec<models::OwnedMediaItem>,
+    event_counts: HashMap<Uuid, i64>,
+    pagination_data: PaginationData,
+}
+
+#[get("/list")]
+async fn media_list(
+    conn: web::Data<sqlx::PgPool>,
+    user: models::User,
+    page: Option<web::Query<MediaListPage>>,
+) -> Result<HttpResponse, Error> {
+    let page = page.map(|page| page.page).unwrap_or(0);
+
+    let media = models::OwnedMediaItem::media_page(&conn, user.id, page).await?;
+    let ids: Vec<_> = media.iter().map(|item| item.id).collect();
+    let event_counts = models::OwnedMediaItem::event_counts(&conn, &ids).await?;
+    let count = models::OwnedMediaItem::count(&conn, user.id).await?;
+
+    let pagination_data = PaginationData::new("/user/media/list", 25, count as u32, page);
+
+    let body = MediaList {
+        media,
+        event_counts,
+        pagination_data,
+    }
+    .render()?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
 #[derive(Template)]
@@ -446,6 +544,6 @@ pub fn service() -> Scope {
             account_view,
             account_verify,
         ]))
-        .service(web::scope("/media").service(services![media_view, media_remove]))
+        .service(web::scope("/media").service(services![media_list, media_view, media_remove]))
         .service(web::scope("/email").service(services![email_add, email_add_post, verify_email]))
 }
