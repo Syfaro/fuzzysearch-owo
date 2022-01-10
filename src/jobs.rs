@@ -672,9 +672,8 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
 
         let account_was_verified = match account.source_site {
             models::Site::FurAffinity => {
-                let client = reqwest::Client::default();
-
-                let body = client
+                let body = ctx
+                    .client
                     .get(format!(
                         "https://www.furaffinity.net/user/{}/",
                         account.username,
@@ -779,7 +778,8 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                 )
                 .await?;
 
-                let data = reqwest::Client::default()
+                let data = ctx
+                    .client
                     .get(&data.content_url)
                     .send()
                     .await?
