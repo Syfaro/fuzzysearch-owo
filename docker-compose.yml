@@ -43,7 +43,7 @@ services:
   postgres:
     build:
       context: .
-      dockerfile: Dockerfile-postgres-bktree
+      dockerfile: Dockerfile.postgres-bktree
     environment:
       - "POSTGRES_PASSWORD=postgres"
     healthcheck:
