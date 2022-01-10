@@ -386,7 +386,7 @@ impl PaginationData {
     }
 
     pub fn last_page(&self) -> u32 {
-        self.item_count / self.page_size
+        self.item_count.saturating_sub(1) / self.page_size
     }
 
     pub fn previous_page(&self) -> Option<u32> {

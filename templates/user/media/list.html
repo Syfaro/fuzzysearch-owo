@@ -39,7 +39,8 @@
     </li>
     {% endfor %}
 
-    {% if data.current_page < last_page - 3 %}
+    {% if last_page != 0 %}
+    {% if data.current_page < last_page.saturating_sub(3) %}
     <li class="is-hidden-touch">
       <span class="pagination-ellipsis">&hellip;</span>
     </li>
@@ -48,6 +49,7 @@
     <li>
       <a class="pagination-link {% if data.current_page == last_page %}is-current{% endif %}" href="{{ data.url(last_page) }}">{{ last_page + 1 }}</a>
     </li>
+    {% endif %}
   </ul>
 </nav>
 {% endmacro %}
