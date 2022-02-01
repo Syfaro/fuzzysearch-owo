@@ -115,7 +115,7 @@ function subscribeToEvents() {
     if (isUnauthorized) {
       console.debug('Unauthorized, keeping closed');
     } else {
-      setTimeout(subscribeToEvents, 1000);
+      setTimeout(subscribeToEvents, 1000 * 30);
     }
   };
 

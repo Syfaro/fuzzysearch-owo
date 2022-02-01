@@ -14,8 +14,8 @@ use uuid::Uuid;
 
 use crate::{auth::FuzzySearchSessionToken, jobs, models, Error};
 
-const HEARTHEAT_INTERVAL: Duration = Duration::from_secs(5);
-const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
+const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
+const CLIENT_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Message)]
 #[rtype(result = "()")]
@@ -92,7 +92,7 @@ impl WsEventSession {
     }
 
     fn hb(&self, ctx: &mut ws::WebsocketContext<Self>) {
-        ctx.run_interval(HEARTHEAT_INTERVAL, |act, ctx| {
+        ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
             tracing::trace!("checking last heartbeat");
 
             if Instant::now().duration_since(act.hb) > CLIENT_TIMEOUT {
