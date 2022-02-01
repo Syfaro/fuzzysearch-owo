@@ -2,13 +2,13 @@ use std::future::Future;
 use std::pin::Pin;
 
 use actix_session::Session;
-use actix_web::{dev::ConnectionInfo, get, post, services, web, FromRequest, HttpResponse, Scope};
+use actix_web::{get, post, services, web, FromRequest, HttpResponse, Scope};
 use askama::Template;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use zxcvbn::zxcvbn;
 
-use crate::{models, routes::*, Error};
+use crate::{models, routes::*, ClientIpAddr, Error};
 
 pub trait FuzzySearchSessionToken {
     const TOKEN_NAME: &'static str;
@@ -62,7 +62,7 @@ struct RegisterFormData {
 
 #[post("/register")]
 async fn register_post(
-    conn_info: ConnectionInfo,
+    client_ip: ClientIpAddr,
     session: Session,
     pool: web::Data<sqlx::Pool<sqlx::Postgres>>,
     form: web::Form<RegisterFormData>,
@@ -107,7 +107,7 @@ async fn register_post(
     let session_id = models::UserSession::create(
         &pool,
         user_id,
-        models::UserSessionSource::registration(conn_info.realip_remote_addr()),
+        models::UserSessionSource::registration(client_ip.ip_addr),
     )
     .await?;
 
@@ -147,7 +147,7 @@ struct LoginFormData {
 
 #[post("/login")]
 async fn login_post(
-    conn_info: ConnectionInfo,
+    client_ip: ClientIpAddr,
     session: Session,
     pool: web::Data<sqlx::Pool<sqlx::Postgres>>,
     form: web::Form<LoginFormData>,
@@ -158,7 +158,7 @@ async fn login_post(
         let session_id = models::UserSession::create(
             &pool,
             user.id,
-            models::UserSessionSource::login(conn_info.realip_remote_addr()),
+            models::UserSessionSource::login(client_ip.ip_addr),
         )
         .await?;
         session.set_session_token(user.id, session_id)?;

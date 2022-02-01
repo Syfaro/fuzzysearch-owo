@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-use actix_web::dev::ConnectionInfo;
 use actix_web::{get, post, services, web, HttpResponse, Scope};
 use askama::Template;
 use futures::TryStreamExt;
@@ -16,7 +15,7 @@ use crate::{
     jobs,
     models::{self, Site},
     routes::*,
-    Error,
+    ClientIpAddr, Error,
 };
 
 #[derive(Template)]
@@ -503,7 +502,7 @@ struct EmailVerifyQuery {
 
 #[get("/verify")]
 async fn verify_email(
-    conn_info: ConnectionInfo,
+    client_ip: ClientIpAddr,
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
     query: web::Query<EmailVerifyQuery>,
     user: Option<models::User>,
@@ -517,7 +516,7 @@ async fn verify_email(
         let session_id = models::UserSession::create(
             &conn,
             query.user_id,
-            models::UserSessionSource::email_verification(conn_info.realip_remote_addr()),
+            models::UserSessionSource::email_verification(client_ip.ip_addr),
         )
         .await?;
         session.set_session_token(query.user_id, session_id)?;

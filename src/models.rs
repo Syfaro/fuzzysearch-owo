@@ -193,19 +193,19 @@ impl UserSessionSource {
         }
     }
 
-    fn from_remote_addr(remote_addr: Option<&str>) -> Option<std::net::IpAddr> {
+    fn from_remote_addr(remote_addr: Option<String>) -> Option<std::net::IpAddr> {
         remote_addr.and_then(|addr| addr.parse().ok())
     }
 
-    pub fn registration(remote_addr: Option<&str>) -> Self {
+    pub fn registration(remote_addr: Option<String>) -> Self {
         Self::Registration(Self::from_remote_addr(remote_addr))
     }
 
-    pub fn login(remote_addr: Option<&str>) -> Self {
+    pub fn login(remote_addr: Option<String>) -> Self {
         Self::Login(Self::from_remote_addr(remote_addr))
     }
 
-    pub fn email_verification(remote_addr: Option<&str>) -> Self {
+    pub fn email_verification(remote_addr: Option<String>) -> Self {
         Self::EmailVerification(Self::from_remote_addr(remote_addr))
     }
 }

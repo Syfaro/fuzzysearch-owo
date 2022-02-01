@@ -33,6 +33,10 @@ pub struct WebConfig {
     #[clap(long, env("COOKIE_INSECURE"))]
     pub cookie_insecure: bool,
 
+    /// If the Cloudflare `cf-connecting-ip` header should be trusted.
+    #[clap(long, env("TRUST_CLOUDFLARE"))]
+    pub trust_cloudflare: bool,
+
     /// Path to static files.
     #[clap(long, env("ASSETS_DIR"), default_value = "./assets")]
     pub assets_dir: String,
@@ -204,6 +208,47 @@ async fn index(user: Option<models::User>) -> Result<HttpResponse, Error> {
 
 async fn not_found() -> Result<HttpResponse, Error> {
     Err(Error::Missing)
+}
+
+struct ClientIpAddr {
+    ip_addr: Option<String>,
+}
+
+impl actix_web::FromRequest for ClientIpAddr {
+    type Error = Error;
+    type Future = std::pin::Pin<Box<dyn futures::Future<Output = Result<Self, Self::Error>>>>;
+
+    fn from_request(
+        req: &actix_web::HttpRequest,
+        payload: &mut actix_http::Payload,
+    ) -> Self::Future {
+        let trust_cloudflare = match &req
+            .app_data::<web::Data<Config>>()
+            .expect("app missing config")
+            .service_mode
+        {
+            ServiceMode::Web(web_config) => web_config.trust_cloudflare,
+            _ => unreachable!("web requests should always be in web service mode"),
+        };
+
+        let cf_connecting_ip = req
+            .headers()
+            .get("cf-connecting-ip")
+            .map(|value| String::from_utf8_lossy(value.as_bytes()).to_string());
+
+        let real_ip = actix_web::dev::ConnectionInfo::from_request(req, payload);
+
+        Box::pin(async move {
+            let ip_addr = if trust_cloudflare && cf_connecting_ip.is_some() {
+                cf_connecting_ip
+            } else {
+                let real_ip = real_ip.await.expect("connectioninfo issue");
+                real_ip.realip_remote_addr().map(|addr| addr.to_string())
+            };
+
+            Ok(Self { ip_addr })
+        })
+    }
 }
 
 #[tokio::main]
