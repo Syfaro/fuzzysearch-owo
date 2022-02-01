@@ -264,7 +264,7 @@ impl UserSession {
         let mut redis = redis.clone();
         redis
             .publish(
-                format!("user-events:{}", user_id.to_string()),
+                format!("user-events:{}", user_id),
                 serde_json::to_string(&api::EventMessage::SessionEnded { session_id: id })?,
             )
             .await?;
@@ -767,7 +767,7 @@ impl LinkedAccount {
         let mut redis = redis.clone();
         redis
             .publish(
-                format!("user-events:{}", user_id.to_string()),
+                format!("user-events:{}", user_id),
                 serde_json::to_string(&api::EventMessage::LoadingStateChange {
                     account_id,
                     loading_state: loading_state.message(),
@@ -1007,7 +1007,7 @@ impl UserEvent {
         let mut redis = redis.clone();
         redis
             .publish(
-                format!("user-events:{}", user_id.to_string()),
+                format!("user-events:{}", user_id),
                 serde_json::to_string(&api::EventMessage::SimpleMessage {
                     id: notification_id,
                     message: message.as_ref().to_string(),
@@ -1045,7 +1045,7 @@ impl UserEvent {
             let mut redis = redis.clone();
             redis
                 .publish(
-                    format!("user-events:{}", user_id.to_string()),
+                    format!("user-events:{}", user_id),
                     serde_json::to_string(&api::EventMessage::SimilarImage { media_id, link })?,
                 )
                 .await?;

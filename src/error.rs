@@ -64,7 +64,7 @@ impl Error {
             Self::Unknown | Self::UnknownMessage(_) => "An unknown error occured.".into(),
             Self::Template(_) => "Page could not be rendered.".into(),
             Self::Missing => "Resource could not be found.".into(),
-            Self::Image(err) => format!("Image could not be handled: {}", err.to_string()).into(),
+            Self::Image(err) => format!("Image could not be handled: {}", err).into(),
             Self::TooLarge(_size) => "Request body too large.".into(),
             Self::LoadingError(msg) => format!("Error loading resource: {}", msg).into(),
             Self::UserError(msg) => msg.to_owned(),

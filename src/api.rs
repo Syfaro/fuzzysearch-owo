@@ -136,9 +136,7 @@ impl WsEventSession {
             async move {
                 let conn = redis.get_async_connection().await?;
                 let mut pubsub = conn.into_pubsub();
-                pubsub
-                    .subscribe(format!("user-events:{}", user_id.to_string()))
-                    .await?;
+                pubsub.subscribe(format!("user-events:{}", user_id)).await?;
 
                 Ok(pubsub)
             }

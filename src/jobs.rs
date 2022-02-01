@@ -719,7 +719,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
         let mut redis = ctx.redis.clone();
         redis
             .publish(
-                format!("user-events:{}", user_id.to_string()),
+                format!("user-events:{}", user_id),
                 serde_json::to_string(&api::EventMessage::AccountVerified {
                     account_id,
                     verified: account_was_verified,
@@ -856,7 +856,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                         Some(username),
                         email.parse().map_err(Error::from_displayable)?,
                     ))
-                    .subject(format!("Similar image found on {}", data.site.to_string()))
+                    .subject(format!("Similar image found on {}", data.site))
                     .body(body)?;
 
                 if let Err(err) = ctx.mailer.send(email).await {

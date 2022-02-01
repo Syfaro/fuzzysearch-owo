@@ -223,10 +223,7 @@ async fn account_link_post(
     let account = models::LinkedAccount::create(&conn, user.id, form.site, username, data).await?;
 
     Ok(HttpResponse::Found()
-        .insert_header((
-            "Location",
-            format!("/user/account/{}", account.id.to_string()),
-        ))
+        .insert_header(("Location", format!("/user/account/{}", account.id)))
         .finish())
 }
 
@@ -302,10 +299,7 @@ async fn account_verify(
         .await?;
 
     Ok(HttpResponse::Found()
-        .insert_header((
-            "Location",
-            format!("/user/account/{}", account.id.to_string()),
-        ))
+        .insert_header(("Location", format!("/user/account/{}", account.id)))
         .finish())
 }
 

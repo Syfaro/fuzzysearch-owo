@@ -257,7 +257,7 @@ async fn update_import_progress<S: ToString>(
 
     redis
         .publish(
-            format!("user-events:{}", user_id.to_string()),
+            format!("user-events:{}", user_id),
             serde_json::to_string(&crate::api::EventMessage::LoadingProgress {
                 account_id,
                 loaded: completed,
