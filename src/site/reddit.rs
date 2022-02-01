@@ -96,6 +96,7 @@ async fn update_subreddit(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(),
                     before: None,
                     count: None,
                     period: None,
+                    limit: None,
                 }),
             )
             .await
