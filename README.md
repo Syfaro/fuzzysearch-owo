@@ -10,14 +10,14 @@ or it can automatically import content from linked websites.
 
 It searches for similar images on:
 
-- F-list (identifying images using the character gallery page)
-- Reddit (from a static list of subreddits)
-- FurAffinity, Weasyl, e621, and Twitter (data provided by FuzzySearch webhooks)
+* F-list (identifying images using the character gallery page)
+* Reddit (from a static list of subreddits)
+* FurAffinity, Weasyl, e621, and Twitter (data provided by FuzzySearch webhooks)
 
 It can import user content from:
 
-- FurAffinity (and can be extended to other data sent in from FuzzySearch)
-- DeviantArt
+* FurAffinity (and can be extended to other data sent in from FuzzySearch)
+* DeviantArt
 
 It will only import user content after the user has either signed into the
 service (via OAuth, etc.) or some other verification of their profile.
@@ -43,21 +43,22 @@ up and running.
 
 It has a few software dependencies to run:
 
-- PostgreSQL with the [bktree] extension as the primary backing datastore
-- Redis to send events about user actions
-- [Faktory] for managing background tasks
-- [faktory-cron] to run scheduled jobs (provided in jobs.yaml)
+* PostgreSQL with the [bktree] extension as the primary backing datastore
+* Redis to send events about user actions
+* [Faktory] for managing background tasks
+* [faktory-cron] to run scheduled jobs (provided in jobs.yaml)
 
 It also requires credentials or app tokens for the following sites:
 
-- DeviantArt (OAuth client)
-- F-list (username and password)
-- FurAffinity (authenticated cookies)
-- FuzzySearch (API key)
-- Patreon (OAuth client, not currently used)
-- Reddit (username, password, and OAuth client)
-- S3-like (endpoint, region, bucket, access, and secret key)
-- SMTP (host, username, and password)
+* DeviantArt (OAuth client)
+* F-list (username and password)
+* FurAffinity (authenticated cookies)
+* FuzzySearch (API key)
+* Patreon (OAuth client, not currently used)
+* Reddit (username, password, and OAuth client)
+* S3-like (endpoint, region, bucket, access, and secret key)
+* SMTP (host, username, and password)
+* Telegram (token and domain)
 
 [bktree]: https://github.com/fake-name/pg-spgist_hamming
 [faktory]: https://github.com/contribsys/faktory
