@@ -75,7 +75,7 @@ where
 }
 
 /// Get all services for all sites.
-pub fn services() -> Vec<actix_web::Scope> {
+pub fn service() -> Vec<actix_web::Scope> {
     deviantart::DeviantArt::services()
         .into_iter()
         .chain(patreon::Patreon::services().into_iter())
@@ -87,13 +87,11 @@ pub async fn jobs(config: &crate::Config) -> Result<HashMap<&'static str, SiteJo
     let watched_site_jobs = watched_sites(config)
         .await?
         .into_iter()
-        .map(|site| site.jobs())
-        .flatten();
+        .flat_map(|site| site.jobs());
     let collected_site_jobs = collected_sites(config)
         .await?
         .into_iter()
-        .map(|site| site.jobs())
-        .flatten();
+        .flat_map(|site| site.jobs());
 
     Ok(watched_site_jobs.chain(collected_site_jobs).collect())
 }

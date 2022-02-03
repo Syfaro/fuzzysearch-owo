@@ -1,0 +1,96 @@
+{% extends "_base.html" %}
+
+{% block content %}
+<section class="section">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-one-third">
+        <h1 class="title has-text-centered">FuzzySearch OwO</h1>
+        <h2 class="subtitle has-text-centered">Admin</h2>
+
+        <div class="block">
+          <h3 class="subtitle is-4">Inject Submission</h3>
+
+          <form method="POST" action="/admin/inject">
+            <div class="field">
+              <label class="label">Image URL</label>
+              <div class="control">
+                <input class="input" type="url" placeholder="Image URL" name="content_url" required>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="label">Page URL</label>
+              <div class="control">
+                <input class="input" type="url" placeholder="Page URL" name="page_url">
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="label">Posted By</label>
+              <div class="control">
+                <input class="input" type="text" placeholder="Posted By" name="posted_by">
+              </div>
+            </div>
+
+            <div class="field">
+              <div class="control">
+                <button class="button is-primary">Inject</button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div class="block">
+          <h3 class="subtitle is-4">Subreddits</h3>
+
+          <table class="table is-fullwidth">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Last Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for subreddit in subreddits %}
+              <tr>
+                <th>{{ subreddit.name }}</th>
+                <td>
+                  {% match subreddit.last_updated %}
+                  {% when Some with (last_updated) %}
+                  <span class="relative-time" data-timestamp="{{ last_updated.timestamp() }}">
+                    {{ last_updated }}
+                  </span>
+                  {% else %}
+                  <span class="has-text-grey">never</span>
+                  {% endmatch %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+
+          <form method="POST" action="/admin/subreddit">
+            <div class="field">
+              <label class="label">Subreddit name</label>
+              <div class="control">
+                <input class="input" type="text" placeholder="Subreddit name" name="subreddit_name">
+              </div>
+            </div>
+
+            <div class="field">
+              <div class="control">
+                <button class="button is-primary">Add</button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div class="control">
+          <a href="/" class="button is-link is-fullwidth">Return Home</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

@@ -104,13 +104,13 @@ async fn settings_post(
     let email_notifications = form
         .get("email-notifications")
         .map(|value| setting::EmailNotifications(value == "on"))
-        .unwrap_or_default();
+        .unwrap_or_else(models::UserSettingItem::off_value);
     models::UserSetting::set(&conn, user.id, &email_notifications).await?;
 
     let telegram_notifications = form
         .get("telegram-notifications")
         .map(|value| setting::TelegramNotifications(value == "on"))
-        .unwrap_or_default();
+        .unwrap_or_else(models::UserSettingItem::off_value);
     models::UserSetting::set(&conn, user.id, &telegram_notifications).await?;
 
     let body = Settings {

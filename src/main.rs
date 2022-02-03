@@ -5,6 +5,7 @@ use actix_web::{web, App, HttpResponse, HttpServer};
 use askama::Template;
 use clap::Parser;
 
+mod admin;
 mod api;
 mod auth;
 mod error;
@@ -389,7 +390,8 @@ async fn main() {
                     .service(auth::service())
                     .service(user::service())
                     .service(api::service())
-                    .service(site::services())
+                    .service(site::service())
+                    .service(admin::service())
                     .service(files)
                     .service(index)
                     .default_service(web::to(not_found))

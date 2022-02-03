@@ -466,8 +466,18 @@ struct EmailVerify<'a> {
 }
 
 #[derive(askama::Template)]
-#[template(path = "email/similar.txt")]
-struct SimilarTemplate<'a> {
+#[template(path = "notification/similar_email.txt")]
+struct SimilarEmailTemplate<'a> {
+    username: &'a str,
+    source_link: &'a str,
+    site_name: &'a str,
+    poster_name: &'a str,
+    similar_link: &'a str,
+}
+
+#[derive(askama::Template)]
+#[template(path = "notification/similar_telegram.txt")]
+struct SimilarTelegramTemplate<'a> {
     username: &'a str,
     source_link: &'a str,
     site_name: &'a str,
@@ -837,15 +847,8 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
             )
             .await?;
 
-            if let Some(
-                ref user @ models::User {
-                    email: Some(ref email),
-                    email_verifier: None,
-                    ..
-                },
-            ) = models::User::lookup_by_id(&ctx.conn, item.owner_id).await?
-            {
-                tracing::debug!("user had email, sending notification");
+            if let Some(user) = models::User::lookup_by_id(&ctx.conn, item.owner_id).await? {
+                tracing::debug!("sending notifications to user");
 
                 let emails_enabled: setting::EmailNotifications =
                     models::UserSetting::get(&ctx.conn, user.id)
@@ -862,39 +865,53 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                     continue;
                 }
 
-                let body = SimilarTemplate {
-                    username: user.display_name(),
-                    source_link: item
-                        .link
-                        .as_deref()
-                        .unwrap_or_else(|| item.content_url.as_deref().unwrap_or("unknown")),
-                    site_name: &data.site.to_string(),
-                    poster_name: data.posted_by.as_deref().unwrap_or("unknown"),
-                    similar_link: data.page_url.as_deref().unwrap_or(&data.content_url),
-                }
-                .render()?;
+                match &user.email {
+                    Some(email) if user.email_verifier.is_none() && emails_enabled.0 => {
+                        let body = SimilarEmailTemplate {
+                            username: user.display_name(),
+                            source_link: item.link.as_deref().unwrap_or_else(|| {
+                                item.content_url.as_deref().unwrap_or("unknown")
+                            }),
+                            site_name: &data.site.to_string(),
+                            poster_name: data.posted_by.as_deref().unwrap_or("unknown"),
+                            similar_link: data.page_url.as_deref().unwrap_or(&data.content_url),
+                        }
+                        .render()?;
 
-                if emails_enabled.0 {
-                    let email = lettre::Message::builder()
-                        .from(ctx.config.smtp_from.clone())
-                        .reply_to(ctx.config.smtp_reply_to.clone())
-                        .to(lettre::message::Mailbox::new(
-                            Some(user.display_name().to_owned()),
-                            email.parse().map_err(Error::from_displayable)?,
-                        ))
-                        .subject(format!("Similar image found on {}", data.site))
-                        .body(body.clone())?;
+                        let email = lettre::Message::builder()
+                            .from(ctx.config.smtp_from.clone())
+                            .reply_to(ctx.config.smtp_reply_to.clone())
+                            .to(lettre::message::Mailbox::new(
+                                Some(user.display_name().to_owned()),
+                                email.parse().map_err(Error::from_displayable)?,
+                            ))
+                            .subject(format!("Similar image found on {}", data.site))
+                            .body(body)?;
 
-                    if let Err(err) = ctx.mailer.send(email).await {
-                        tracing::error!("could not send email: {:?}", err);
-                    };
+                        if let Err(err) = ctx.mailer.send(email).await {
+                            tracing::error!("could not send email: {:?}", err);
+                        };
+                    }
+                    _ => (),
                 }
 
                 match user.telegram_id {
                     Some(telegram_id) if telegram_enabled.0 => {
+                        let body = SimilarTelegramTemplate {
+                            username: user.display_name(),
+                            source_link: item.link.as_deref().unwrap_or_else(|| {
+                                item.content_url.as_deref().unwrap_or("unknown")
+                            }),
+                            site_name: &data.site.to_string(),
+                            poster_name: data.posted_by.as_deref().unwrap_or("unknown"),
+                            similar_link: data.page_url.as_deref().unwrap_or(&data.content_url),
+                        }
+                        .render()?;
+
                         let send_message = tgbotapi::requests::SendMessage {
                             chat_id: telegram_id.into(),
                             text: body,
+                            disable_web_page_preview: Some(true),
                             ..Default::default()
                         };
 

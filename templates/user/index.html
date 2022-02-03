@@ -145,20 +145,4 @@
     </div>
   </div>
 </section>
-
-<script>
-  [...document.querySelectorAll('input[type=file]')].forEach((input) => {
-    input.addEventListener('change', () => {
-      if (input.files.length === 0) {
-        return;
-      }
-
-      const fileName = document.querySelector(input.dataset.fileNameLabel);
-
-      if (fileName) {
-        fileName.textContent = input.files[0].name;
-      }
-    });
-  });
-</script>
 {% endblock %}

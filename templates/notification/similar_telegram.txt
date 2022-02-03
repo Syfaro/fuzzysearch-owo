@@ -1,0 +1,5 @@
+Hi {{ username }},
+
+A similar image to this was found: {{ source_link }}
+
+It was posted to {{ site_name }} by {{ poster_name }}. You can see it here: {{ similar_link }}

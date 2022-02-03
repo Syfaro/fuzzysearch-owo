@@ -22,6 +22,7 @@ pub struct User {
     pub email_verifier: Option<Uuid>,
     pub telegram_id: Option<i64>,
     pub telegram_name: Option<String>,
+    pub is_admin: bool,
 
     hashed_password: Option<String>,
 }
@@ -937,6 +938,7 @@ pub enum Site {
     FList,
     DeviantArt,
     Reddit,
+    InternalTesting,
 }
 
 impl Site {
@@ -966,6 +968,7 @@ impl Display for Site {
             Site::FList => write!(f, "F-list"),
             Site::DeviantArt => write!(f, "DeviantArt"),
             Site::Reddit => write!(f, "Reddit"),
+            Self::InternalTesting => write!(f, "Internal Testing"),
         }
     }
 }
@@ -983,6 +986,7 @@ impl FromStr for Site {
             "F-list" => Site::FList,
             "DeviantArt" => Site::DeviantArt,
             "Reddit" => Site::Reddit,
+            "Internal Testing" => Site::InternalTesting,
             _ => return Err("unknown source site"),
         };
 
@@ -1396,6 +1400,22 @@ impl RedditSubreddit {
 
         Ok(())
     }
+
+    pub async fn subreddits(conn: &sqlx::PgPool) -> Result<Vec<Self>, Error> {
+        let subreddits = sqlx::query_file_as!(Self, "queries/reddit/subreddits.sql")
+            .fetch_all(conn)
+            .await?;
+
+        Ok(subreddits)
+    }
+
+    pub async fn add(conn: &sqlx::PgPool, name: &str) -> Result<(), Error> {
+        sqlx::query_file!("queries/reddit/add_subreddit.sql", name)
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
 }
 
 pub struct RedditPost {
@@ -1495,6 +1515,8 @@ pub trait UserSettingItem:
     Clone + Default + serde::Serialize + serde::de::DeserializeOwned
 {
     const SETTING_NAME: &'static str;
+
+    fn off_value() -> Self;
 }
 
 pub struct UserSetting;
@@ -1550,19 +1572,20 @@ pub mod setting {
 
     impl UserSettingItem for EmailNotifications {
         const SETTING_NAME: &'static str = "email-notifications";
-    }
 
-    #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct TelegramNotifications(pub bool);
-
-    #[allow(clippy::derivable_impls)]
-    impl Default for TelegramNotifications {
-        fn default() -> Self {
+        fn off_value() -> Self {
             Self(false)
         }
     }
 
+    #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+    pub struct TelegramNotifications(pub bool);
+
     impl UserSettingItem for TelegramNotifications {
         const SETTING_NAME: &'static str = "telegram-notifications";
+
+        fn off_value() -> Self {
+            Self(false)
+        }
     }
 }
