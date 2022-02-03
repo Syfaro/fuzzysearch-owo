@@ -91,6 +91,11 @@
           "ordinal": 7,
           "name": "is_admin",
           "type_info": "Bool"
+        },
+        {
+          "ordinal": 8,
+          "name": "display_name",
+          "type_info": "Text"
         }
       ],
       "parameters": {
@@ -106,7 +111,8 @@
         true,
         true,
         true,
-        false
+        false,
+        true
       ]
     }
   },
@@ -1264,6 +1270,31 @@
       ]
     }
   },
+  "a4e181c819359c8e26829688d6b5636a5a44bcbc402f52780292393ac2af72d1": {
+    "query": "DELETE FROM\n    user_account\nWHERE\n    id = $1;\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "a6286b43713fdd80b9f3d00acccad8e51a561ae939b4ea5d8cbffa05be19b81f": {
+    "query": "UPDATE\n    user_account\nSET\n    display_name = $2\nWHERE\n    id = $1;\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text"
+        ]
+      },
+      "nullable": []
+    }
+  },
   "a6d44684de329c52d1ba4a69b866421d2da14e92e0fe1f7ebba411d1163d5cd4": {
     "query": "INSERT INTO\n    reddit_image (post_fullname, size, sha256, perceptual_hash)\nVALUES\n    ($1, $2, $3, $4) ON CONFLICT DO NOTHING RETURNING id;\n",
     "describe": {
@@ -1363,6 +1394,11 @@
           "ordinal": 7,
           "name": "is_admin",
           "type_info": "Bool"
+        },
+        {
+          "ordinal": 8,
+          "name": "display_name",
+          "type_info": "Text"
         }
       ],
       "parameters": {
@@ -1378,7 +1414,8 @@
         true,
         true,
         true,
-        false
+        false,
+        true
       ]
     }
   },
@@ -1875,6 +1912,11 @@
           "ordinal": 7,
           "name": "is_admin",
           "type_info": "Bool"
+        },
+        {
+          "ordinal": 8,
+          "name": "display_name",
+          "type_info": "Text"
         }
       ],
       "parameters": {
@@ -1890,7 +1932,8 @@
         true,
         true,
         true,
-        false
+        false,
+        true
       ]
     }
   },
