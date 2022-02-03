@@ -7,7 +7,7 @@
       <div class="column is-one-third">
         <h1 class="title has-text-centered">FuzzySearch OwO</h1>
         <h2 class="subtitle has-text-centered">
-          Welcome, {{ user.username }}!
+          Welcome, {{ user.display_name() }}!
         </h2>
 
         <nav class="level">
@@ -126,6 +126,10 @@
 
         <div class="block">
           <form method="POST" action="/auth/logout">
+            <div class="field">
+              <a class="button is-primary is-fullwidth" href="/user/settings">Settings</a>
+            </div>
+
             <div class="field is-grouped">
               <div class="control is-flex-grow-1">
                 <button class="button is-danger is-outlined is-fullwidth">Sign Out</button>

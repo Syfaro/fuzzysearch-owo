@@ -11,9 +11,9 @@ use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use uuid::Uuid;
 
 use crate::{
-    auth::FuzzySearchSessionToken,
+    auth::{self, FuzzySearchSessionToken},
     jobs,
-    models::{self, Site},
+    models::{self, setting, Site},
     routes::*,
     ClientIpAddr, Error,
 };
@@ -46,6 +46,81 @@ async fn home(
         total_content_size,
         recent_media,
         monitored_accounts,
+    }
+    .render()?;
+
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[derive(Template)]
+#[template(path = "user/settings.html")]
+struct Settings<'a> {
+    telegram_login: &'a auth::TelegramLoginConfig,
+
+    user: models::User,
+    saved: bool,
+
+    email_notifications: setting::EmailNotifications,
+    telegram_notifications: setting::TelegramNotifications,
+}
+
+#[get("/settings")]
+async fn settings_get(
+    telegram_login: web::Data<auth::TelegramLoginConfig>,
+    conn: web::Data<sqlx::PgPool>,
+    user: models::User,
+) -> Result<HttpResponse, Error> {
+    let email_notifications = models::UserSetting::get(&conn, user.id)
+        .await?
+        .unwrap_or_default();
+
+    let telegram_notifications = models::UserSetting::get(&conn, user.id)
+        .await?
+        .unwrap_or_default();
+
+    let body = Settings {
+        telegram_login: &telegram_login,
+
+        user,
+        saved: false,
+
+        email_notifications,
+        telegram_notifications,
+    }
+    .render()?;
+
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[post("/settings")]
+async fn settings_post(
+    telegram_login: web::Data<auth::TelegramLoginConfig>,
+    conn: web::Data<sqlx::PgPool>,
+    user: models::User,
+    form: web::Form<HashMap<String, String>>,
+) -> Result<HttpResponse, Error> {
+    tracing::trace!("got settings: {:?}", form);
+
+    let email_notifications = form
+        .get("email-notifications")
+        .map(|value| setting::EmailNotifications(value == "on"))
+        .unwrap_or_default();
+    models::UserSetting::set(&conn, user.id, &email_notifications).await?;
+
+    let telegram_notifications = form
+        .get("telegram-notifications")
+        .map(|value| setting::TelegramNotifications(value == "on"))
+        .unwrap_or_default();
+    models::UserSetting::set(&conn, user.id, &telegram_notifications).await?;
+
+    let body = Settings {
+        telegram_login: &telegram_login,
+
+        user,
+        saved: true,
+
+        email_notifications,
+        telegram_notifications,
     }
     .render()?;
 
@@ -529,7 +604,7 @@ async fn verify_email(
 
 pub fn service() -> Scope {
     web::scope("/user")
-        .service(services![home, events, single])
+        .service(services![home, settings_get, settings_post, events, single])
         .service(web::scope("/account").service(services![
             account_link_get,
             account_link_post,

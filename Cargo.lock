@@ -1615,6 +1615,7 @@ dependencies = [
  "sha2 0.10.1",
  "sqlx",
  "tempfile",
+ "tgbotapi",
  "thiserror",
  "tokio",
  "tracing",
@@ -4097,6 +4098,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0066c8d12af8b5acd21e00547c3797fde4e8677254a7ee429176ccebbe93dd80"
 dependencies = [
  "terminal_size",
+]
+
+[[package]]
+name = "tgbotapi"
+version = "0.1.0"
+source = "git+https://github.com/Syfaro/tgbotapi-rs.git#0c96a3d2acbf0937466deda94a8a28894cfddea0"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tracing",
+ "tracing-futures",
 ]
 
 [[package]]

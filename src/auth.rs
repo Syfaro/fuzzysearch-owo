@@ -1,10 +1,14 @@
-use std::future::Future;
 use std::pin::Pin;
+use std::{collections::HashMap, future::Future};
 
 use actix_session::Session;
 use actix_web::{get, post, services, web, FromRequest, HttpResponse, Scope};
 use askama::Template;
+use chrono::TimeZone;
+use hmac::Hmac;
+use hmac::Mac;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 use zxcvbn::zxcvbn;
 
@@ -37,15 +41,26 @@ impl FuzzySearchSessionToken for Session {
     }
 }
 
+#[derive(Clone)]
+pub struct TelegramLoginConfig {
+    pub bot_username: String,
+    pub auth_url: String,
+    pub token: String,
+}
+
 #[derive(Template)]
 #[template(path = "auth/register.html")]
 struct Register<'a> {
+    telegram_login: &'a TelegramLoginConfig,
     error_messages: Option<Vec<&'a str>>,
 }
 
 #[get("/register")]
-async fn register_get() -> Result<HttpResponse, Error> {
+async fn register_get(
+    telegram_login: web::Data<TelegramLoginConfig>,
+) -> Result<HttpResponse, Error> {
     let body = Register {
+        telegram_login: &telegram_login,
         error_messages: None,
     }
     .render()?;
@@ -62,6 +77,7 @@ struct RegisterFormData {
 
 #[post("/register")]
 async fn register_post(
+    telegram_login: web::Data<TelegramLoginConfig>,
     client_ip: ClientIpAddr,
     session: Session,
     pool: web::Data<sqlx::Pool<sqlx::Postgres>>,
@@ -96,6 +112,7 @@ async fn register_post(
 
     if !error_messages.is_empty() {
         let body = Register {
+            telegram_login: &telegram_login,
             error_messages: Some(error_messages),
         }
         .render()?;
@@ -121,11 +138,15 @@ async fn register_post(
 #[derive(Template)]
 #[template(path = "auth/login.html")]
 struct Login<'a> {
+    telegram_login: &'a TelegramLoginConfig,
     error_message: Option<&'a str>,
 }
 
 #[get("/login")]
-async fn login_get(session: Session) -> Result<HttpResponse, Error> {
+async fn login_get(
+    telegram_login: web::Data<TelegramLoginConfig>,
+    session: Session,
+) -> Result<HttpResponse, Error> {
     if session.get_session_token()?.is_some() {
         return Ok(HttpResponse::Found()
             .insert_header(("Location", USER_HOME))
@@ -133,6 +154,7 @@ async fn login_get(session: Session) -> Result<HttpResponse, Error> {
     }
 
     let body = Login {
+        telegram_login: &telegram_login,
         error_message: None,
     }
     .render()?;
@@ -147,6 +169,7 @@ struct LoginFormData {
 
 #[post("/login")]
 async fn login_post(
+    telegram_login: web::Data<TelegramLoginConfig>,
     client_ip: ClientIpAddr,
     session: Session,
     pool: web::Data<sqlx::Pool<sqlx::Postgres>>,
@@ -168,12 +191,105 @@ async fn login_post(
             .finish())
     } else {
         let body = Login {
+            telegram_login: &telegram_login,
             error_message: Some("Unknown username or password."),
         }
         .render()?;
 
         Ok(HttpResponse::Ok().content_type("text/html").body(body))
     }
+}
+
+#[get("/telegram")]
+async fn telegram(
+    telegram_login: web::Data<TelegramLoginConfig>,
+    pool: web::Data<sqlx::PgPool>,
+    client_ip: ClientIpAddr,
+    query: web::Query<HashMap<String, String>>,
+    session: Session,
+    user: Option<models::User>,
+) -> Result<HttpResponse, Error> {
+    let mut query = query.into_inner();
+
+    let hash = query.remove("hash").ok_or(Error::Missing)?;
+
+    let hash = hex::decode(hash).map_err(actix_web::error::ErrorBadRequest)?;
+
+    let id: i64 = query
+        .get("id")
+        .ok_or(Error::Missing)?
+        .parse()
+        .map_err(actix_web::error::ErrorBadRequest)?;
+
+    let first_name = query.get("first_name").ok_or(Error::Missing)?.to_owned();
+
+    let auth_date: i64 = query
+        .get("auth_date")
+        .ok_or(Error::Missing)?
+        .parse()
+        .map_err(actix_web::error::ErrorBadRequest)?;
+
+    let auth_date = chrono::Utc.timestamp(auth_date, 0);
+    if auth_date + chrono::Duration::minutes(15) < chrono::Utc::now() {
+        return Err(actix_web::error::ErrorBadRequest("data too old").into());
+    }
+
+    let mut data: Vec<_> = query.into_iter().collect();
+    data.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+    let data = data
+        .into_iter()
+        .map(|(key, value)| format!("{}={}", key, value))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let token = Sha256::digest(&telegram_login.token);
+
+    let mut mac = Hmac::<Sha256>::new_from_slice(&token)
+        .expect("hmac could not be constructed with provided token");
+    mac.update(data.as_bytes());
+
+    mac.verify_slice(&hash)
+        .map_err(actix_web::error::ErrorBadRequest)?;
+
+    let user_id = if let Some(user) = user {
+        tracing::info!("user already authenticated, associating telegram account");
+
+        if models::User::lookup_by_telegram_id(&pool, id)
+            .await?
+            .is_some()
+        {
+            tracing::warn!("telegram account is already associated to other account");
+
+            return Err(Error::user_error(
+                "Telegram account is already registered to another account.",
+            ));
+        }
+
+        models::User::associate_telegram(&pool, user.id, id, &first_name).await?;
+
+        user.id
+    } else if let Some(user) = models::User::lookup_by_telegram_id(&pool, id).await? {
+        tracing::info!("known telegram account");
+
+        user.id
+    } else {
+        tracing::info!("new telegram account, creating account");
+
+        models::User::create_telegram(&pool, id, &first_name).await?
+    };
+
+    let session_id = models::UserSession::create(
+        &pool,
+        user_id,
+        models::UserSessionSource::telegram(client_ip.ip_addr),
+    )
+    .await?;
+    session.set_session_token(user_id, session_id)?;
+
+    return Ok(HttpResponse::Found()
+        .insert_header(("Location", USER_HOME))
+        .finish());
 }
 
 #[post("/logout")]
@@ -254,6 +370,7 @@ pub fn service() -> Scope {
         register_post,
         login_get,
         login_post,
+        telegram,
         logout,
         sessions,
         sessions_remove,

@@ -1,0 +1,68 @@
+{% extends "_base.html" %}
+
+{% block content %}
+<section class="section">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-one-third">
+        <h1 class="title has-text-centered">FuzzySearch OwO</h1>
+        <h2 class="subtitle has-text-centered">Settings</h2>
+
+        {% if saved %}
+        <div class="notification is-success">
+          <p>Your settings were saved.</p>
+        </div>
+        {% endif %}
+
+        <form method="POST">
+          <div class="block">
+            <h3 class="subtitle is-4">Notifications</h3>
+
+            <div class="field">
+              <label class="checkbox">
+                <input type="checkbox" name="email-notifications" {% if user.email_verifier.is_some() %} disabled {%
+                  else if email_notifications.0 %} checked {% endif %}>
+                Email notifications
+              </label>
+
+              {% if user.email_verifier.is_some() %}
+              <p class="help">You must verify your email address before receiving notifications.</p>
+              {% endif %}
+            </div>
+
+            <div class="field">
+              <label class="checkbox">
+                <input type="checkbox" name="telegram-notifications" {% if user.telegram_id.is_none() %} disabled {%
+                  else if telegram_notifications.0 %} checked {% endif %}>
+                Telegram notifications
+              </label>
+
+              {% if user.telegram_id.is_none() %}
+              <p class="help">You must add your Telegram account first.</p>
+
+              <div class="block has-text-centered">
+                <script async src="https://telegram.org/js/telegram-widget.js?15"
+                  data-telegram-login="{{ telegram_login.bot_username }}" data-size="large"
+                  data-auth-url="{{ telegram_login.auth_url }}" data-request-access="write"></script>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="control">
+              <button class="button is-primary is-fullwidth">Save Settings</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="control">
+              <a href="/user/home" class="button is-link is-fullwidth">Return Home</a>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

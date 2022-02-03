@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use actix_session::CookieSession;
 use actix_web::{web, App, HttpResponse, HttpServer};
 use askama::Template;
@@ -36,6 +38,11 @@ pub struct WebConfig {
     /// If the Cloudflare `cf-connecting-ip` header should be trusted.
     #[clap(long, env("TRUST_CLOUDFLARE"))]
     pub trust_cloudflare: bool,
+
+    #[clap(long, env("TELEGRAM_LOGIN_USERNAME"))]
+    pub telegram_login_username: String,
+    #[clap(long, env("TELEGRAM_AUTH_URL"))]
+    pub telegram_auth_url: String,
 
     /// Path to static files.
     #[clap(long, env("ASSETS_DIR"), default_value = "./assets")]
@@ -104,6 +111,11 @@ pub struct Config {
     /// FuzzySearch API key.
     #[clap(long, env("FUZZYSEARCH_API_KEY"))]
     pub fuzzysearch_api_key: String,
+
+    /// Telegram API token from Botfather, used for login and sending
+    /// notification messages.
+    #[clap(long, env("TELEGRAM_BOT_TOKEN"))]
+    pub telegram_bot_token: String,
 
     /// Faktory host, in the format `tcp://host`.
     #[clap(long, env("FAKTORY_HOST"))]
@@ -319,6 +331,8 @@ async fn main() {
                     .credentials(creds)
                     .build();
 
+            let telegram = Arc::new(tgbotapi::Telegram::new(config.telegram_bot_token.clone()));
+
             jobs::start_job_processing(jobs::JobContext {
                 faktory,
                 conn: pool,
@@ -330,6 +344,7 @@ async fn main() {
                 config: std::sync::Arc::new(config.clone()),
                 worker_config: std::sync::Arc::new(worker_config.clone()),
                 client,
+                telegram,
             })
             .await
             .expect("could not run background worker");
@@ -341,6 +356,12 @@ async fn main() {
                 cookie_private_key.len() >= 32,
                 "cookie private key must be greater than 32 bytes"
             );
+
+            let telegram_login = auth::TelegramLoginConfig {
+                bot_username: web_config.telegram_login_username,
+                auth_url: web_config.telegram_auth_url,
+                token: config.telegram_bot_token.clone(),
+            };
 
             let (http_host, http_workers) = (web_config.http_host.clone(), web_config.http_workers);
             tracing::info!("starting fuzzysearch-owo on http://{}", http_host);
@@ -364,6 +385,7 @@ async fn main() {
                     .app_data(web::Data::new(redis_manager.clone()))
                     .app_data(web::Data::new(faktory.clone()))
                     .app_data(web::Data::new(config.clone()))
+                    .app_data(web::Data::new(telegram_login.clone()))
                     .service(auth::service())
                     .service(user::service())
                     .service(api::service())

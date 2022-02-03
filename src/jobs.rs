@@ -16,7 +16,11 @@ use serde::{Deserialize, Serialize};
 use tracing::Instrument;
 use uuid::Uuid;
 
-use crate::{api, models, site, Error};
+use crate::{
+    api,
+    models::{self, setting},
+    site, Error,
+};
 
 #[derive(Clone, Debug, clap::ArgEnum)]
 pub enum FaktoryQueue {
@@ -375,6 +379,7 @@ pub struct JobContext {
     pub config: Arc<crate::Config>,
     pub worker_config: Arc<crate::WorkerConfig>,
     pub client: reqwest::Client,
+    pub telegram: Arc<tgbotapi::Telegram>,
 }
 
 struct WorkerEnvironment {
@@ -519,12 +524,13 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
 
         let email = user
             .email
+            .as_deref()
             .ok_or(Error::Missing)?
             .parse()
             .map_err(Error::from_displayable)?;
 
         let body = EmailVerify {
-            username: &user.username,
+            username: user.display_name(),
             link: &format!(
                 "{}/user/email/verify?u={}&v={}",
                 ctx.config.host_url,
@@ -537,7 +543,10 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
         let email = lettre::Message::builder()
             .from(ctx.config.smtp_from.clone())
             .reply_to(ctx.config.smtp_reply_to.clone())
-            .to(lettre::message::Mailbox::new(Some(user.username), email))
+            .to(lettre::message::Mailbox::new(
+                Some(user.display_name().to_owned()),
+                email,
+            ))
             .subject("Verify your FuzzySearch OwO account email address")
             .body(body)?;
 
@@ -828,17 +837,33 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
             )
             .await?;
 
-            if let Some(models::User {
-                username,
-                email: Some(email),
-                email_verifier: None,
-                ..
-            }) = models::User::lookup_by_id(&ctx.conn, item.owner_id).await?
+            if let Some(
+                ref user @ models::User {
+                    email: Some(ref email),
+                    email_verifier: None,
+                    ..
+                },
+            ) = models::User::lookup_by_id(&ctx.conn, item.owner_id).await?
             {
                 tracing::debug!("user had email, sending notification");
 
+                let emails_enabled: setting::EmailNotifications =
+                    models::UserSetting::get(&ctx.conn, user.id)
+                        .await?
+                        .unwrap_or_default();
+
+                let telegram_enabled: setting::TelegramNotifications =
+                    models::UserSetting::get(&ctx.conn, user.id)
+                        .await?
+                        .unwrap_or_default();
+
+                if !emails_enabled.0 && !telegram_enabled.0 {
+                    tracing::debug!("all notifications disabled, skipping");
+                    continue;
+                }
+
                 let body = SimilarTemplate {
-                    username: &username,
+                    username: user.display_name(),
                     source_link: item
                         .link
                         .as_deref()
@@ -849,19 +874,36 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                 }
                 .render()?;
 
-                let email = lettre::Message::builder()
-                    .from(ctx.config.smtp_from.clone())
-                    .reply_to(ctx.config.smtp_reply_to.clone())
-                    .to(lettre::message::Mailbox::new(
-                        Some(username),
-                        email.parse().map_err(Error::from_displayable)?,
-                    ))
-                    .subject(format!("Similar image found on {}", data.site))
-                    .body(body)?;
+                if emails_enabled.0 {
+                    let email = lettre::Message::builder()
+                        .from(ctx.config.smtp_from.clone())
+                        .reply_to(ctx.config.smtp_reply_to.clone())
+                        .to(lettre::message::Mailbox::new(
+                            Some(user.display_name().to_owned()),
+                            email.parse().map_err(Error::from_displayable)?,
+                        ))
+                        .subject(format!("Similar image found on {}", data.site))
+                        .body(body.clone())?;
 
-                if let Err(err) = ctx.mailer.send(email).await {
-                    tracing::error!("could not send email: {:?}", err);
-                };
+                    if let Err(err) = ctx.mailer.send(email).await {
+                        tracing::error!("could not send email: {:?}", err);
+                    };
+                }
+
+                match user.telegram_id {
+                    Some(telegram_id) if telegram_enabled.0 => {
+                        let send_message = tgbotapi::requests::SendMessage {
+                            chat_id: telegram_id.into(),
+                            text: body,
+                            ..Default::default()
+                        };
+
+                        if let Err(err) = ctx.telegram.make_request(&send_message).await {
+                            tracing::error!("could not send telegram message: {:?}", err);
+                        }
+                    }
+                    _ => (),
+                }
             }
         }
 

@@ -17,11 +17,13 @@ use crate::{api, site, Error};
 
 pub struct User {
     pub id: Uuid,
-    pub username: String,
+    pub username: Option<String>,
     pub email: Option<String>,
     pub email_verifier: Option<Uuid>,
+    pub telegram_id: Option<i64>,
+    pub telegram_name: Option<String>,
 
-    hashed_password: String,
+    hashed_password: Option<String>,
 }
 
 impl Debug for User {
@@ -40,6 +42,16 @@ impl User {
 
     pub fn has_unverified_email(&self) -> bool {
         self.email.is_some() && self.email_verifier.is_some()
+    }
+
+    pub fn display_name(&self) -> &str {
+        if let Some(username) = &self.username {
+            username
+        } else if let Some(telegram_name) = &self.telegram_name {
+            telegram_name
+        } else {
+            unreachable!("user must always have display name")
+        }
     }
 
     pub async fn lookup_by_id(
@@ -74,6 +86,18 @@ impl User {
         Ok(Some(user))
     }
 
+    pub async fn lookup_by_telegram_id(
+        conn: &sqlx::PgPool,
+        telegram_id: i64,
+    ) -> Result<Option<User>, Error> {
+        let user =
+            sqlx::query_file_as!(User, "queries/user/lookup_by_telegram_id.sql", telegram_id)
+                .fetch_optional(conn)
+                .await?;
+
+        Ok(user)
+    }
+
     pub async fn create(
         conn: &sqlx::Pool<sqlx::Postgres>,
         username: &str,
@@ -84,6 +108,22 @@ impl User {
         let id = sqlx::query_file_scalar!("queries/user/create.sql", username, password)
             .fetch_one(conn)
             .await?;
+
+        Ok(id)
+    }
+
+    pub async fn create_telegram(
+        conn: &sqlx::PgPool,
+        telegram_id: i64,
+        telegram_name: &str,
+    ) -> Result<Uuid, Error> {
+        let id = sqlx::query_file_scalar!(
+            "queries/user/create_telegram.sql",
+            telegram_id,
+            telegram_name
+        )
+        .fetch_one(conn)
+        .await?;
 
         Ok(id)
     }
@@ -111,10 +151,15 @@ impl User {
     }
 
     fn verify_password(&self, input: &str) -> bool {
+        let hashed_password = match &self.hashed_password {
+            Some(hashed_password) => hashed_password,
+            None => return false,
+        };
+
         let mut verifier = Verifier::default();
 
         verifier
-            .with_hash(&self.hashed_password)
+            .with_hash(hashed_password)
             .with_password(input)
             .verify()
             .unwrap_or(false)
@@ -155,6 +200,24 @@ impl User {
 
         Ok(updated_user_id.is_some())
     }
+
+    pub async fn associate_telegram(
+        conn: &sqlx::PgPool,
+        user_id: Uuid,
+        telegram_id: i64,
+        telegram_name: &str,
+    ) -> Result<(), Error> {
+        sqlx::query_file!(
+            "queries/user/associate_telegram.sql",
+            user_id,
+            telegram_id,
+            telegram_name
+        )
+        .execute(conn)
+        .await?;
+
+        Ok(())
+    }
 }
 
 #[derive(Deserialize, Serialize)]
@@ -164,6 +227,7 @@ pub enum UserSessionSource {
     Registration(Option<std::net::IpAddr>),
     Login(Option<std::net::IpAddr>),
     EmailVerification(Option<std::net::IpAddr>),
+    Telegram(Option<std::net::IpAddr>),
 }
 
 impl UserSessionSource {
@@ -173,6 +237,7 @@ impl UserSessionSource {
             Self::Registration(_) => "registration",
             Self::Login(_) => "login",
             Self::EmailVerification(_) => "email verification",
+            Self::Telegram(_) => "Telegram",
         }
     }
 
@@ -181,6 +246,7 @@ impl UserSessionSource {
             Self::Registration(ip) => ip,
             Self::Login(ip) => ip,
             Self::EmailVerification(ip) => ip,
+            Self::Telegram(ip) => ip,
             _ => None,
         }
     }
@@ -207,6 +273,10 @@ impl UserSessionSource {
 
     pub fn email_verification(remote_addr: Option<String>) -> Self {
         Self::EmailVerification(Self::from_remote_addr(remote_addr))
+    }
+
+    pub fn telegram(remote_addr: Option<String>) -> Self {
+        Self::Telegram(Self::from_remote_addr(remote_addr))
     }
 }
 
@@ -393,6 +463,7 @@ impl OwnedMediaItem {
         Ok(item_id)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn add_item<ID: ToString>(
         conn: &sqlx::Pool<sqlx::Postgres>,
         user_id: Uuid,
@@ -1417,5 +1488,81 @@ impl RedditImage {
             .await?;
 
         Ok(images)
+    }
+}
+
+pub trait UserSettingItem:
+    Clone + Default + serde::Serialize + serde::de::DeserializeOwned
+{
+    const SETTING_NAME: &'static str;
+}
+
+pub struct UserSetting;
+
+impl UserSetting {
+    pub async fn get<S>(conn: &sqlx::PgPool, owner_id: Uuid) -> Result<Option<S>, Error>
+    where
+        S: UserSettingItem,
+    {
+        let value =
+            sqlx::query_file_scalar!("queries/user_setting/get.sql", owner_id, S::SETTING_NAME)
+                .fetch_optional(conn)
+                .await?;
+
+        value
+            .map(|value| S::deserialize(value))
+            .transpose()
+            .map_err(Into::into)
+    }
+
+    pub async fn set<S>(conn: &sqlx::PgPool, owner_id: Uuid, setting: &S) -> Result<(), Error>
+    where
+        S: UserSettingItem,
+    {
+        let value = serde_json::to_value(&setting)?;
+
+        sqlx::query_file!(
+            "queries/user_setting/set.sql",
+            owner_id,
+            S::SETTING_NAME,
+            value
+        )
+        .execute(conn)
+        .await?;
+
+        Ok(())
+    }
+}
+
+pub mod setting {
+    use serde::{Deserialize, Serialize};
+
+    use super::UserSettingItem;
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct EmailNotifications(pub bool);
+
+    impl Default for EmailNotifications {
+        fn default() -> Self {
+            Self(true)
+        }
+    }
+
+    impl UserSettingItem for EmailNotifications {
+        const SETTING_NAME: &'static str = "email-notifications";
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct TelegramNotifications(pub bool);
+
+    #[allow(clippy::derivable_impls)]
+    impl Default for TelegramNotifications {
+        fn default() -> Self {
+            Self(false)
+        }
+    }
+
+    impl UserSettingItem for TelegramNotifications {
+        const SETTING_NAME: &'static str = "telegram-notifications";
     }
 }
