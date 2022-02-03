@@ -16,6 +16,18 @@
 
         <form method="POST">
           <div class="block">
+            <h3 class="subtitle is-4">Profile</h3>
+
+            <div class="field">
+              <label class="label">Name</label>
+              <div class="control">
+                <input class="input" type="text" placeholder="Name" name="display_name"
+                  value="{{ user.display_name() }}" required>
+              </div>
+            </div>
+          </div>
+
+          <div class="block">
             <h3 class="subtitle is-4">Notifications</h3>
 
             <div class="field">
@@ -60,9 +72,27 @@
               <a href="/user/home" class="button is-link is-fullwidth">Return Home</a>
             </div>
           </div>
+
+          <div class="field mt-6">
+            <div class="control">
+              <button id="delete-account" class="button is-danger is-outline is-fullwidth"
+                formaction="/user/delete">Delete Account</button>
+            </div>
+          </div>
         </form>
       </div>
     </div>
   </div>
 </section>
+{% endblock %}
+
+{% block footer %}
+<script>
+  document.getElementById('delete-account').addEventListener('click', (ev) => {
+    const wasIntentional = confirm('Are you sure you want to delete your account?');
+    if (!wasIntentional) {
+      ev.preventDefault();
+    }
+  });
+</script>
 {% endblock %}

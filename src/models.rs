@@ -23,6 +23,7 @@ pub struct User {
     pub telegram_id: Option<i64>,
     pub telegram_name: Option<String>,
     pub is_admin: bool,
+    pub display_name: Option<String>,
 
     hashed_password: Option<String>,
 }
@@ -46,7 +47,9 @@ impl User {
     }
 
     pub fn display_name(&self) -> &str {
-        if let Some(username) = &self.username {
+        if let Some(display_name) = &self.display_name {
+            display_name
+        } else if let Some(username) = &self.username {
             username
         } else if let Some(telegram_name) = &self.telegram_name {
             telegram_name
@@ -213,6 +216,30 @@ impl User {
             user_id,
             telegram_id,
             telegram_name
+        )
+        .execute(conn)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn delete(conn: &sqlx::PgPool, user_id: Uuid) -> Result<(), Error> {
+        sqlx::query_file!("queries/user/delete.sql", user_id)
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn update_display_name(
+        conn: &sqlx::PgPool,
+        user_id: Uuid,
+        display_name: Option<&str>,
+    ) -> Result<(), Error> {
+        sqlx::query_file!(
+            "queries/user/update_display_name.sql",
+            user_id,
+            display_name
         )
         .execute(conn)
         .await?;

@@ -57,7 +57,7 @@ async fn home(
 struct Settings<'a> {
     telegram_login: &'a auth::TelegramLoginConfig,
 
-    user: models::User,
+    user: &'a models::User,
     saved: bool,
 
     email_notifications: setting::EmailNotifications,
@@ -81,7 +81,7 @@ async fn settings_get(
     let body = Settings {
         telegram_login: &telegram_login,
 
-        user,
+        user: &user,
         saved: false,
 
         email_notifications,
@@ -113,10 +113,20 @@ async fn settings_post(
         .unwrap_or_else(models::UserSettingItem::off_value);
     models::UserSetting::set(&conn, user.id, &telegram_notifications).await?;
 
+    let display_name = match form.get("display_name") {
+        Some(display_name) if !display_name.is_empty() => Some(display_name.as_str()),
+        _ => None,
+    };
+    models::User::update_display_name(&conn, user.id, display_name).await?;
+
+    let user = models::User::lookup_by_id(&conn, user.id)
+        .await?
+        .ok_or(Error::Missing)?;
+
     let body = Settings {
         telegram_login: &telegram_login,
 
-        user,
+        user: &user,
         saved: true,
 
         email_notifications,
@@ -125,6 +135,20 @@ async fn settings_post(
     .render()?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[post("/delete")]
+async fn delete(
+    conn: web::Data<sqlx::PgPool>,
+    session: actix_session::Session,
+    user: models::User,
+) -> Result<HttpResponse, Error> {
+    models::User::delete(&conn, user.id).await?;
+    session.purge();
+
+    return Ok(HttpResponse::Found()
+        .insert_header(("Location", "/"))
+        .finish());
 }
 
 #[get("/events")]
@@ -604,7 +628,14 @@ async fn verify_email(
 
 pub fn service() -> Scope {
     web::scope("/user")
-        .service(services![home, settings_get, settings_post, events, single])
+        .service(services![
+            home,
+            settings_get,
+            settings_post,
+            delete,
+            events,
+            single
+        ])
         .service(web::scope("/account").service(services![
             account_link_get,
             account_link_post,
