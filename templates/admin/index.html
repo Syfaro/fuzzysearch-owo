@@ -48,6 +48,7 @@
             <thead>
               <tr>
                 <th>Name</th>
+                <th>Status</th>
                 <th>Last Updated</th>
               </tr>
             </thead>
@@ -55,6 +56,13 @@
               {% for subreddit in subreddits %}
               <tr>
                 <th>{{ subreddit.name }}</th>
+                <td>
+                  {% if subreddit.disabled %}
+                    Disabled
+                  {% else %}
+                    Enabled
+                  {% endif %}
+                </td>
                 <td>
                   {% match subreddit.last_updated %}
                   {% when Some with (last_updated) %}

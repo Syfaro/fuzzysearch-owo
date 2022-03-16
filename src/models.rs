@@ -1394,6 +1394,7 @@ pub struct RedditSubreddit {
     pub name: String,
     pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
     pub last_page: Option<String>,
+    pub disabled: bool,
 }
 
 impl RedditSubreddit {

@@ -138,6 +138,42 @@
       ]
     }
   },
+  "07deca709df2815ed2052b0669a11d589d5133a8d499cc1aef576b0f2b708972": {
+    "query": "SELECT\n    *\nFROM\n    reddit_subreddit\nWHERE\n    disabled = false\n    AND (\n        last_updated IS NULL\n        OR last_updated < now() + interval '15 minutes'\n    );\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 1,
+          "name": "last_updated",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 2,
+          "name": "last_page",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "disabled",
+          "type_info": "Bool"
+        }
+      ],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": [
+        false,
+        true,
+        true,
+        false
+      ]
+    }
+  },
   "0af8022e9c61ba897ed78301a4eeb1d0ac5908fa0e26837d6aa881f90304aff8": {
     "query": "INSERT INTO\n    user_setting (owner_id, setting, value)\nVALUES\n    ($1, $2, $3) ON CONFLICT (owner_id, setting) DO\nUPDATE\nSET\n    value = EXCLUDED.value;\n",
     "describe": {
@@ -276,36 +312,6 @@
         false,
         false,
         true,
-        true,
-        true
-      ]
-    }
-  },
-  "283976d5cc56bb044af4e2d946737a6d8cec4180cf7ecec80d8f45ce3b65ab4d": {
-    "query": "SELECT\n    *\nFROM\n    reddit_subreddit\nWHERE\n    last_updated IS NULL\n    OR last_updated < now() + interval '15 minutes';\n",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "name",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 1,
-          "name": "last_updated",
-          "type_info": "Timestamptz"
-        },
-        {
-          "ordinal": 2,
-          "name": "last_page",
-          "type_info": "Text"
-        }
-      ],
-      "parameters": {
-        "Left": []
-      },
-      "nullable": [
-        false,
         true,
         true
       ]
@@ -1056,6 +1062,11 @@
           "ordinal": 2,
           "name": "last_page",
           "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "disabled",
+          "type_info": "Bool"
         }
       ],
       "parameters": {
@@ -1066,7 +1077,8 @@
       "nullable": [
         false,
         true,
-        true
+        true,
+        false
       ]
     }
   },
@@ -1809,6 +1821,11 @@
           "ordinal": 2,
           "name": "last_page",
           "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "disabled",
+          "type_info": "Bool"
         }
       ],
       "parameters": {
@@ -1817,7 +1834,8 @@
       "nullable": [
         false,
         true,
-        true
+        true,
+        false
       ]
     }
   },
