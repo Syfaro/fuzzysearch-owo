@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use actix_session::CookieSession;
-use actix_web::{web, App, HttpResponse, HttpServer};
+use actix_session::{storage::CookieSessionStore, SessionLength, SessionMiddleware};
+use actix_web::{cookie::Key, web, App, HttpResponse, HttpServer};
 use askama::Template;
 use clap::Parser;
 
@@ -56,7 +56,7 @@ pub struct WorkerConfig {
     #[clap(long, env("FAKTORY_WORKERS"), default_value = "2")]
     pub faktory_workers: usize,
     /// Queues to fetch jobs from.
-    #[clap(long, env("FAKTORY_QUEUES"), arg_enum, use_delimiter = true)]
+    #[clap(long, env("FAKTORY_QUEUES"), arg_enum, use_value_delimiter = true)]
     pub faktory_queues: Vec<jobs::FaktoryQueue>,
 }
 
@@ -354,8 +354,8 @@ async fn main() {
             let cookie_private_key = hex::decode(&web_config.cookie_private_key)
                 .expect("cookie secret was not hex data");
             assert!(
-                cookie_private_key.len() >= 32,
-                "cookie private key must be greater than 32 bytes"
+                cookie_private_key.len() >= 64,
+                "cookie private key must be greater than 64 bytes"
             );
 
             let telegram_login = auth::TelegramLoginConfig {
@@ -368,11 +368,16 @@ async fn main() {
             tracing::info!("starting fuzzysearch-owo on http://{}", http_host);
 
             HttpServer::new(move || {
-                let session = CookieSession::private(&cookie_private_key)
-                    .name("owo-session")
-                    .secure(!web_config.cookie_insecure)
-                    .http_only(true)
-                    .max_age(60 * 60 * 24 * 365);
+                let key = Key::from(&cookie_private_key);
+
+                let session = SessionMiddleware::builder(CookieSessionStore::default(), key)
+                    .cookie_name("owo-session".to_string())
+                    .cookie_secure(!web_config.cookie_insecure)
+                    .cookie_http_only(true)
+                    .session_length(SessionLength::Predetermined {
+                        max_session_length: Some(actix_web::cookie::time::Duration::days(365)),
+                    })
+                    .build();
 
                 let files =
                     actix_files::Files::new("/static", &web_config.assets_dir).prefer_utf8(true);
