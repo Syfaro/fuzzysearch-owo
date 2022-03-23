@@ -317,6 +317,19 @@
       ]
     }
   },
+  "1d694ab301a5ca3bb33ffdd5a1132691ca95410d543b70b7c31350da4f152ad6": {
+    "query": "UPDATE\n    reddit_subreddit\nSET\n    disabled = $2\nWHERE\n    name = $1;\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Bool"
+        ]
+      },
+      "nullable": []
+    }
+  },
   "2aa0ada2357ae99086950c0e5d8dfd750f977e830a031f24f62063c6277933f9": {
     "query": "INSERT INTO\n    user_account (telegram_id, telegram_name)\nVALUES\n    ($1, $2) RETURNING id;\n",
     "describe": {
@@ -1023,6 +1036,48 @@
       ]
     }
   },
+  "7eaaa4fe7e0c1d59c617e787ecd56096bc6de2701b536dfa37bfa54c65a7a7b3": {
+    "query": "SELECT\n    *\nFROM\n    flist_import_run\nORDER BY\n    started_at DESC\nLIMIT\n    10;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "started_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 2,
+          "name": "finished_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 3,
+          "name": "starting_id",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 4,
+          "name": "max_id",
+          "type_info": "Int4"
+        }
+      ],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": [
+        false,
+        false,
+        true,
+        false,
+        true
+      ]
+    }
+  },
   "8bc6979ea098c101a062b14542bb9b0f5ddfe871649c6144b23c4832d9ddf1cc": {
     "query": "UPDATE\n    user_session\nSET\n    last_used = current_timestamp\nWHERE\n    user_id = $1\n    AND id = $2 RETURNING user_id;\n",
     "describe": {
@@ -1429,6 +1484,18 @@
         false,
         true
       ]
+    }
+  },
+  "b8946dfef01780773713136e31594b2347be98536da6e066ed49378f88b11e13": {
+    "query": "DELETE FROM\n    flist_import_run\nWHERE\n    id = $1;\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      },
+      "nullable": []
     }
   },
   "c31741e37f17354e28644ae0be39865bba63eaf8ac19b409085a0e481d827ee6": {
