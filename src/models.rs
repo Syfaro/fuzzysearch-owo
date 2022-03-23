@@ -1388,6 +1388,22 @@ impl FListImportRun {
 
         Ok(())
     }
+
+    pub async fn recent_runs(conn: &sqlx::PgPool) -> Result<Vec<Self>, Error> {
+        let runs = sqlx::query_file_as!(Self, "queries/flist/recent_runs.sql")
+            .fetch_all(conn)
+            .await?;
+
+        Ok(runs)
+    }
+
+    pub async fn abort_run(conn: &sqlx::PgPool, id: Uuid) -> Result<(), Error> {
+        sqlx::query_file!("queries/flist/abort_run.sql", id)
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
 }
 
 pub struct RedditSubreddit {
@@ -1439,6 +1455,18 @@ impl RedditSubreddit {
 
     pub async fn add(conn: &sqlx::PgPool, name: &str) -> Result<(), Error> {
         sqlx::query_file!("queries/reddit/add_subreddit.sql", name)
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn update_state(
+        conn: &sqlx::PgPool,
+        name: &str,
+        new_state: bool,
+    ) -> Result<(), Error> {
+        sqlx::query_file!("queries/reddit/update_state.sql", name, new_state)
             .execute(conn)
             .await?;
 

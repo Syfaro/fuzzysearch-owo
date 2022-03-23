@@ -7,13 +7,20 @@ use sha2::{Digest, Sha256};
 use crate::{jobs, models, Error};
 
 pub fn service() -> Scope {
-    web::scope("/admin").service(services![admin, inject_post, subreddit_post])
+    web::scope("/admin").service(services![
+        admin,
+        inject_post,
+        subreddit_add,
+        subreddit_state,
+        flist_abort
+    ])
 }
 
 #[derive(Template)]
 #[template(path = "admin/index.html")]
 struct Admin {
     subreddits: Vec<models::RedditSubreddit>,
+    recent_flist_runs: Vec<models::FListImportRun>,
 }
 
 #[get("/tools")]
@@ -23,8 +30,13 @@ async fn admin(conn: web::Data<sqlx::PgPool>, user: models::User) -> Result<Http
     }
 
     let subreddits = models::RedditSubreddit::subreddits(&conn).await?;
+    let recent_flist_runs = models::FListImportRun::recent_runs(&conn).await?;
 
-    let body = Admin { subreddits }.render()?;
+    let body = Admin {
+        subreddits,
+        recent_flist_runs,
+    }
+    .render()?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -98,8 +110,8 @@ struct SubredditForm {
     subreddit_name: String,
 }
 
-#[post("/subreddit")]
-async fn subreddit_post(
+#[post("/subreddit/add")]
+async fn subreddit_add(
     conn: web::Data<sqlx::PgPool>,
     user: models::User,
     form: web::Form<SubredditForm>,
@@ -109,6 +121,52 @@ async fn subreddit_post(
     }
 
     models::RedditSubreddit::add(&conn, &form.subreddit_name).await?;
+
+    Ok(HttpResponse::Found()
+        .insert_header(("Location", "/admin/tools"))
+        .finish())
+}
+
+#[post("/subreddit/state")]
+async fn subreddit_state(
+    conn: web::Data<sqlx::PgPool>,
+    user: models::User,
+    form: web::Form<SubredditForm>,
+) -> Result<HttpResponse, Error> {
+    if !user.is_admin {
+        return Err(actix_web::error::ErrorUnauthorized("Unauthorized").into());
+    }
+
+    let subreddit = match models::RedditSubreddit::get_by_name(&conn, &form.subreddit_name).await? {
+        Some(subreddit) => subreddit,
+        _ => return Err(actix_web::error::ErrorNotFound("Unknown subreddit").into()),
+    };
+
+    let new_state = !subreddit.disabled;
+
+    models::RedditSubreddit::update_state(&conn, &form.subreddit_name, new_state).await?;
+
+    Ok(HttpResponse::Found()
+        .insert_header(("Location", "/admin/tools"))
+        .finish())
+}
+
+#[derive(Deserialize)]
+struct FListImportRunForm {
+    import_run_id: uuid::Uuid,
+}
+
+#[post("/flist/abort")]
+async fn flist_abort(
+    conn: web::Data<sqlx::PgPool>,
+    user: models::User,
+    form: web::Form<FListImportRunForm>,
+) -> Result<HttpResponse, Error> {
+    if !user.is_admin {
+        return Err(actix_web::error::ErrorUnauthorized("Unauthorized").into());
+    }
+
+    models::FListImportRun::abort_run(&conn, form.import_run_id).await?;
 
     Ok(HttpResponse::Found()
         .insert_header(("Location", "/admin/tools"))
