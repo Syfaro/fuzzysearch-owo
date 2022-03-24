@@ -21,6 +21,42 @@
       ]
     }
   },
+  "0122e45e4ee1370147704d1367e18caf126428fcca031b534d9d12f54dd6129c": {
+    "query": "SELECT\n    *\nFROM\n    reddit_subreddit\nORDER BY\n    disabled ASC,\n    last_updated ASC NULLS FIRST;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "name",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 1,
+          "name": "last_updated",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 2,
+          "name": "last_page",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "disabled",
+          "type_info": "Bool"
+        }
+      ],
+      "parameters": {
+        "Left": []
+      },
+      "nullable": [
+        false,
+        true,
+        true,
+        false
+      ]
+    }
+  },
   "01c7c249ded3d2620a52f0e1dae36f7495f5038f624a0cfed0b1c89a5c56dc5a": {
     "query": "SELECT\n    coalesce(count(*), 0) \"count!\",\n    coalesce(sum(content_size)::bigint, 0) \"total_content_size!\"\nFROM\n    owned_media_item\nWHERE\n    owner_id = $1\n    AND account_id = $2;\n",
     "describe": {
@@ -1866,42 +1902,6 @@
         ]
       },
       "nullable": [
-        false
-      ]
-    }
-  },
-  "de1f53b6a2cc71ac0a7f627306977a7e695f04eed74ecad3171651c88fb93c5d": {
-    "query": "SELECT\n    *\nFROM\n    reddit_subreddit;\n",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "name",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 1,
-          "name": "last_updated",
-          "type_info": "Timestamptz"
-        },
-        {
-          "ordinal": 2,
-          "name": "last_page",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 3,
-          "name": "disabled",
-          "type_info": "Bool"
-        }
-      ],
-      "parameters": {
-        "Left": []
-      },
-      "nullable": [
-        false,
-        true,
-        true,
         false
       ]
     }
