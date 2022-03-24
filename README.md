@@ -16,7 +16,7 @@ It searches for similar images on:
 
 It can import user content from:
 
-* FurAffinity (and can be extended to other data sent in from FuzzySearch)
+* FurAffinity and Weasyl (and can be extended to other data sent in from FuzzySearch)
 * DeviantArt
 
 It will only import user content after the user has either signed into the
