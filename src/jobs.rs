@@ -654,7 +654,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                     models::LinkedAccount::search_site_account(
                         &ctx.conn,
                         &similar_image.site.to_string(),
-                        &posted_by,
+                        posted_by,
                     )
                     .await?
                 {
