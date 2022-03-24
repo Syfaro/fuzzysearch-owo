@@ -1,0 +1,30 @@
+<h3 class="subtitle is-4">Inject Submission</h3>
+
+<form method="POST" action="/admin/inject">
+  <div class="field">
+    <label class="label" for="image-url">Image URL</label>
+    <div class="control">
+      <input class="input" type="url" placeholder="Image URL" name="content_url" id="image-url" required>
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label" for="page-url">Page URL</label>
+    <div class="control">
+      <input class="input" type="url" placeholder="Page URL" name="page_url" id="page-url">
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label" for="posted-by">Posted By</label>
+    <div class="control">
+      <input class="input" type="text" placeholder="Posted By" name="posted_by" id="posted-by">
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="control">
+      <button class="button is-warning">Inject</button>
+    </div>
+  </div>
+</form>
