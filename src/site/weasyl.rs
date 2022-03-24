@@ -31,6 +31,7 @@ pub struct WeasylSubmission {
     title: String,
     posted_at: chrono::DateTime<chrono::Utc>,
     media: WeasylMedia,
+    link: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -196,7 +197,7 @@ async fn add_submission_weasyl(ctx: Arc<JobContext>, job: faktory::Job) -> Resul
             format!("{}-{}", sub.id, media.id),
             perceptual_hash,
             sha256,
-            Some(media.url),
+            Some(sub.link.clone()),
             Some(sub.title.clone()),
             Some(sub.posted_at),
         )

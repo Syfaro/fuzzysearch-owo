@@ -646,8 +646,27 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                 )
             });
 
-        for (similar_image, created_at) in fuzzysearch_items.chain(flist_items).chain(reddit_items)
-        {
+        let found_images = fuzzysearch_items.chain(flist_items).chain(reddit_items);
+
+        for (similar_image, created_at) in found_images {
+            if let Some(posted_by) = &similar_image.posted_by {
+                if let Some((_account_id, searched_user_id)) =
+                    models::LinkedAccount::search_site_account(
+                        &ctx.conn,
+                        &similar_image.site.to_string(),
+                        &posted_by,
+                    )
+                    .await?
+                {
+                    tracing::debug!("existing submission belongs to known account");
+
+                    if searched_user_id == user_id {
+                        tracing::info!("submission belongs to current user, skipping");
+                        continue;
+                    }
+                }
+            }
+
             models::UserEvent::similar_found(
                 &ctx.conn,
                 &ctx.redis,
