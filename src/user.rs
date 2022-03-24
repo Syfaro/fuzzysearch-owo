@@ -315,6 +315,7 @@ async fn account_link_post(
 
     let data = match form.site {
         Site::FurAffinity => Some(serde_json::json!({ "verification_key": token })),
+        Site::Weasyl => Some(serde_json::json!({ "verification_key": token })),
         _ => None,
     };
 

@@ -174,6 +174,10 @@ pub struct Config {
     #[clap(long, env("FLIST_PASSWORD"))]
     pub flist_password: String,
 
+    /// Weasyl API token.
+    #[clap(long, env("WEASYL_API_TOKEN"))]
+    pub weasyl_api_token: String,
+
     /// Reddit client ID (or username).
     #[clap(long, env("REDDIT_CLIENT_ID"))]
     pub reddit_client_id: String,

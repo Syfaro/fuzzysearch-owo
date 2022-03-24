@@ -15,12 +15,14 @@ mod flist;
 mod furaffinity;
 mod patreon;
 mod reddit;
+mod weasyl;
 
 pub use deviantart::{types::DeviantArtSubmission, DeviantArt};
 pub use flist::FList;
 pub use furaffinity::FurAffinity;
 pub use patreon::Patreon;
 pub use reddit::{types::RedditPost, Reddit};
+pub use weasyl::{Weasyl, WeasylSubmission};
 
 /// A function that is executed to handle a job.
 pub type SiteJob = Box<dyn Fn(Arc<jobs::JobContext>, faktory::Job) -> SiteJobFut + Send + Sync>;
@@ -110,6 +112,7 @@ pub async fn collected_sites(config: &crate::Config) -> Result<Vec<Box<dyn Colle
         Box::new(deviantart::DeviantArt::site_from_config(config).await?),
         Box::new(furaffinity::FurAffinity::site_from_config(config).await?),
         Box::new(patreon::Patreon::site_from_config(config).await?),
+        Box::new(weasyl::Weasyl::site_from_config(config).await?),
     ])
 }
 

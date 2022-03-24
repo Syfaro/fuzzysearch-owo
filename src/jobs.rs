@@ -65,6 +65,7 @@ pub mod job {
 
     pub const ADD_SUBMISSION_FURAFFINITY: &str = "add_submission_furaffinity";
     pub const ADD_SUBMISSION_DEVIANTART: &str = "add_submission_deviantart";
+    pub const ADD_SUBMISSION_WEASYL: &str = "add_submission_weasyl";
 
     pub const SEARCH_EXISTING_SUBMISSIONS: &str = "search_existing_submissions";
 
@@ -185,6 +186,17 @@ pub fn add_furaffinity_submission_job(
         faktory::Job::new(job::ADD_SUBMISSION_FURAFFINITY, args)
             .fuzzy_queue(FaktoryQueue::Outgoing),
     )
+}
+
+pub fn add_weasyl_submission_job(
+    user_id: Uuid,
+    account_id: Uuid,
+    submission: site::WeasylSubmission,
+    import: bool,
+) -> Result<faktory::Job, Error> {
+    let args = serialize_args!(user_id, account_id, submission, import);
+
+    Ok(faktory::Job::new(job::ADD_SUBMISSION_WEASYL, args).fuzzy_queue(FaktoryQueue::Outgoing))
 }
 
 pub fn new_submission_job<D>(data: D) -> Result<faktory::Job, Error>
@@ -719,6 +731,33 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                     .unwrap_or_default();
 
                 let verifier_found = text.contains(key);
+
+                if verifier_found {
+                    models::LinkedAccount::update_data(&ctx.conn, account.id, None).await?;
+                }
+
+                verifier_found
+            }
+            models::Site::Weasyl => {
+                let profile: serde_json::Value = ctx
+                    .client
+                    .get(format!(
+                        "https://www.weasyl.com/api/users/{}/view",
+                        account.username
+                    ))
+                    .header("x-weasyl-api-key", &ctx.config.weasyl_api_token)
+                    .send()
+                    .await?
+                    .json()
+                    .await?;
+
+                let profile_text = profile
+                    .as_object()
+                    .and_then(|profile| profile.get("profile_text"))
+                    .and_then(|profile_text| profile_text.as_str())
+                    .ok_or_else(|| Error::unknown_message("Weasyl was missing profile text"))?;
+
+                let verifier_found = profile_text.contains(key);
 
                 if verifier_found {
                     models::LinkedAccount::update_data(&ctx.conn, account.id, None).await?;

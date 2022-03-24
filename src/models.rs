@@ -977,6 +977,7 @@ impl Site {
             Site::FurAffinity => Some(Box::new(site::FurAffinity::site_from_config(config).await?)),
             Site::DeviantArt => Some(Box::new(site::DeviantArt::site_from_config(config).await?)),
             Site::Patreon => Some(Box::new(site::Patreon::site_from_config(config).await?)),
+            Site::Weasyl => Some(Box::new(site::Weasyl::site_from_config(config).await?)),
             _ => None,
         };
 
@@ -995,7 +996,7 @@ impl Display for Site {
             Site::FList => write!(f, "F-list"),
             Site::DeviantArt => write!(f, "DeviantArt"),
             Site::Reddit => write!(f, "Reddit"),
-            Self::InternalTesting => write!(f, "Internal Testing"),
+            Site::InternalTesting => write!(f, "Internal Testing"),
         }
     }
 }
