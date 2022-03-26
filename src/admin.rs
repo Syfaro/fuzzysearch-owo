@@ -29,8 +29,10 @@ async fn admin(conn: web::Data<sqlx::PgPool>, user: models::User) -> Result<Http
         return Err(actix_web::error::ErrorUnauthorized("Unauthorized").into());
     }
 
-    let subreddits = models::RedditSubreddit::subreddits(&conn).await?;
-    let recent_flist_runs = models::FListImportRun::recent_runs(&conn).await?;
+    let subreddits = models::RedditSubreddit::subreddits(&conn);
+    let recent_flist_runs = models::FListImportRun::recent_runs(&conn);
+
+    let (subreddits, recent_flist_runs) = futures::try_join!(subreddits, recent_flist_runs)?;
 
     let body = Admin {
         subreddits,

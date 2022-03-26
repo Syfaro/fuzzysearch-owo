@@ -35,10 +35,12 @@ async fn home(
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
-    let (item_count, total_content_size) =
-        models::OwnedMediaItem::user_item_count(&conn, user.id).await?;
-    let recent_media = models::OwnedMediaItem::recent_media(&conn, user.id).await?;
-    let monitored_accounts = models::LinkedAccount::owned_by_user(&conn, user.id).await?;
+    let user_item_count = models::OwnedMediaItem::user_item_count(&conn, user.id);
+    let recent_media = models::OwnedMediaItem::recent_media(&conn, user.id);
+    let monitored_accounts = models::LinkedAccount::owned_by_user(&conn, user.id);
+
+    let ((item_count, total_content_size), recent_media, monitored_accounts) =
+        futures::try_join!(user_item_count, recent_media, monitored_accounts)?;
 
     let body = Home {
         user,
@@ -105,19 +107,22 @@ async fn settings_post(
         .get("email-notifications")
         .map(|value| setting::EmailNotifications(value == "on"))
         .unwrap_or_else(models::UserSettingItem::off_value);
-    models::UserSetting::set(&conn, user.id, &email_notifications).await?;
 
     let telegram_notifications = form
         .get("telegram-notifications")
         .map(|value| setting::TelegramNotifications(value == "on"))
         .unwrap_or_else(models::UserSettingItem::off_value);
-    models::UserSetting::set(&conn, user.id, &telegram_notifications).await?;
 
     let display_name = match form.get("display_name") {
         Some(display_name) if !display_name.is_empty() => Some(display_name.as_str()),
         _ => None,
     };
-    models::User::update_display_name(&conn, user.id, display_name).await?;
+
+    futures::try_join!(
+        models::UserSetting::set(&conn, user.id, &email_notifications),
+        models::UserSetting::set(&conn, user.id, &telegram_notifications),
+        models::User::update_display_name(&conn, user.id, display_name)
+    )?;
 
     let user = models::User::lookup_by_id(&conn, user.id)
         .await?
@@ -360,9 +365,15 @@ async fn account_view(
     user: models::User,
 ) -> Result<HttpResponse, Error> {
     let account_id: Uuid = path.into_inner().0;
+
     let account = models::LinkedAccount::lookup_by_id(&conn, account_id)
         .await?
         .ok_or(Error::Missing)?;
+
+    if account.owner_id != user.id {
+        return Err(Error::Missing);
+    }
+
     let (item_count, total_content_size) =
         models::LinkedAccount::items(&conn, user.id, account_id).await?;
 
@@ -525,6 +536,7 @@ async fn media_list(
 
     let media = models::OwnedMediaItem::media_page(&conn, user.id, page).await?;
     let ids: Vec<_> = media.iter().map(|item| item.id).collect();
+
     let event_counts = models::OwnedMediaItem::event_counts(&conn, &ids).await?;
     let count = models::OwnedMediaItem::count(&conn, user.id).await?;
 
