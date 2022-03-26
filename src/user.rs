@@ -368,11 +368,8 @@ async fn account_view(
 
     let account = models::LinkedAccount::lookup_by_id(&conn, account_id)
         .await?
-        .ok_or(Error::Missing)?;
-
-    if account.owner_id != user.id {
-        return Err(Error::Missing);
-    }
+        .ok_or(Error::Missing)?
+        .allow_owner_access(user.id)?;
 
     let (item_count, total_content_size) =
         models::LinkedAccount::items(&conn, user.id, account_id).await?;
@@ -395,11 +392,8 @@ async fn account_verify(
 ) -> Result<HttpResponse, Error> {
     let account = models::LinkedAccount::lookup_by_id(&conn, form.account_id)
         .await?
-        .ok_or(Error::Missing)?;
-
-    if account.owner_id != user.id {
-        return Err(Error::Missing);
-    }
+        .ok_or(Error::Missing)?
+        .allow_owner_access(user.id)?;
 
     faktory
         .enqueue_job(
@@ -426,9 +420,10 @@ async fn media_view(
     path: web::Path<(Uuid,)>,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
-    let media = models::OwnedMediaItem::get_by_id(&conn, path.0, user.id)
+    let media = models::OwnedMediaItem::get_by_id(&conn, path.0)
         .await?
-        .ok_or(Error::Missing)?;
+        .ok_or(Error::Missing)?
+        .allow_owner_access(user.id)?;
 
     let recent_events =
         models::UserEvent::recent_events_for_media(&conn, user.id, media.id).await?;

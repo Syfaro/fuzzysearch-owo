@@ -581,9 +581,10 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
         let mut args = job.args().iter();
         let (user_id, media_id) = extract_args!(args, Uuid, Uuid);
 
-        let media = models::OwnedMediaItem::get_by_id(&ctx.conn, media_id, user_id)
+        let media = models::OwnedMediaItem::get_by_id(&ctx.conn, media_id)
             .await?
-            .ok_or(Error::Missing)?;
+            .ok_or(Error::Missing)?
+            .allow_owner_access(user_id)?;
 
         let perceptual_hash = match media.perceptual_hash {
             Some(hash) => hash,
@@ -687,7 +688,8 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
 
         let account = models::LinkedAccount::lookup_by_id(&ctx.conn, account_id)
             .await?
-            .ok_or(Error::Missing)?;
+            .ok_or(Error::Missing)?
+            .allow_owner_access(user_id)?;
 
         models::LinkedAccount::update_loading_state(
             &ctx.conn,
@@ -713,7 +715,8 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
 
         let account = models::LinkedAccount::lookup_by_id(&ctx.conn, account_id)
             .await?
-            .ok_or(Error::Missing)?;
+            .ok_or(Error::Missing)?
+            .allow_owner_access(user_id)?;
 
         let key = match account.verification_key() {
             Some(key) => key,

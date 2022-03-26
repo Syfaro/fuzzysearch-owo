@@ -62,6 +62,7 @@ impl Patreon {
         conn: &sqlx::Pool<sqlx::Postgres>,
         redlock: &redlock::RedLock,
         data: &types::SavedPatreonData,
+        user_id: Uuid,
         account_id: Uuid,
     ) -> Result<AccessToken, Error> {
         super::refresh_credentials(
@@ -79,7 +80,8 @@ impl Patreon {
             || async {
                 let account = models::LinkedAccount::lookup_by_id(conn, account_id)
                     .await?
-                    .ok_or(Error::Missing)?;
+                    .ok_or(Error::Missing)?
+                    .allow_owner_access(user_id)?;
 
                 let data = account.data.ok_or(Error::Missing)?;
                 let data: types::SavedPatreonData = serde_json::from_value(data)?;
@@ -141,7 +143,7 @@ impl CollectedSite for Patreon {
             serde_json::from_value(account.data.ok_or(Error::Missing)?)?;
 
         let token = self
-            .refresh_credentials(&ctx.conn, &ctx.redlock, &data, account.id)
+            .refresh_credentials(&ctx.conn, &ctx.redlock, &data, account.owner_id, account.id)
             .await?;
         let client = super::get_authenticated_client(&ctx.config, &token)?;
 
@@ -411,7 +413,8 @@ async fn webhook_post(
 ) -> Result<HttpResponse, Error> {
     let account = models::LinkedAccount::lookup_by_id(&conn, query.id)
         .await?
-        .ok_or(Error::Missing)?;
+        .ok_or(Error::Missing)?
+        .allow_any_access();
 
     let campaign = extract_campaign(account.data)?.ok_or(Error::Missing)?;
 

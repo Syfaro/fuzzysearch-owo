@@ -15,6 +15,26 @@ use uuid::Uuid;
 use crate::site::SiteFromConfig;
 use crate::{api, site, Error};
 
+pub trait OwnerID {
+    fn owner_id(&self) -> Uuid;
+}
+
+pub struct AccessGuard<R: OwnerID>(R);
+
+impl<R: OwnerID> AccessGuard<R> {
+    pub fn allow_any_access(self) -> R {
+        self.0
+    }
+
+    pub fn allow_owner_access(self, accessor_id: Uuid) -> Result<R, Error> {
+        if self.0.owner_id() != accessor_id {
+            return Err(Error::Missing);
+        }
+
+        Ok(self.0)
+    }
+}
+
 pub struct User {
     pub id: Uuid,
     pub username: Option<String>,
@@ -432,24 +452,29 @@ pub struct OwnedMediaItem {
     pub thumb_url: Option<String>,
 }
 
+impl OwnerID for OwnedMediaItem {
+    fn owner_id(&self) -> Uuid {
+        self.owner_id
+    }
+}
+
 impl OwnedMediaItem {
     pub async fn get_by_id(
         conn: &sqlx::Pool<sqlx::Postgres>,
         id: Uuid,
-        user_id: Uuid,
-    ) -> Result<Option<Self>, Error> {
-        let item = sqlx::query_file_as!(Self, "queries/owned_media/get_by_id.sql", id, user_id)
+    ) -> Result<Option<AccessGuard<Self>>, Error> {
+        let item = sqlx::query_file_as!(Self, "queries/owned_media/get_by_id.sql", id)
             .fetch_optional(conn)
             .await?;
 
-        Ok(item)
+        Ok(item.map(AccessGuard))
     }
 
     pub async fn lookup_by_site_id<S: ToString>(
         conn: &sqlx::Pool<sqlx::Postgres>,
         site: Site,
         site_id: S,
-    ) -> Result<Option<Self>, Error> {
+    ) -> Result<Option<AccessGuard<Self>>, Error> {
         let item = sqlx::query_file_as!(
             Self,
             "queries/owned_media/lookup_by_site_id.sql",
@@ -459,7 +484,7 @@ impl OwnedMediaItem {
         .fetch_optional(conn)
         .await?;
 
-        Ok(item)
+        Ok(item.map(AccessGuard))
     }
 
     pub async fn user_item_count(
@@ -726,6 +751,12 @@ pub struct LinkedAccount {
     pub data: Option<serde_json::Value>,
 }
 
+impl OwnerID for LinkedAccount {
+    fn owner_id(&self) -> Uuid {
+        self.owner_id
+    }
+}
+
 impl LinkedAccount {
     pub async fn create(
         conn: &sqlx::Pool<sqlx::Postgres>,
@@ -761,7 +792,7 @@ impl LinkedAccount {
     pub async fn lookup_by_id(
         conn: &sqlx::Pool<sqlx::Postgres>,
         id: Uuid,
-    ) -> Result<Option<Self>, Error> {
+    ) -> Result<Option<AccessGuard<Self>>, Error> {
         let account = sqlx::query_file!("queries/linked_account/lookup_by_id.sql", id)
             .map(|row| LinkedAccount {
                 id: row.id,
@@ -777,7 +808,7 @@ impl LinkedAccount {
             .fetch_optional(conn)
             .await?;
 
-        Ok(account)
+        Ok(account.map(AccessGuard))
     }
 
     pub async fn lookup_by_site_id(

@@ -62,6 +62,7 @@ impl DeviantArt {
         conn: &sqlx::Pool<sqlx::Postgres>,
         redlock: &redlock::RedLock,
         data: &types::DeviantArtData,
+        user_id: Uuid,
         account_id: Uuid,
     ) -> Result<AccessToken, Error> {
         super::refresh_credentials(
@@ -79,7 +80,8 @@ impl DeviantArt {
             || async {
                 let account = models::LinkedAccount::lookup_by_id(conn, account_id)
                     .await?
-                    .ok_or(Error::Missing)?;
+                    .ok_or(Error::Missing)?
+                    .allow_owner_access(user_id)?;
 
                 let data = account.data.ok_or(Error::Missing)?;
                 let data: types::DeviantArtData = serde_json::from_value(data)?;
@@ -160,7 +162,7 @@ impl CollectedSite for DeviantArt {
         )?;
 
         let token = self
-            .refresh_credentials(&ctx.conn, &ctx.redlock, &data, account.id)
+            .refresh_credentials(&ctx.conn, &ctx.redlock, &data, account.owner_id, account.id)
             .await?;
         let client = super::get_authenticated_client(&ctx.config, &token)?;
 
@@ -305,14 +307,15 @@ async fn update_account(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(), E
 
     let account = models::LinkedAccount::lookup_by_id(&ctx.conn, account_id)
         .await?
-        .ok_or(Error::Missing)?;
+        .ok_or(Error::Missing)?
+        .allow_any_access();
 
     let data: types::DeviantArtData = serde_json::from_value(account.data.ok_or(Error::Missing)?)?;
 
     let da = DeviantArt::site_from_config(&ctx.config).await?;
 
     let token = da
-        .refresh_credentials(&ctx.conn, &ctx.redlock, &data, account.id)
+        .refresh_credentials(&ctx.conn, &ctx.redlock, &data, account.owner_id, account.id)
         .await?;
     let client = super::get_authenticated_client(&ctx.config, &token)?;
 
