@@ -95,7 +95,7 @@ impl DeviantArt {
                     expires_after,
                 })?;
 
-                models::LinkedAccount::update_data(conn, account_id, Some(data)).await?;
+                models::LinkedAccount::update_data(conn, user_id, account_id, Some(data)).await?;
 
                 Ok(())
             },
@@ -421,7 +421,8 @@ async fn callback(
     let id = match account {
         Some(account) => {
             tracing::info!("got existing account");
-            models::LinkedAccount::update_data(&conn, account.id, Some(saved_data)).await?;
+            models::LinkedAccount::update_data(&conn, user.id, account.id, Some(saved_data))
+                .await?;
 
             account.id
         }

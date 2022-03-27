@@ -422,6 +422,62 @@
       ]
     }
   },
+  "3062cf5071cd2b363e46798ab619b33d4318099d050ea057c35e5fee3578219f": {
+    "query": "SELECT\n    id,\n    owner_id,\n    source_site,\n    username,\n    last_update,\n    loading_state,\n    data\nFROM\n    linked_account\nWHERE\n    id = $1;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "source_site",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "username",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "last_update",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 5,
+          "name": "loading_state",
+          "type_info": "Jsonb"
+        },
+        {
+          "ordinal": 6,
+          "name": "data",
+          "type_info": "Jsonb"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
   "3159f7eda032c78d407e8cb01daaa79c14d92a60b83e3ac30160189be75876b9": {
     "query": "INSERT INTO\n    flist_file (id, ext, character_name)\nVALUES\n    ($1, $2, $3) ON CONFLICT DO NOTHING;\n",
     "describe": {
@@ -556,19 +612,6 @@
       "nullable": [
         false
       ]
-    }
-  },
-  "432653c3dd8926da7a9565c36ec6db289917d56fe19df29900b7440e9588581a": {
-    "query": "UPDATE\n    linked_account\nSET\n    data = $2\nWHERE\n    id = $1;\n",
-    "describe": {
-      "columns": [],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Jsonb"
-        ]
-      },
-      "nullable": []
     }
   },
   "432d46f47da5eba2b5033373e2d0333f05e54c6de3db8b5a0838448ba228fa1b": {
@@ -971,60 +1014,18 @@
       ]
     }
   },
-  "7771385d57fa5aef4120fb21b4e4216e4b75c263ff82e59e35e1b482c6cf9606": {
-    "query": "SELECT\n    *\nFROM\n    linked_account\nWHERE\n    id = $1;\n",
+  "75ccb17769e50ca1fa5bcc2cf7b130b76e7709400c51ad27b14b4c5dd77087a5": {
+    "query": "UPDATE\n    linked_account\nSET\n    data = $3\nWHERE\n    id = $2\n    AND owner_id = $1;\n",
     "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 1,
-          "name": "owner_id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 2,
-          "name": "source_site",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 3,
-          "name": "username",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 4,
-          "name": "last_update",
-          "type_info": "Timestamptz"
-        },
-        {
-          "ordinal": 5,
-          "name": "loading_state",
-          "type_info": "Jsonb"
-        },
-        {
-          "ordinal": 6,
-          "name": "data",
-          "type_info": "Jsonb"
-        }
-      ],
+      "columns": [],
       "parameters": {
         "Left": [
-          "Uuid"
+          "Uuid",
+          "Uuid",
+          "Jsonb"
         ]
       },
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        true,
-        true,
-        true
-      ]
+      "nullable": []
     }
   },
   "79e7be8b292a6ee36dda7a01e60f4d79be565fad85211cae54d0bc9cc9d8b779": {
@@ -1348,6 +1349,98 @@
         true,
         false,
         false,
+        true,
+        true
+      ]
+    }
+  },
+  "9ad08b323eb8feb18134b4e0f978f194f71b723048eb0a9f4f37235f1a57e0b7": {
+    "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url\nFROM\n    owned_media_item\nWHERE\n    id = $1;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "account_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 3,
+          "name": "source_id",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "perceptual_hash",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 5,
+          "name": "sha256_hash: Sha256Hash",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 6,
+          "name": "link",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "title",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "posted_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 9,
+          "name": "last_modified",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 10,
+          "name": "content_url",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 11,
+          "name": "content_size",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 12,
+          "name": "thumb_url",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
         true,
         true
       ]
@@ -1751,99 +1844,6 @@
       },
       "nullable": [
         false
-      ]
-    }
-  },
-  "d249de43f9b52b6da213152a9065878d28b4e659217b4d6277a53185957bc0b7": {
-    "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url\nFROM\n    owned_media_item\nWHERE\n    id = $1\n    AND owner_id = $2;\n",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 1,
-          "name": "owner_id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 2,
-          "name": "account_id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 3,
-          "name": "source_id",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 4,
-          "name": "perceptual_hash",
-          "type_info": "Int8"
-        },
-        {
-          "ordinal": 5,
-          "name": "sha256_hash: Sha256Hash",
-          "type_info": "Bytea"
-        },
-        {
-          "ordinal": 6,
-          "name": "link",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 7,
-          "name": "title",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 8,
-          "name": "posted_at",
-          "type_info": "Timestamptz"
-        },
-        {
-          "ordinal": 9,
-          "name": "last_modified",
-          "type_info": "Timestamptz"
-        },
-        {
-          "ordinal": 10,
-          "name": "content_url",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 11,
-          "name": "content_size",
-          "type_info": "Int8"
-        },
-        {
-          "ordinal": 12,
-          "name": "thumb_url",
-          "type_info": "Text"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Uuid"
-        ]
-      },
-      "nullable": [
-        false,
-        false,
-        true,
-        true,
-        true,
-        false,
-        true,
-        true,
-        true,
-        false,
-        true,
-        true,
-        true
       ]
     }
   },

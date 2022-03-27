@@ -910,12 +910,18 @@ impl LinkedAccount {
 
     pub async fn update_data(
         conn: &sqlx::Pool<sqlx::Postgres>,
+        user_id: Uuid,
         account_id: Uuid,
         data: Option<serde_json::Value>,
     ) -> Result<(), Error> {
-        sqlx::query_file!("queries/linked_account/update_data.sql", account_id, data)
-            .execute(conn)
-            .await?;
+        sqlx::query_file!(
+            "queries/linked_account/update_data.sql",
+            user_id,
+            account_id,
+            data
+        )
+        .execute(conn)
+        .await?;
 
         Ok(())
     }

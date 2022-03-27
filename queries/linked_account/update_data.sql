@@ -1,6 +1,7 @@
 UPDATE
     linked_account
 SET
-    data = $2
+    data = $3
 WHERE
-    id = $1;
+    id = $2
+    AND owner_id = $1;

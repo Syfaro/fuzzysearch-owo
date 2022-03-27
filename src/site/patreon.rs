@@ -98,7 +98,7 @@ impl Patreon {
                     ..data
                 })?;
 
-                models::LinkedAccount::update_data(conn, account_id, Some(data)).await?;
+                models::LinkedAccount::update_data(conn, user_id, account_id, Some(data)).await?;
 
                 Ok(())
             },
@@ -389,6 +389,7 @@ async fn callback(
 
         models::LinkedAccount::update_data(
             &conn,
+            user.id,
             linked_account.id,
             Some(serde_json::to_value(types::SavedPatreonData {
                 site_id: patreon_campaign_id.to_string(),

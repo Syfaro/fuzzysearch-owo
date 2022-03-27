@@ -755,7 +755,8 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                 let verifier_found = text.contains(key);
 
                 if verifier_found {
-                    models::LinkedAccount::update_data(&ctx.conn, account.id, None).await?;
+                    models::LinkedAccount::update_data(&ctx.conn, user_id, account.id, None)
+                        .await?;
                 }
 
                 verifier_found
@@ -782,7 +783,8 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                 let verifier_found = profile_text.contains(key);
 
                 if verifier_found {
-                    models::LinkedAccount::update_data(&ctx.conn, account.id, None).await?;
+                    models::LinkedAccount::update_data(&ctx.conn, user_id, account.id, None)
+                        .await?;
                 }
 
                 verifier_found
