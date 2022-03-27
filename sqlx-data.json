@@ -387,6 +387,62 @@
       ]
     }
   },
+  "2b5eb6597c4d02d868647b4537a752effacff9b6432ec180f698115ba0149f9c": {
+    "query": "SELECT\n    id,\n    owner_id,\n    source_site \"source_site: Site\",\n    username,\n    last_update,\n    loading_state \"loading_state: sqlx::types::Json<LoadingState>\",\n    data\nFROM\n    linked_account\nWHERE\n    id = $1;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "source_site: Site",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "username",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "last_update",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 5,
+          "name": "loading_state: sqlx::types::Json<LoadingState>",
+          "type_info": "Jsonb"
+        },
+        {
+          "ordinal": 6,
+          "name": "data",
+          "type_info": "Jsonb"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
   "2d604883874fd3e845e509e15b020b5a7d80d27acf32cad96b18c7992784d9c7": {
     "query": "UPDATE\n    user_account\nSET\n    telegram_id = $2,\n    telegram_name = $3\nWHERE\n    id = $1;\n",
     "describe": {
@@ -419,62 +475,6 @@
       },
       "nullable": [
         false
-      ]
-    }
-  },
-  "3062cf5071cd2b363e46798ab619b33d4318099d050ea057c35e5fee3578219f": {
-    "query": "SELECT\n    id,\n    owner_id,\n    source_site,\n    username,\n    last_update,\n    loading_state,\n    data\nFROM\n    linked_account\nWHERE\n    id = $1;\n",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 1,
-          "name": "owner_id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 2,
-          "name": "source_site",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 3,
-          "name": "username",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 4,
-          "name": "last_update",
-          "type_info": "Timestamptz"
-        },
-        {
-          "ordinal": 5,
-          "name": "loading_state",
-          "type_info": "Jsonb"
-        },
-        {
-          "ordinal": 6,
-          "name": "data",
-          "type_info": "Jsonb"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid"
-        ]
-      },
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        true,
-        true,
-        true
       ]
     }
   },
@@ -535,8 +535,8 @@
       ]
     }
   },
-  "3e1a263e5d37619937d78ff82a3c74398f307e866a94337e827e61afd74beeb1": {
-    "query": "SELECT\n    *\nFROM\n    linked_account\nWHERE\n    owner_id = $1\n    AND source_site = $2\n    AND data ->> 'site_id' = $3;\n",
+  "3c027503fa4dad4dbdb5eafbc2f15471095df10e98ced618decc6296a13e62bf": {
+    "query": "INSERT INTO\n    linked_account (\n        owner_id,\n        source_site,\n        username,\n        data\n    )\nVALUES\n    ($1, $2, $3, $4) RETURNING id,\n    owner_id,\n    source_site \"source_site: Site\",\n    username,\n    last_update,\n    loading_state \"loading_state: sqlx::types::Json<LoadingState>\",\n    data;\n",
     "describe": {
       "columns": [
         {
@@ -551,7 +551,7 @@
         },
         {
           "ordinal": 2,
-          "name": "source_site",
+          "name": "source_site: Site",
           "type_info": "Text"
         },
         {
@@ -566,7 +566,7 @@
         },
         {
           "ordinal": 5,
-          "name": "loading_state",
+          "name": "loading_state: sqlx::types::Json<LoadingState>",
           "type_info": "Jsonb"
         },
         {
@@ -579,7 +579,8 @@
         "Left": [
           "Uuid",
           "Text",
-          "Text"
+          "Text",
+          "Jsonb"
         ]
       },
       "nullable": [
@@ -958,8 +959,8 @@
       ]
     }
   },
-  "751d48d0988dbf5948192377f4bf36b4b65afbb6c90ec23d12d45afffe182dd5": {
-    "query": "SELECT\n    *\nFROM\n    linked_account\nWHERE\n    owner_id = $1;\n",
+  "6f8bfb51b3af232bad8c0f6d291b1f7717b359772e7b6779237ae1a3781885ac": {
+    "query": "SELECT\n    id,\n    owner_id,\n    source_site \"source_site: Site\",\n    username,\n    last_update,\n    loading_state \"loading_state: sqlx::types::Json<LoadingState>\",\n    data\nFROM\n    linked_account\nWHERE\n    owner_id = $1;\n",
     "describe": {
       "columns": [
         {
@@ -974,7 +975,7 @@
         },
         {
           "ordinal": 2,
-          "name": "source_site",
+          "name": "source_site: Site",
           "type_info": "Text"
         },
         {
@@ -989,7 +990,7 @@
         },
         {
           "ordinal": 5,
-          "name": "loading_state",
+          "name": "loading_state: sqlx::types::Json<LoadingState>",
           "type_info": "Jsonb"
         },
         {
@@ -1217,65 +1218,6 @@
       ]
     }
   },
-  "930ae63c1ef71a87799036a706f5ce4a5522872ba7c1aad2f2c8ad68b2d4f883": {
-    "query": "INSERT INTO\n    linked_account (\n        owner_id,\n        source_site,\n        username,\n        data\n    )\nVALUES\n    ($1, $2, $3, $4) RETURNING *;\n",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 1,
-          "name": "owner_id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 2,
-          "name": "source_site",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 3,
-          "name": "username",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 4,
-          "name": "last_update",
-          "type_info": "Timestamptz"
-        },
-        {
-          "ordinal": 5,
-          "name": "loading_state",
-          "type_info": "Jsonb"
-        },
-        {
-          "ordinal": 6,
-          "name": "data",
-          "type_info": "Jsonb"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Text",
-          "Text",
-          "Jsonb"
-        ]
-      },
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        true,
-        true,
-        true
-      ]
-    }
-  },
   "9499afaf61b5a24ace5360d39e21234c56d9c8daaf4ae6e2bb1fd10f30718802": {
     "query": "SELECT\n    1\nFROM\n    auth_state\nWHERE\n    owner_id = $1\n    AND state = $2\n    AND current_timestamp < expires_after;\n",
     "describe": {
@@ -1463,6 +1405,64 @@
       },
       "nullable": [
         null
+      ]
+    }
+  },
+  "a1f6dcd27b46f09bfd8acff36a8f103a11e3714e6584837cbf5dace67c92a82a": {
+    "query": "SELECT\n    id,\n    owner_id,\n    source_site \"source_site: Site\",\n    username,\n    last_update,\n    loading_state \"loading_state: sqlx::types::Json<LoadingState>\",\n    data\nFROM\n    linked_account\nWHERE\n    owner_id = $1\n    AND source_site = $2\n    AND data ->> 'site_id' = $3;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "source_site: Site",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 3,
+          "name": "username",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "last_update",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 5,
+          "name": "loading_state: sqlx::types::Json<LoadingState>",
+          "type_info": "Jsonb"
+        },
+        {
+          "ordinal": 6,
+          "name": "data",
+          "type_info": "Jsonb"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text",
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        true,
+        true,
+        true
       ]
     }
   },

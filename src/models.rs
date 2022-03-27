@@ -747,7 +747,7 @@ pub struct LinkedAccount {
     pub source_site: Site,
     pub username: String,
     pub last_update: Option<chrono::DateTime<chrono::Utc>>,
-    pub loading_state: Option<LoadingState>,
+    pub loading_state: Option<sqlx::types::Json<LoadingState>>,
     pub data: Option<serde_json::Value>,
 }
 
@@ -765,24 +765,14 @@ impl LinkedAccount {
         username: &str,
         data: Option<serde_json::Value>,
     ) -> Result<Self, Error> {
-        let id = sqlx::query_file!(
+        let id = sqlx::query_file_as!(
+            Self,
             "queries/linked_account/create.sql",
             user_id,
             source_site.to_string(),
             username,
             data
         )
-        .map(|row| LinkedAccount {
-            id: row.id,
-            owner_id: row.owner_id,
-            source_site: row.source_site.parse().expect("unknown site in database"),
-            username: row.username,
-            last_update: row.last_update,
-            loading_state: row
-                .loading_state
-                .and_then(|loading_state| serde_json::from_value(loading_state).ok()),
-            data: row.data,
-        })
         .fetch_one(conn)
         .await?;
 
@@ -793,18 +783,7 @@ impl LinkedAccount {
         conn: &sqlx::Pool<sqlx::Postgres>,
         id: Uuid,
     ) -> Result<Option<AccessGuard<Self>>, Error> {
-        let account = sqlx::query_file!("queries/linked_account/lookup_by_id.sql", id)
-            .map(|row| LinkedAccount {
-                id: row.id,
-                owner_id: row.owner_id,
-                source_site: row.source_site.parse().expect("unknown site in database"),
-                username: row.username,
-                last_update: row.last_update,
-                loading_state: row
-                    .loading_state
-                    .and_then(|loading_state| serde_json::from_value(loading_state).ok()),
-                data: row.data,
-            })
+        let account = sqlx::query_file_as!(Self, "queries/linked_account/lookup_by_id.sql", id)
             .fetch_optional(conn)
             .await?;
 
@@ -817,23 +796,13 @@ impl LinkedAccount {
         site: Site,
         site_id: &str,
     ) -> Result<Option<Self>, Error> {
-        let account = sqlx::query_file!(
+        let account = sqlx::query_file_as!(
+            Self,
             "queries/linked_account/lookup_by_site_id.sql",
             user_id,
             site.to_string(),
             site_id
         )
-        .map(|row| LinkedAccount {
-            id: row.id,
-            owner_id: row.owner_id,
-            source_site: row.source_site.parse().expect("unknown site in database"),
-            username: row.username,
-            last_update: row.last_update,
-            loading_state: row
-                .loading_state
-                .and_then(|loading_state| serde_json::from_value(loading_state).ok()),
-            data: row.data,
-        })
         .fetch_optional(conn)
         .await?;
 
@@ -844,20 +813,10 @@ impl LinkedAccount {
         conn: &sqlx::Pool<sqlx::Postgres>,
         user_id: Uuid,
     ) -> Result<Vec<Self>, Error> {
-        let accounts = sqlx::query_file!("queries/linked_account/owned_by_user.sql", user_id)
-            .map(|row| LinkedAccount {
-                id: row.id,
-                owner_id: row.owner_id,
-                source_site: row.source_site.parse().expect("unknown site in database"),
-                username: row.username,
-                last_update: row.last_update,
-                loading_state: row
-                    .loading_state
-                    .and_then(|loading_state| serde_json::from_value(loading_state).ok()),
-                data: row.data,
-            })
-            .fetch_all(conn)
-            .await?;
+        let accounts =
+            sqlx::query_file_as!(Self, "queries/linked_account/owned_by_user.sql", user_id)
+                .fetch_all(conn)
+                .await?;
 
         Ok(accounts)
     }
@@ -865,7 +824,7 @@ impl LinkedAccount {
     pub fn loading_state(&self) -> String {
         self.loading_state
             .as_ref()
-            .unwrap_or(&LoadingState::Unknown)
+            .unwrap_or(&sqlx::types::Json(LoadingState::Unknown))
             .message()
     }
 
@@ -873,7 +832,8 @@ impl LinkedAccount {
         !matches!(
             self.loading_state
                 .as_ref()
-                .unwrap_or(&LoadingState::Unknown),
+                .unwrap_or(&sqlx::types::Json(LoadingState::Unknown))
+                .0,
             LoadingState::Complete
         )
     }
@@ -1054,6 +1014,19 @@ impl FromStr for Site {
             "Internal Testing" => Site::InternalTesting,
             _ => return Err("unknown source site"),
         };
+
+        Ok(site)
+    }
+}
+
+impl<'r> sqlx::Decode<'r, sqlx::Postgres> for Site {
+    fn decode(
+        value: <sqlx::Postgres as sqlx::database::HasValueRef<'r>>::ValueRef,
+    ) -> Result<Self, sqlx::error::BoxDynError> {
+        let value = <&str as sqlx::Decode<sqlx::Postgres>>::decode(value)?;
+        let site = value
+            .parse()
+            .map_err(|_err| anyhow::anyhow!("site could not be converted"))?;
 
         Ok(site)
     }
