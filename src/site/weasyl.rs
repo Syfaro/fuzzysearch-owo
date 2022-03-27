@@ -170,10 +170,7 @@ async fn add_submission_weasyl(ctx: Arc<JobContext>, job: faktory::Job) -> Resul
 
     match process_submission(&ctx, sub, user_id, account_id).await {
         Ok(()) => (),
-        Err(Error::Missing) => {
-            tracing::warn!("submission was missing");
-            ()
-        }
+        Err(Error::Missing) => tracing::warn!("submission was missing"),
         Err(err) => {
             tracing::warn!("could not load submission: {}", err);
             return Err(err);

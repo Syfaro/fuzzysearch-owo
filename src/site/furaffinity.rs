@@ -167,10 +167,7 @@ async fn add_submission_furaffinity(ctx: Arc<JobContext>, job: faktory::Job) -> 
 
     match process_submission(&ctx, &fa, user_id, account_id, sub_id).await {
         Ok(()) => (),
-        Err(Error::Missing) => {
-            tracing::warn!("submission was missing");
-            ()
-        }
+        Err(Error::Missing) => tracing::warn!("submission was missing"),
         Err(err) => {
             tracing::warn!("could not load submission: {}", err);
             return Err(err);
