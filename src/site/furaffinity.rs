@@ -165,6 +165,33 @@ async fn add_submission_furaffinity(ctx: Arc<JobContext>, job: faktory::Job) -> 
         Some(ctx.client.clone()),
     );
 
+    match process_submission(&ctx, &fa, user_id, account_id, sub_id).await {
+        Ok(()) => (),
+        Err(Error::Missing) => {
+            tracing::warn!("submission was missing");
+            ()
+        }
+        Err(err) => {
+            tracing::warn!("could not load submission: {}", err);
+            return Err(err);
+        }
+    }
+
+    if was_import {
+        let mut redis = ctx.redis.clone();
+        super::update_import_progress(&ctx.conn, &mut redis, user_id, account_id, sub_id).await?;
+    }
+
+    Ok(())
+}
+
+async fn process_submission(
+    ctx: &JobContext,
+    fa: &furaffinity_rs::FurAffinity,
+    user_id: Uuid,
+    account_id: Uuid,
+    sub_id: i32,
+) -> Result<(), Error> {
     let sub = fa
         .get_submission(sub_id)
         .await
@@ -175,48 +202,44 @@ async fn add_submission_furaffinity(ctx: Arc<JobContext>, job: faktory::Job) -> 
 
     if sub.content.url().contains("/stories/") {
         tracing::debug!("submission was story, skipping");
-    } else {
-        let sub = fa.calc_image_hash(sub).await.map_err(|_err| {
-            Error::LoadingError(format!(
-                "Could not load FurAffinity submission content {}",
-                sub_id
-            ))
-        })?;
+        return Ok(());
+    }
 
-        let sha256_hash: [u8; 32] = sub
-            .file_sha256
-            .ok_or(Error::Missing)?
-            .try_into()
-            .expect("sha256 hash was wrong length");
+    let sub = fa.calc_image_hash(sub).await.map_err(|_err| {
+        Error::LoadingError(format!(
+            "Could not load FurAffinity submission content {}",
+            sub_id
+        ))
+    })?;
 
-        let item_id = models::OwnedMediaItem::add_item(
-            &ctx.conn,
-            user_id,
-            account_id,
-            sub_id,
-            sub.hash_num,
-            sha256_hash,
-            Some(format!("https://www.furaffinity.net/view/{}/", sub_id)),
-            Some(sub.title),
-            Some(sub.posted_at),
+    let sha256_hash: [u8; 32] = sub
+        .file_sha256
+        .ok_or(Error::Missing)?
+        .try_into()
+        .expect("sha256 hash was wrong length");
+
+    let item_id = models::OwnedMediaItem::add_item(
+        &ctx.conn,
+        user_id,
+        account_id,
+        sub_id,
+        sub.hash_num,
+        sha256_hash,
+        Some(format!("https://www.furaffinity.net/view/{}/", sub_id)),
+        Some(sub.title),
+        Some(sub.posted_at),
+    )
+    .await?;
+
+    let im = image::load_from_memory(&sub.file.ok_or(Error::Missing)?)?;
+    models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im).await?;
+
+    ctx.faktory
+        .enqueue_job(
+            JobInitiator::User { user_id },
+            jobs::search_existing_submissions_job(user_id, item_id)?,
         )
         .await?;
-
-        let im = image::load_from_memory(&sub.file.ok_or(Error::Missing)?)?;
-        models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im).await?;
-
-        ctx.faktory
-            .enqueue_job(
-                JobInitiator::User { user_id },
-                jobs::search_existing_submissions_job(user_id, item_id)?,
-            )
-            .await?;
-    }
-
-    if was_import {
-        let mut redis = ctx.redis.clone();
-        super::update_import_progress(&ctx.conn, &mut redis, user_id, account_id, sub_id).await?;
-    }
 
     Ok(())
 }

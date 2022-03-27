@@ -791,6 +791,17 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
             }
         };
 
+        let account_was_verified = if ctx.config.skip_verifications {
+            tracing::warn!(
+                "skipping verifications, found state was: {}",
+                account_was_verified
+            );
+
+            true
+        } else {
+            account_was_verified
+        };
+
         tracing::info!(account_was_verified, "checked verification");
 
         let mut redis = ctx.redis.clone();

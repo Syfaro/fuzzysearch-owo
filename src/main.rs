@@ -191,6 +191,10 @@ pub struct Config {
     #[clap(long, env("REDDIT_PASSWORD"))]
     pub reddit_password: String,
 
+    /// Skip verifications for account.
+    #[clap(long)]
+    pub skip_verifications: bool,
+
     /// Mode to run service.
     #[clap(subcommand)]
     pub service_mode: ServiceMode,

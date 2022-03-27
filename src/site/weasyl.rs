@@ -166,6 +166,34 @@ async fn add_submission_weasyl(ctx: Arc<JobContext>, job: faktory::Job) -> Resul
     let (user_id, account_id, sub, was_import) =
         crate::extract_args!(args, Uuid, Uuid, WeasylSubmission, bool);
 
+    let sub_id = sub.id;
+
+    match process_submission(&ctx, sub, user_id, account_id).await {
+        Ok(()) => (),
+        Err(Error::Missing) => {
+            tracing::warn!("submission was missing");
+            ()
+        }
+        Err(err) => {
+            tracing::warn!("could not load submission: {}", err);
+            return Err(err);
+        }
+    }
+
+    if was_import {
+        let mut redis = ctx.redis.clone();
+        super::update_import_progress(&ctx.conn, &mut redis, user_id, account_id, sub_id).await?;
+    }
+
+    Ok(())
+}
+
+async fn process_submission(
+    ctx: &JobContext,
+    sub: WeasylSubmission,
+    user_id: Uuid,
+    account_id: Uuid,
+) -> Result<(), Error> {
     for media in sub.media.submission.unwrap_or_default() {
         let image_data = ctx.client.get(&media.url).send().await?.bytes().await?;
 
@@ -214,11 +242,6 @@ async fn add_submission_weasyl(ctx: Arc<JobContext>, job: faktory::Job) -> Resul
                 )
                 .await?;
         }
-    }
-
-    if was_import {
-        let mut redis = ctx.redis.clone();
-        super::update_import_progress(&ctx.conn, &mut redis, user_id, account_id, sub.id).await?;
     }
 
     Ok(())
