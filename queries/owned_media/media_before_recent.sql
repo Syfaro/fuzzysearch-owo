@@ -11,12 +11,15 @@ SELECT
     last_modified,
     content_url,
     content_size,
-    thumb_url
+    thumb_url,
+    event_count,
+    last_event
 FROM
     owned_media_item
 WHERE
     owner_id = $1
 ORDER BY
+    last_event DESC NULLS LAST,
     last_modified DESC
 LIMIT
-    25 OFFSET ($2 * 25);
+    $2 OFFSET ($3::integer * $2::integer);

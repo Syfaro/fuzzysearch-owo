@@ -1,5 +1,17 @@
 {% extends "_base.html" %}
 
+{% block header %}
+<style>
+  .relative-time {
+    white-space: nowrap;
+  }
+
+  .match-link {
+    text-overflow: ellipsis;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <section class="section" data-media-id="{{ media.id }}">
   <div class="container">
@@ -31,29 +43,76 @@
           {% endmatch %}
         </div>
 
-        {% if !recent_events.is_empty() %}
+        {% if !similar_image_events.is_empty() %}
       </div>
     </div>
 
     <div class="columns is-centered">
-      <div class="column">
-        <h2 class="subtitle has-text-centered">Recent Events</h2>
+      <div class="column is-two-thirds-desktop">
+        <h2 class="subtitle has-text-centered">Matched Images</h2>
 
-        <div class="content">
-          <ul>
-            {% for event in recent_events %}
-            <li>{{ event.display() }} <span class="pl-3 has-text-weight-light has-text-grey relative-time"
-                data-timestamp="{{ event.created_at.timestamp() }}" title="{{ event.created_at.to_rfc2822() }}">
-                {{ event.created_at }}
-              </span></li>
-            {% endfor %}
-          </ul>
+        <div class="table-container">
+          <table class="table is-fullwidth">
+            <thead>
+              <tr>
+                <th>Site</th>
+                <th>Posted By</th>
+                <th>Found</th>
+                <th>Link</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for (created_at, image) in similar_image_events %}
+              <tr>
+                <td>{{ image.site }}</td>
+                <td>
+                  {% match image.posted_by %}
+                  {% when Some with (posted_by) %}
+                  {{ posted_by }}
+                  {% else %}
+                  <span class="has-text-grey">Unknown</span>
+                  {% endmatch %}
+                </td>
+                <td>
+                  <span class="relative-time"
+                    data-timestamp="{{ created_at.timestamp() }}"
+                    title="{{ created_at.to_rfc2822() }}">
+                    {{ created_at }}
+                  </span>
+                </td>
+                <td>
+                  <span class="match-link">
+                    <a href="{{ image.best_link() }}" target="_blank">{{ image.best_link() }}</a>
+                  </span>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
 
     <div class="columns is-centered">
       <div class="column is-one-third">
+        {% endif %}
+
+        {% if !other_events.is_empty() %}
+        <hr>
+
+        <h2 class="subtitle has-text-centered">Other Events</h2>
+
+        <ul>
+          {% for event in other_events %}
+            <li>{{ event.display() }}
+              <span class="pl-3 has-text-weight-light has-text-grey relative-time"
+                data-timestamp="{{ event.created_at.timestamp() }}"
+                title="{{ event.created_at.to_rfc2822() }}">
+                {{ event.created_at }}
+              </span>
+            </li>
+          {% endfor %}
+        </ul>
         {% endif %}
 
         <hr>

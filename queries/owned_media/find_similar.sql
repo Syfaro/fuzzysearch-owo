@@ -11,7 +11,9 @@ SELECT
     last_modified,
     content_url,
     content_size,
-    thumb_url
+    thumb_url,
+    event_count,
+    last_event
 FROM
     owned_media_item
 WHERE

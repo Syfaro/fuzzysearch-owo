@@ -11,7 +11,9 @@ SELECT
   owned_media_item.last_modified,
   owned_media_item.content_url,
   owned_media_item.content_size,
-  owned_media_item.thumb_url
+  owned_media_item.thumb_url,
+  owned_media_item.event_count,
+  owned_media_item.last_event
 FROM
   owned_media_item
   JOIN linked_account on owned_media_item.account_id = linked_account.id

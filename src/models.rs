@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     fmt::{Debug, Display},
     str::FromStr,
 };
@@ -430,6 +429,27 @@ pub struct OwnedMediaItem {
     pub content_url: Option<String>,
     pub content_size: Option<i64>,
     pub thumb_url: Option<String>,
+
+    pub event_count: i32,
+    pub last_event: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MediaListSort {
+    Added,
+    Events,
+    Recent,
+}
+
+impl MediaListSort {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Added => "added",
+            Self::Events => "events",
+            Self::Recent => "recent",
+        }
+    }
 }
 
 impl OwnedMediaItem {
@@ -611,15 +631,43 @@ impl OwnedMediaItem {
         conn: &sqlx::PgPool,
         user_id: Uuid,
         page: u32,
+        sort: MediaListSort,
     ) -> Result<Vec<Self>, Error> {
-        let media = sqlx::query_file_as!(
-            Self,
-            "queries/owned_media/media_before.sql",
-            user_id,
-            page as i64,
-        )
-        .fetch_all(conn)
-        .await?;
+        let media = match sort {
+            MediaListSort::Added => {
+                sqlx::query_file_as!(
+                    Self,
+                    "queries/owned_media/media_before_added.sql",
+                    user_id,
+                    25,
+                    page as i64,
+                )
+                .fetch_all(conn)
+                .await?
+            }
+            MediaListSort::Events => {
+                sqlx::query_file_as!(
+                    Self,
+                    "queries/owned_media/media_before_events.sql",
+                    user_id,
+                    25,
+                    page as i64,
+                )
+                .fetch_all(conn)
+                .await?
+            }
+            MediaListSort::Recent => {
+                sqlx::query_file_as!(
+                    Self,
+                    "queries/owned_media/media_before_recent.sql",
+                    user_id,
+                    25,
+                    page as i64,
+                )
+                .fetch_all(conn)
+                .await?
+            }
+        };
 
         Ok(media)
     }
@@ -631,20 +679,6 @@ impl OwnedMediaItem {
             .unwrap_or_default();
 
         Ok(count)
-    }
-
-    pub async fn event_counts(
-        conn: &sqlx::PgPool,
-        event_ids: &[Uuid],
-    ) -> Result<HashMap<Uuid, i64>, Error> {
-        let counts = sqlx::query_file!("queries/owned_media/event_counts.sql", event_ids)
-            .map(|row| (row.id, row.count))
-            .fetch_all(conn)
-            .await?
-            .into_iter()
-            .collect();
-
-        Ok(counts)
     }
 }
 
@@ -1059,6 +1093,23 @@ impl SimilarImage {
             None => &self.content_url,
         }
     }
+
+    pub fn display(&self) -> String {
+        match (self.posted_by.as_ref(), self.page_url.as_ref()) {
+            (Some(posted_by), Some(page_url)) => format!(
+                "Image posted by {} was found on {}: {}",
+                posted_by, self.site, page_url
+            ),
+            (Some(posted_by), None) => format!(
+                "Image posted by {} was found on {}: {}",
+                posted_by, self.site, self.content_url
+            ),
+            (None, Some(page_url)) => {
+                format!("Image was found on {}: {}", self.site, page_url)
+            }
+            (None, None) => format!("Image was found on {}: {}", self.site, self.content_url),
+        }
+    }
 }
 
 impl From<SimilarImage> for UserEventData {
@@ -1202,25 +1253,7 @@ impl UserEvent {
 
     pub fn display(&self) -> String {
         match self.data.as_ref() {
-            Some(UserEventData::SimilarImage(similar)) => {
-                match (similar.posted_by.as_ref(), similar.page_url.as_ref()) {
-                    (Some(posted_by), Some(page_url)) => format!(
-                        "Image posted by {} was found on {}: {}",
-                        posted_by, similar.site, page_url
-                    ),
-                    (Some(posted_by), None) => format!(
-                        "Image posted by {} was found on {}: {}",
-                        posted_by, similar.site, similar.content_url
-                    ),
-                    (None, Some(page_url)) => {
-                        format!("Image was found on {}: {}", similar.site, page_url)
-                    }
-                    (None, None) => format!(
-                        "Image was found on {}: {}",
-                        similar.site, similar.content_url
-                    ),
-                }
-            }
+            Some(UserEventData::SimilarImage(similar)) => similar.display(),
             _ => "Unknown event".to_string(),
         }
     }

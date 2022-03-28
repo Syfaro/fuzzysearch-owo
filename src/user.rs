@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::collections::HashMap;
 
 use actix_web::{get, post, services, web, HttpResponse, Scope};
@@ -415,9 +414,10 @@ async fn account_verify(
 
 #[derive(Template)]
 #[template(path = "user/media/view.html")]
-struct MediaView {
+struct MediaView<'a> {
     media: models::OwnedMediaItem,
-    recent_events: Vec<models::UserEvent>,
+    similar_image_events: &'a [(chrono::DateTime<chrono::Utc>, models::SimilarImage)],
+    other_events: &'a [models::UserEvent],
 }
 
 #[get("/view/{media_id}")]
@@ -433,9 +433,22 @@ async fn media_view(
     let recent_events =
         models::UserEvent::recent_events_for_media(&conn, user.id, media.id).await?;
 
+    let (similar_events, other_events): (Vec<_>, Vec<_>) = recent_events
+        .into_iter()
+        .partition(|event| matches!(event.data, Some(models::UserEventData::SimilarImage(_))));
+
+    let similar_events: Vec<_> = similar_events
+        .into_iter()
+        .filter_map(|event| match event.data {
+            Some(models::UserEventData::SimilarImage(similar)) => Some((event.created_at, similar)),
+            _ => None,
+        })
+        .collect();
+
     let body = MediaView {
         media,
-        recent_events,
+        similar_image_events: &similar_events,
+        other_events: &other_events,
     }
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
@@ -459,26 +472,50 @@ async fn media_remove(
         .finish())
 }
 
-#[derive(Deserialize)]
-struct MediaListPage {
-    page: u32,
+#[derive(Debug, Deserialize)]
+struct MediaListQuery {
+    page: Option<u32>,
+    sort: Option<models::MediaListSort>,
 }
 
-pub struct PaginationData {
-    pub url: Cow<'static, str>,
+fn decode_query(query: &str) -> HashMap<&str, &str> {
+    query
+        .split('&')
+        .filter_map(|pair| pair.split_once('='))
+        .collect()
+}
+
+fn encode_query(params: &HashMap<&str, &str>) -> String {
+    params
+        .iter()
+        .map(|(k, v)| format!("{}={}", k, v))
+        .collect::<Vec<_>>()
+        .join("&")
+}
+
+pub struct PaginationData<'a> {
+    uri: &'a actix_web::http::Uri,
+    params: HashMap<&'a str, &'a str>,
+
     pub page_size: u32,
     pub item_count: u32,
 
     pub current_page: u32,
 }
 
-impl PaginationData {
-    pub fn new<U>(url: U, page_size: u32, item_count: u32, current_page: u32) -> Self
-    where
-        U: Into<Cow<'static, str>>,
-    {
+impl<'a> PaginationData<'a> {
+    pub fn new(
+        uri: &'a actix_web::http::Uri,
+        page_size: u32,
+        item_count: u32,
+        current_page: u32,
+    ) -> Self {
+        let params = decode_query(uri.query().unwrap_or_default());
+
         Self {
-            url: url.into(),
+            uri,
+            params,
+
             page_size,
             item_count,
             current_page,
@@ -486,7 +523,12 @@ impl PaginationData {
     }
 
     pub fn url<P: std::fmt::Display>(&self, page: P) -> String {
-        format!("{}?page={}", self.url, page)
+        let page = page.to_string();
+
+        let mut params = self.params.clone();
+        params.insert("page", &page);
+
+        format!("{}?{}", self.uri.path(), encode_query(&params))
     }
 
     pub fn last_page(&self) -> u32 {
@@ -520,31 +562,30 @@ impl PaginationData {
 
 #[derive(Template)]
 #[template(path = "user/media/list.html")]
-struct MediaList {
-    media: Vec<models::OwnedMediaItem>,
-    event_counts: HashMap<Uuid, i64>,
-    pagination_data: PaginationData,
+struct MediaList<'a> {
+    media: &'a [models::OwnedMediaItem],
+    sort: &'a str,
+    pagination_data: PaginationData<'a>,
 }
 
 #[get("/list")]
 async fn media_list(
+    request: actix_web::HttpRequest,
     conn: web::Data<sqlx::PgPool>,
     user: models::User,
-    page: Option<web::Query<MediaListPage>>,
+    query: web::Query<MediaListQuery>,
 ) -> Result<HttpResponse, Error> {
-    let page = page.map(|page| page.page).unwrap_or(0);
+    let page = query.page.unwrap_or(0);
+    let sort = query.sort.unwrap_or(models::MediaListSort::Added);
 
-    let media = models::OwnedMediaItem::media_page(&conn, user.id, page).await?;
-    let ids: Vec<_> = media.iter().map(|item| item.id).collect();
+    let media = models::OwnedMediaItem::media_page(&conn, user.id, page, sort).await?;
 
-    let event_counts = models::OwnedMediaItem::event_counts(&conn, &ids).await?;
     let count = models::OwnedMediaItem::count(&conn, user.id).await?;
-
-    let pagination_data = PaginationData::new("/user/media/list", 25, count as u32, page);
+    let pagination_data = PaginationData::new(request.uri(), 25, count as u32, page);
 
     let body = MediaList {
-        media,
-        event_counts,
+        media: &media,
+        sort: sort.name(),
         pagination_data,
     }
     .render()?;

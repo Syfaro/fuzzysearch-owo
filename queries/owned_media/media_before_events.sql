@@ -18,8 +18,8 @@ FROM
     owned_media_item
 WHERE
     owner_id = $1
-    AND thumb_url IS NOT NULL
 ORDER BY
+    event_count DESC,
     last_modified DESC
 LIMIT
-    20;
+    $2 OFFSET ($3::integer * $2::integer);

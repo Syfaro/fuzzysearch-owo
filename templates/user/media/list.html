@@ -1,5 +1,29 @@
 {% extends "_base.html" %}
 
+{% macro small_pagination(data) %}
+<nav class="pagination is-justify-content-end">
+  {% let last_page = data.last_page() %}
+
+  {% match data.previous_page() %}
+  {% when Some with (previous_page) %}
+  <a class="pagination-previous" href="{{ data.url(previous_page) }}">Previous</a>
+  {% else %}
+  <a class="pagination-previous is-disabled" href="{{ data.url(0) }}" title="This is the first page" disabled>
+    Previous
+  </a>
+  {% endmatch %}
+
+  {% match data.next_page() %}
+  {% when Some with (next_page) %}
+  <a class="pagination-next" href="{{ data.url(next_page) }}">Next page</a>
+  {% else %}
+  <a class="pagination-next is-disabled" href="{{ data.url(last_page) }}" title="This is the last page" disabled>
+    Next page
+  </a>
+  {% endmatch %}
+</nav>
+{% endmacro %}
+
 {% macro pagination(data) %}
 <nav class="pagination">
   {% let last_page = data.last_page() %}
@@ -54,23 +78,57 @@
 </nav>
 {% endmacro %}
 
+{% macro option(name, value, selected) %}
+  {% let is_selected = selected == value %}
+  <option value="{{ value }}" {% if is_selected %}selected{% endif %}>
+    {{ name }}
+  </option>
+{% endmacro %}
+
 {% block content %}
 <section class="section">
   <div class="container">
     <div class="columns is-centered">
-      <div class="column">
+      <div class="column is-two-thirds-desktop">
         <h1 class="title has-text-centered">FuzzySearch OwO</h1>
         <h2 class="subtitle has-text-centered">All Media</h2>
 
         {% if !media.is_empty() %}
+        <div class="columns is-desktop">
+          <div class="column is-one-third-desktop">
+            <form method="GET">
+              <div class="field has-addons">
+                <div class="control is-expanded">
+                  <div class="select is-fullwidth">
+                    <select name="sort">
+                      {% call option("Date Added", "added", sort) %}
+                      {% call option("Number of Events", "events", sort) %}
+                      {% call option("Recent Events", "recent", sort) %}
+                    </select>
+                  </div>
+                </div>
+
+                <div class="control">
+                  <button class="button is-primary">Sort</button>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          <div class="column">
+            {% call small_pagination(pagination_data) %}
+          </div>
+        </div>
+
         <div class="table-container">
           <table class="table is-fullwidth">
             <thead class="has-text-left">
               <tr>
                 <th>Preview</th>
                 <th>Title</th>
-                <th>Uploaded</th>
-                <th>Events</th>
+                <th>Added</th>
+                <th>Last Event</th>
+                <th>Event Count</th>
               </tr>
             </thead>
             <tbody>
@@ -108,12 +166,21 @@
                   </span>
                 </td>
                 <td>
-                  {% match event_counts.get(item.id) %}
-                  {% when Some with (count) %}
-                  {{ count }}
+                  {% match item.last_event %}
+                  {% when Some with (last_event) %}
+                  <span class="relative-time" data-timestamp="{{ last_event.timestamp() }}">
+                    {{ last_event }}
+                  </span>
                   {% else %}
                   <span class="has-text-grey">No&nbsp;events</span>
                   {% endmatch %}
+                </td>
+                <td>
+                  {% if item.event_count > 0 %}
+                  {{ item.event_count }}
+                  {% else %}
+                  <span class="has-text-grey">No&nbsp;events</span>
+                  {% endif %}
                 </td>
               </tr>
               {% endfor %}

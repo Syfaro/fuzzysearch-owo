@@ -152,6 +152,217 @@
       ]
     }
   },
+  "0328fef89f25afdb905480494e8846d5c2250b74cca5c58eb45a1ce3bd2d7f42": {
+    "query": "SELECT\n  owned_media_item.id,\n  owned_media_item.owner_id,\n  owned_media_item.account_id,\n  owned_media_item.source_id,\n  owned_media_item.perceptual_hash,\n  owned_media_item.sha256_hash \"sha256_hash: Sha256Hash\",\n  owned_media_item.link,\n  owned_media_item.title,\n  owned_media_item.posted_at,\n  owned_media_item.last_modified,\n  owned_media_item.content_url,\n  owned_media_item.content_size,\n  owned_media_item.thumb_url,\n  owned_media_item.event_count,\n  owned_media_item.last_event\nFROM\n  owned_media_item\n  JOIN linked_account on owned_media_item.account_id = linked_account.id\nWHERE\n  linked_account.source_site = $1\n  AND source_id = $2;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "account_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 3,
+          "name": "source_id",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "perceptual_hash",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 5,
+          "name": "sha256_hash: Sha256Hash",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 6,
+          "name": "link",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "title",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "posted_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 9,
+          "name": "last_modified",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 10,
+          "name": "content_url",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 11,
+          "name": "content_size",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 12,
+          "name": "thumb_url",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 13,
+          "name": "event_count",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 14,
+          "name": "last_event",
+          "type_info": "Timestamptz"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true
+      ]
+    }
+  },
+  "054b6e48ed7ec8940f15af60e2379229e8de3d10477402b4207ffad5fc501919": {
+    "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url,\n    event_count,\n    last_event\nFROM\n    owned_media_item\nWHERE\n    owner_id = $1\nORDER BY\n    last_modified DESC\nLIMIT\n    $2 OFFSET ($3::integer * $2::integer);\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "account_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 3,
+          "name": "source_id",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "perceptual_hash",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 5,
+          "name": "sha256_hash: Sha256Hash",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 6,
+          "name": "link",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "title",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "posted_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 9,
+          "name": "last_modified",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 10,
+          "name": "content_url",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 11,
+          "name": "content_size",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 12,
+          "name": "thumb_url",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 13,
+          "name": "event_count",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 14,
+          "name": "last_event",
+          "type_info": "Timestamptz"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Int4",
+          "Int4"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true
+      ]
+    }
+  },
   "062d84cc9d91b43796d0d7ebfe39dc4ac37aa1e0f3e9ce2228fa1e4fc66730a1": {
     "query": "INSERT INTO\n    user_event (owner_id, message, event_name)\nVALUES\n    ($1, $2, $3) RETURNING id;\n",
     "describe": {
@@ -458,6 +669,111 @@
       ]
     }
   },
+  "33776bde5184d2caf37cd3f739aee971cdf03fa4b569e2c2371031f1b4bad555": {
+    "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url,\n    event_count,\n    last_event\nFROM\n    owned_media_item\nWHERE\n    id = $1\n    AND owner_id = $2;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "account_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 3,
+          "name": "source_id",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "perceptual_hash",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 5,
+          "name": "sha256_hash: Sha256Hash",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 6,
+          "name": "link",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "title",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "posted_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 9,
+          "name": "last_modified",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 10,
+          "name": "content_url",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 11,
+          "name": "content_size",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 12,
+          "name": "thumb_url",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 13,
+          "name": "event_count",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 14,
+          "name": "last_event",
+          "type_info": "Timestamptz"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true
+      ]
+    }
+  },
   "3950c47de61f6ba464700f0ed9092333a3c0a4de4f45afd6949efd6a75276490": {
     "query": "SELECT\n    value\nFROM\n    user_setting\nWHERE\n    owner_id = $1\n    AND setting = $2;\n",
     "describe": {
@@ -613,99 +929,6 @@
       ]
     }
   },
-  "4bfbadd676e60ebde89bf37e11cc241c1a0ede9059f8d47b3b669038654a828b": {
-    "query": "SELECT\n  owned_media_item.id,\n  owned_media_item.owner_id,\n  owned_media_item.account_id,\n  owned_media_item.source_id,\n  owned_media_item.perceptual_hash,\n  owned_media_item.sha256_hash \"sha256_hash: Sha256Hash\",\n  owned_media_item.link,\n  owned_media_item.title,\n  owned_media_item.posted_at,\n  owned_media_item.last_modified,\n  owned_media_item.content_url,\n  owned_media_item.content_size,\n  owned_media_item.thumb_url\nFROM\n  owned_media_item\n  JOIN linked_account on owned_media_item.account_id = linked_account.id\nWHERE\n  linked_account.source_site = $1\n  AND source_id = $2;\n",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 1,
-          "name": "owner_id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 2,
-          "name": "account_id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 3,
-          "name": "source_id",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 4,
-          "name": "perceptual_hash",
-          "type_info": "Int8"
-        },
-        {
-          "ordinal": 5,
-          "name": "sha256_hash: Sha256Hash",
-          "type_info": "Bytea"
-        },
-        {
-          "ordinal": 6,
-          "name": "link",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 7,
-          "name": "title",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 8,
-          "name": "posted_at",
-          "type_info": "Timestamptz"
-        },
-        {
-          "ordinal": 9,
-          "name": "last_modified",
-          "type_info": "Timestamptz"
-        },
-        {
-          "ordinal": 10,
-          "name": "content_url",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 11,
-          "name": "content_size",
-          "type_info": "Int8"
-        },
-        {
-          "ordinal": 12,
-          "name": "thumb_url",
-          "type_info": "Text"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Text",
-          "Text"
-        ]
-      },
-      "nullable": [
-        false,
-        false,
-        true,
-        true,
-        true,
-        false,
-        true,
-        true,
-        true,
-        false,
-        true,
-        true,
-        true
-      ]
-    }
-  },
   "530670baabea0aade25a8c44559c04eaeeed20c4accedef1e502a2c87c4fd563": {
     "query": "DELETE FROM\n    linked_account\nWHERE\n    owner_id = $1\n    AND id = $2;\n",
     "describe": {
@@ -802,8 +1025,29 @@
       ]
     }
   },
-  "57eae1be3ca0cb7f1ee103ee6be7665436ec82dd185f0f4df17fe2bff7b2959b": {
-    "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url\nFROM\n    owned_media_item\nWHERE\n    owner_id = $1\n    AND thumb_url IS NOT NULL\nORDER BY\n    last_modified DESC\nLIMIT\n    20;\n",
+  "5a31bf2e799fe5b3f6f467576b048326ce1db4ec2392f55470b81d70c38d9d5a": {
+    "query": "INSERT INTO\n    auth_state (owner_id, state)\nVALUES\n    ($1, $2) RETURNING id;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
+  "5b4e55cb08c969337b56cff8a2b9e78c4231617a15a370890a27221c7bb80559": {
+    "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url,\n    event_count,\n    last_event\nFROM\n    owned_media_item\nWHERE\n    perceptual_hash <@ ($1, $2);\n",
     "describe": {
       "columns": [
         {
@@ -870,6 +1114,121 @@
           "ordinal": 12,
           "name": "thumb_url",
           "type_info": "Text"
+        },
+        {
+          "ordinal": 13,
+          "name": "event_count",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 14,
+          "name": "last_event",
+          "type_info": "Timestamptz"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Int8",
+          "Int8"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true
+      ]
+    }
+  },
+  "5f98d2c2a5b5ff7d897111201cd90af0592492d2d71c5eae2f7a7e793686ee6b": {
+    "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url,\n    event_count,\n    last_event\nFROM\n    owned_media_item\nWHERE\n    owner_id = $1\n    AND thumb_url IS NOT NULL\nORDER BY\n    last_modified DESC\nLIMIT\n    20;\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "account_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 3,
+          "name": "source_id",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "perceptual_hash",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 5,
+          "name": "sha256_hash: Sha256Hash",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 6,
+          "name": "link",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "title",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "posted_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 9,
+          "name": "last_modified",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 10,
+          "name": "content_url",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 11,
+          "name": "content_size",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 12,
+          "name": "thumb_url",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 13,
+          "name": "event_count",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 14,
+          "name": "last_event",
+          "type_info": "Timestamptz"
         }
       ],
       "parameters": {
@@ -890,28 +1249,9 @@
         false,
         true,
         true,
+        true,
+        false,
         true
-      ]
-    }
-  },
-  "5a31bf2e799fe5b3f6f467576b048326ce1db4ec2392f55470b81d70c38d9d5a": {
-    "query": "INSERT INTO\n    auth_state (owner_id, state)\nVALUES\n    ($1, $2) RETURNING id;\n",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Uuid"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Text"
-        ]
-      },
-      "nullable": [
-        false
       ]
     }
   },
@@ -1190,8 +1530,8 @@
       "nullable": []
     }
   },
-  "910f3391dce647c85859fc9109436201cb561ff8d58c2237c6e699e07be365bb": {
-    "query": "SELECT\n    owned_media_item.id,\n    count(*) \"count!\"\nFROM\n    owned_media_item\n    JOIN user_event ON user_event.related_to_media_item_id = owned_media_item.id\nWHERE\n    owned_media_item.id = any($1)\nGROUP BY\n    owned_media_item.id\n",
+  "924f0b85ce356204277e8c88513b3077926e3c4eaddb1bb4266e4856de969859": {
+    "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url,\n    event_count,\n    last_event\nFROM\n    owned_media_item\nWHERE\n    owner_id = $1\nORDER BY\n    last_event DESC NULLS LAST,\n    last_modified DESC\nLIMIT\n    $2 OFFSET ($3::integer * $2::integer);\n",
     "describe": {
       "columns": [
         {
@@ -1201,18 +1541,98 @@
         },
         {
           "ordinal": 1,
-          "name": "count!",
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "account_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 3,
+          "name": "source_id",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "perceptual_hash",
           "type_info": "Int8"
+        },
+        {
+          "ordinal": 5,
+          "name": "sha256_hash: Sha256Hash",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 6,
+          "name": "link",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "title",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "posted_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 9,
+          "name": "last_modified",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 10,
+          "name": "content_url",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 11,
+          "name": "content_size",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 12,
+          "name": "thumb_url",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 13,
+          "name": "event_count",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 14,
+          "name": "last_event",
+          "type_info": "Timestamptz"
         }
       ],
       "parameters": {
         "Left": [
-          "UuidArray"
+          "Uuid",
+          "Int4",
+          "Int4"
         ]
       },
       "nullable": [
         false,
-        null
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true
       ]
     }
   },
@@ -1421,6 +1841,112 @@
       ]
     }
   },
+  "ac5c9823884b21bb470d3c23fb5cffcf1a2c03d3fed3a8b702c2e33885800637": {
+    "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url,\n    event_count,\n    last_event\nFROM\n    owned_media_item\nWHERE\n    owner_id = $1\nORDER BY\n    event_count DESC,\n    last_modified DESC\nLIMIT\n    $2 OFFSET ($3::integer * $2::integer);\n",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "owner_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 2,
+          "name": "account_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 3,
+          "name": "source_id",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 4,
+          "name": "perceptual_hash",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 5,
+          "name": "sha256_hash: Sha256Hash",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 6,
+          "name": "link",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 7,
+          "name": "title",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 8,
+          "name": "posted_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 9,
+          "name": "last_modified",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 10,
+          "name": "content_url",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 11,
+          "name": "content_size",
+          "type_info": "Int8"
+        },
+        {
+          "ordinal": 12,
+          "name": "thumb_url",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 13,
+          "name": "event_count",
+          "type_info": "Int4"
+        },
+        {
+          "ordinal": 14,
+          "name": "last_event",
+          "type_info": "Timestamptz"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Int4",
+          "Int4"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true
+      ]
+    }
+  },
   "ad4466be049c757e7b4b7a9d65a04e80cdd01ab9a42f97cb03190d16c37bef86": {
     "query": "DELETE FROM\n    user_session\nWHERE\n    user_id = $1\n    AND id = $2;\n",
     "describe": {
@@ -1532,99 +2058,6 @@
         ]
       },
       "nullable": []
-    }
-  },
-  "c31741e37f17354e28644ae0be39865bba63eaf8ac19b409085a0e481d827ee6": {
-    "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url\nFROM\n    owned_media_item\nWHERE\n    perceptual_hash <@ ($1, $2);\n",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 1,
-          "name": "owner_id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 2,
-          "name": "account_id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 3,
-          "name": "source_id",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 4,
-          "name": "perceptual_hash",
-          "type_info": "Int8"
-        },
-        {
-          "ordinal": 5,
-          "name": "sha256_hash: Sha256Hash",
-          "type_info": "Bytea"
-        },
-        {
-          "ordinal": 6,
-          "name": "link",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 7,
-          "name": "title",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 8,
-          "name": "posted_at",
-          "type_info": "Timestamptz"
-        },
-        {
-          "ordinal": 9,
-          "name": "last_modified",
-          "type_info": "Timestamptz"
-        },
-        {
-          "ordinal": 10,
-          "name": "content_url",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 11,
-          "name": "content_size",
-          "type_info": "Int8"
-        },
-        {
-          "ordinal": 12,
-          "name": "thumb_url",
-          "type_info": "Text"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Int8",
-          "Int8"
-        ]
-      },
-      "nullable": [
-        false,
-        false,
-        true,
-        true,
-        true,
-        false,
-        true,
-        true,
-        true,
-        false,
-        true,
-        true,
-        true
-      ]
     }
   },
   "c5d2ab0824d09910f1e20bac7fefdcde7e309af236bb0856bc49c626f40221cb": {
@@ -1751,99 +2184,6 @@
       },
       "nullable": [
         false
-      ]
-    }
-  },
-  "d249de43f9b52b6da213152a9065878d28b4e659217b4d6277a53185957bc0b7": {
-    "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url\nFROM\n    owned_media_item\nWHERE\n    id = $1\n    AND owner_id = $2;\n",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 1,
-          "name": "owner_id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 2,
-          "name": "account_id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 3,
-          "name": "source_id",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 4,
-          "name": "perceptual_hash",
-          "type_info": "Int8"
-        },
-        {
-          "ordinal": 5,
-          "name": "sha256_hash: Sha256Hash",
-          "type_info": "Bytea"
-        },
-        {
-          "ordinal": 6,
-          "name": "link",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 7,
-          "name": "title",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 8,
-          "name": "posted_at",
-          "type_info": "Timestamptz"
-        },
-        {
-          "ordinal": 9,
-          "name": "last_modified",
-          "type_info": "Timestamptz"
-        },
-        {
-          "ordinal": 10,
-          "name": "content_url",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 11,
-          "name": "content_size",
-          "type_info": "Int8"
-        },
-        {
-          "ordinal": 12,
-          "name": "thumb_url",
-          "type_info": "Text"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Uuid"
-        ]
-      },
-      "nullable": [
-        false,
-        false,
-        true,
-        true,
-        true,
-        false,
-        true,
-        true,
-        true,
-        false,
-        true,
-        true,
-        true
       ]
     }
   },
@@ -2047,99 +2387,6 @@
         ]
       },
       "nullable": []
-    }
-  },
-  "f326df6395f903710d52516b39927856c6b6927528dd72d95042976ff0653b8d": {
-    "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url\nFROM\n    owned_media_item\nWHERE\n    owner_id = $1\nORDER BY\n    last_modified DESC\nLIMIT\n    25 OFFSET ($2 * 25);\n",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 1,
-          "name": "owner_id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 2,
-          "name": "account_id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 3,
-          "name": "source_id",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 4,
-          "name": "perceptual_hash",
-          "type_info": "Int8"
-        },
-        {
-          "ordinal": 5,
-          "name": "sha256_hash: Sha256Hash",
-          "type_info": "Bytea"
-        },
-        {
-          "ordinal": 6,
-          "name": "link",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 7,
-          "name": "title",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 8,
-          "name": "posted_at",
-          "type_info": "Timestamptz"
-        },
-        {
-          "ordinal": 9,
-          "name": "last_modified",
-          "type_info": "Timestamptz"
-        },
-        {
-          "ordinal": 10,
-          "name": "content_url",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 11,
-          "name": "content_size",
-          "type_info": "Int8"
-        },
-        {
-          "ordinal": 12,
-          "name": "thumb_url",
-          "type_info": "Text"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Int4"
-        ]
-      },
-      "nullable": [
-        false,
-        false,
-        true,
-        true,
-        true,
-        false,
-        true,
-        true,
-        true,
-        false,
-        true,
-        true,
-        true
-      ]
     }
   },
   "f454852668fd52c1e47118536bb5b57263d32b8f9e91d59a17b0d8ce2ff0e47e": {
