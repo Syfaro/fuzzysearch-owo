@@ -194,7 +194,7 @@ async fn single(
 
         let mut size = 0;
         while let Ok(Some(chunk)) = field.try_next().await {
-            if size > 10_000_000 {
+            if size > 25_000_000 {
                 return Err(Error::TooLarge(size));
             }
 
@@ -204,11 +204,7 @@ async fn single(
         }
 
         if size == 0 {
-            tracing::info!("empty image, ignoring");
-
-            return Ok(HttpResponse::Found()
-                .insert_header(("Location", USER_HOME))
-                .finish());
+            continue;
         }
 
         let sha256_hash: [u8; 32] = hasher

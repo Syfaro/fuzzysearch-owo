@@ -166,16 +166,22 @@ function updateRelativeTimes() {
 
 updateRelativeTimes();
 
+const singleUploadButton = document.getElementById('single-upload-button');
+
 [...document.querySelectorAll('input[type=file]')].forEach((input) => {
   input.addEventListener('change', () => {
     if (input.files.length === 0) {
+      singleUploadButton?.setAttribute('disabled', 'disabled');
       return;
     }
 
     const fileName = document.querySelector(input.dataset.fileNameLabel);
 
     if (fileName) {
-      fileName.textContent = input.files[0].name;
+      const displayedName = input.files.length === 1 ? input.files[0].name : 'Multiple Selected';
+      fileName.textContent = displayedName;
     }
+
+    singleUploadButton?.removeAttribute('disabled');
   });
 });

@@ -68,7 +68,7 @@
               <div class="file is-boxed is-centered has-name">
                 <label class="file-label">
                   <input class="file-input" type="file" name="image" accept="image/png, image/jpeg"
-                    data-file-name-label="#upload-single-label">
+                    data-file-name-label="#upload-single-label" multiple>
                   <span class="file-cta">
                     <span class="file-label">Select Photo</span>
                   </span>
@@ -82,7 +82,7 @@
             </div>
 
             <div class="control">
-              <button class="button is-link is-fullwidth is-outlined">Upload</button>
+              <button id="single-upload-button" class="button is-link is-fullwidth is-outlined" disabled>Upload</button>
             </div>
           </form>
         </div>
