@@ -82,6 +82,10 @@ pub struct Config {
     #[clap(long, env("RUN_MIGRATIONS"))]
     pub run_migrations: bool,
 
+    /// Sentry DSN.
+    #[clap(long, env("SENTRY_DSN"))]
+    pub sentry_dsn: Option<String>,
+
     /// S3 region name, can be anything for Minio.
     #[clap(long, env("S3_REGION_NAME"))]
     pub s3_region_name: String,
@@ -327,6 +331,18 @@ async fn main() {
         .build()
         .expect("could not create http client");
 
+    let _guard = config.sentry_dsn.as_deref().map(|dsn| {
+        sentry::init((
+            dsn,
+            sentry::ClientOptions {
+                release: sentry::release_name!(),
+                session_mode: sentry::SessionMode::Request,
+                auto_session_tracking: true,
+                ..Default::default()
+            },
+        ))
+    });
+
     match config.service_mode.clone() {
         ServiceMode::BackgroundWorker(worker_config) => {
             let creds = lettre::transport::smtp::authentication::Credentials::new(
@@ -392,6 +408,7 @@ async fn main() {
 
                 App::new()
                     .wrap(tracing_actix_web::TracingLogger::default())
+                    .wrap(sentry_actix::Sentry::new())
                     .wrap(session)
                     .app_data(web::Data::new(pool.clone()))
                     .app_data(web::Data::new(s3.clone()))
