@@ -650,20 +650,17 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
 
         for (similar_image, created_at) in found_images {
             if let Some(posted_by) = &similar_image.posted_by {
-                if let Some((_account_id, searched_user_id)) =
-                    models::LinkedAccount::search_site_account(
-                        &ctx.conn,
-                        &similar_image.site.to_string(),
-                        posted_by,
-                    )
-                    .await?
+                if models::LinkedAccount::search_site_account(
+                    &ctx.conn,
+                    &similar_image.site.to_string(),
+                    posted_by,
+                )
+                .await?
+                .into_iter()
+                .any(|(_account_id, searched_user_id)| searched_user_id == user_id)
                 {
-                    tracing::debug!("existing submission belongs to known account");
-
-                    if searched_user_id == user_id {
-                        tracing::info!("submission belongs to current user, skipping");
-                        continue;
-                    }
+                    tracing::info!("submission belongs to current user, skipping");
+                    continue;
                 }
             }
 
@@ -842,7 +839,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
         };
 
         if let Some(artist) = artist {
-            if let Some((account_id, user_id)) = models::LinkedAccount::search_site_account(
+            for (account_id, user_id) in models::LinkedAccount::search_site_account(
                 &ctx.conn,
                 &data.site.to_string(),
                 &artist,
@@ -857,7 +854,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                     &ctx.conn,
                     user_id,
                     account_id,
-                    data.site_id,
+                    data.site_id.clone(),
                     data.perceptual_hash.map(i64::from_be_bytes),
                     sha256_hash,
                     data.page_url.clone(),

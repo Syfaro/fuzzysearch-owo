@@ -951,14 +951,14 @@ impl LinkedAccount {
         conn: &sqlx::Pool<sqlx::Postgres>,
         site_name: &str,
         username: &str,
-    ) -> Result<Option<(Uuid, Uuid)>, Error> {
+    ) -> Result<Vec<(Uuid, Uuid)>, Error> {
         let account = sqlx::query_file!(
             "queries/linked_account/search_site_account.sql",
             site_name,
             username
         )
         .map(|row| (row.id, row.owner_id))
-        .fetch_optional(conn)
+        .fetch_all(conn)
         .await?;
 
         Ok(account)
