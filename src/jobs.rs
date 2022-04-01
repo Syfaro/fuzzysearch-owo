@@ -838,45 +838,6 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
             data.posted_by.clone()
         };
 
-        if let Some(artist) = artist {
-            for (account_id, user_id) in models::LinkedAccount::search_site_account(
-                &ctx.conn,
-                &data.site.to_string(),
-                &artist,
-            )
-            .await?
-            {
-                tracing::info!("new submission belongs to known account");
-
-                let sha256_hash = data.sha256.ok_or(Error::Missing)?;
-
-                let item = models::OwnedMediaItem::add_item(
-                    &ctx.conn,
-                    user_id,
-                    account_id,
-                    data.site_id.clone(),
-                    data.perceptual_hash.map(i64::from_be_bytes),
-                    sha256_hash,
-                    data.page_url.clone(),
-                    None, // TODO: collect title
-                    data.posted_at,
-                )
-                .await?;
-
-                let data = ctx
-                    .client
-                    .get(&data.content_url)
-                    .send()
-                    .await?
-                    .bytes()
-                    .await?;
-                let im = image::load_from_memory(&data)?;
-
-                models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item, im)
-                    .await?;
-            }
-        }
-
         let hash = match data.perceptual_hash {
             Some(hash) => i64::from_be_bytes(hash),
             None => {
@@ -987,6 +948,45 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                     }
                     _ => (),
                 }
+            }
+        }
+
+        if let Some(artist) = artist {
+            for (account_id, user_id) in models::LinkedAccount::search_site_account(
+                &ctx.conn,
+                &data.site.to_string(),
+                &artist,
+            )
+            .await?
+            {
+                tracing::info!("new submission belongs to known account");
+
+                let sha256_hash = data.sha256.ok_or(Error::Missing)?;
+
+                let item = models::OwnedMediaItem::add_item(
+                    &ctx.conn,
+                    user_id,
+                    account_id,
+                    data.site_id.clone(),
+                    data.perceptual_hash.map(i64::from_be_bytes),
+                    sha256_hash,
+                    data.page_url.clone(),
+                    None, // TODO: collect title
+                    data.posted_at,
+                )
+                .await?;
+
+                let data = ctx
+                    .client
+                    .get(&data.content_url)
+                    .send()
+                    .await?
+                    .bytes()
+                    .await?;
+                let im = image::load_from_memory(&data)?;
+
+                models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item, im)
+                    .await?;
             }
         }
 
