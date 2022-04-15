@@ -502,7 +502,11 @@ impl OwnedMediaItem {
         let item_id = sqlx::query_file_scalar!(
             "queries/owned_media/add_manual_item.sql",
             user_id,
-            perceptual_hash,
+            if perceptual_hash != 0 {
+                Some(perceptual_hash)
+            } else {
+                None
+            },
             sha256_hash.to_vec()
         )
         .fetch_one(conn)
@@ -528,7 +532,7 @@ impl OwnedMediaItem {
             user_id,
             account_id,
             source_id.to_string(),
-            perceptual_hash,
+            perceptual_hash.filter(|hash| *hash != 0),
             sha256_hash.to_vec(),
             link,
             title,
