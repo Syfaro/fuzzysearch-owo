@@ -563,6 +563,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
         .render()?;
 
         let email = lettre::Message::builder()
+            .header(lettre::message::header::ContentType::TEXT_PLAIN)
             .from(ctx.config.smtp_from.clone())
             .reply_to(ctx.config.smtp_reply_to.clone())
             .to(lettre::message::Mailbox::new(
@@ -906,6 +907,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                         .render()?;
 
                         let email = lettre::Message::builder()
+                            .header(lettre::message::header::ContentType::TEXT_PLAIN)
                             .from(ctx.config.smtp_from.clone())
                             .reply_to(ctx.config.smtp_reply_to.clone())
                             .to(lettre::message::Mailbox::new(
