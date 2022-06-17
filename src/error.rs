@@ -22,7 +22,7 @@ pub enum Error {
     #[error("redis error: {0}")]
     Redis(#[from] redis::RedisError),
     #[error("faktory error: {0}")]
-    Faktory(faktory::FaktoryError),
+    Faktory(faktory::Error),
     #[error("actix error: {0}")]
     Actix(#[from] actix_web::Error),
     #[error("json error: {0}")]
