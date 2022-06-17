@@ -16,11 +16,7 @@ use serde::{Deserialize, Serialize};
 use tracing::Instrument;
 use uuid::Uuid;
 
-use crate::{
-    api,
-    models::{self, setting},
-    site, Error,
-};
+use crate::{api, common, models, site, Error};
 
 #[derive(Clone, Debug, clap::ArgEnum)]
 pub enum FaktoryQueue {
@@ -594,60 +590,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
             }
         };
 
-        let fuzzysearch_items = ctx
-            .fuzzysearch
-            .lookup_hashes(&[perceptual_hash], Some(3))
-            .await?
-            .into_iter()
-            .flat_map(|file| {
-                Some((
-                    models::SimilarImage {
-                        page_url: Some(file.url()),
-                        site: models::Site::from(file.site_info?),
-                        posted_by: file.artists.as_ref().map(|artists| artists.join(", ")),
-                        content_url: file.url,
-                    },
-                    file.posted_at,
-                ))
-            });
-
-        let flist_items = models::FListFile::similar_images(&ctx.conn, perceptual_hash)
-            .await?
-            .into_iter()
-            .map(|file| {
-                (
-                    models::SimilarImage {
-                        site: models::Site::FList,
-                        page_url: Some(format!(
-                            "https://www.f-list.net/c/{}/",
-                            file.character_name
-                        )),
-                        posted_by: Some(file.character_name),
-                        content_url: format!(
-                            "https://static.f-list.net/images/charimage/{}.{}",
-                            file.id, file.ext
-                        ),
-                    },
-                    None,
-                )
-            });
-
-        let reddit_items = models::RedditImage::similar_images(&ctx.conn, perceptual_hash)
-            .await?
-            .into_iter()
-            .map(|image| {
-                (
-                    models::SimilarImage {
-                        site: models::Site::Reddit,
-                        page_url: Some(image.post.permalink),
-                        posted_by: Some(image.post.author),
-                        content_url: image.post.content_link,
-                    },
-                    Some(image.post.posted_at),
-                )
-            });
-
-        let found_images = fuzzysearch_items.chain(flist_items).chain(reddit_items);
+        let found_images = common::search_perceptual_hash(&ctx, perceptual_hash).await?;
 
         for (similar_image, created_at) in found_images {
             if let Some(posted_by) = &similar_image.posted_by {
@@ -829,169 +772,8 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
         let mut args = job.args().iter();
         let (data,) = extract_args!(args, IncomingSubmission);
 
-        // FurAffinity has some weird differences between how usernames are
-        // displayed and how they're used in URLs.
-        let artist = if matches!(data.site, models::Site::FurAffinity) {
-            data.posted_by
-                .as_ref()
-                .map(|posted_by| posted_by.replace('_', ""))
-        } else {
-            data.posted_by.clone()
-        };
-
-        let hash = match data.perceptual_hash {
-            Some(hash) => i64::from_be_bytes(hash),
-            None => {
-                tracing::warn!("webhook data had no hash");
-                return Ok(());
-            }
-        };
-
-        if hash == 0 {
-            tracing::warn!("hash was 0, skipping similar check");
-        }
-
-        let similar_items = models::OwnedMediaItem::find_similar(&ctx.conn, hash).await?;
-
-        if !similar_items.is_empty() && hash != 0 {
-            let similar_image = models::SimilarImage {
-                site: data.site,
-                posted_by: data.posted_by.clone(),
-                page_url: data.page_url.clone(),
-                content_url: data.content_url.clone(),
-            };
-
-            // TODO: this loop should split each item into a new job
-            for item in similar_items {
-                tracing::debug!("found similar item owned by {}", item.owner_id);
-
-                models::UserEvent::similar_found(
-                    &ctx.conn,
-                    &ctx.redis,
-                    item.owner_id,
-                    item.id,
-                    similar_image.clone(),
-                    None,
-                )
-                .await?;
-
-                if let Some(user) = models::User::lookup_by_id(&ctx.conn, item.owner_id).await? {
-                    tracing::debug!("sending notifications to user");
-
-                    let emails_enabled: setting::EmailNotifications =
-                        models::UserSetting::get(&ctx.conn, user.id)
-                            .await?
-                            .unwrap_or_default();
-
-                    let telegram_enabled: setting::TelegramNotifications =
-                        models::UserSetting::get(&ctx.conn, user.id)
-                            .await?
-                            .unwrap_or_default();
-
-                    if !emails_enabled.0 && !telegram_enabled.0 {
-                        tracing::debug!("all notifications disabled, skipping");
-                        continue;
-                    }
-
-                    match &user.email {
-                        Some(email) if user.email_verifier.is_none() && emails_enabled.0 => {
-                            let body = SimilarEmailTemplate {
-                                username: user.display_name(),
-                                source_link: item.link.as_deref().unwrap_or_else(|| {
-                                    item.content_url.as_deref().unwrap_or("unknown")
-                                }),
-                                site_name: &data.site.to_string(),
-                                poster_name: data.posted_by.as_deref().unwrap_or("unknown"),
-                                similar_link: data.page_url.as_deref().unwrap_or(&data.content_url),
-                            }
-                            .render()?;
-
-                            let email = lettre::Message::builder()
-                                .header(lettre::message::header::ContentType::TEXT_PLAIN)
-                                .from(ctx.config.smtp_from.clone())
-                                .reply_to(ctx.config.smtp_reply_to.clone())
-                                .to(lettre::message::Mailbox::new(
-                                    Some(user.display_name().to_owned()),
-                                    email.parse().map_err(Error::from_displayable)?,
-                                ))
-                                .subject(format!("Similar image found on {}", data.site))
-                                .body(body)?;
-
-                            if let Err(err) = ctx.mailer.send(email).await {
-                                tracing::error!("could not send email: {:?}", err);
-                            };
-                        }
-                        _ => (),
-                    }
-
-                    match user.telegram_id {
-                        Some(telegram_id) if telegram_enabled.0 => {
-                            let body = SimilarTelegramTemplate {
-                                username: user.display_name(),
-                                source_link: item.link.as_deref().unwrap_or_else(|| {
-                                    item.content_url.as_deref().unwrap_or("unknown")
-                                }),
-                                site_name: &data.site.to_string(),
-                                poster_name: data.posted_by.as_deref().unwrap_or("unknown"),
-                                similar_link: data.page_url.as_deref().unwrap_or(&data.content_url),
-                            }
-                            .render()?;
-
-                            let send_message = tgbotapi::requests::SendMessage {
-                                chat_id: telegram_id.into(),
-                                text: body,
-                                disable_web_page_preview: Some(true),
-                                ..Default::default()
-                            };
-
-                            if let Err(err) = ctx.telegram.make_request(&send_message).await {
-                                tracing::error!("could not send telegram message: {:?}", err);
-                            }
-                        }
-                        _ => (),
-                    }
-                }
-            }
-        }
-
-        if let Some(artist) = artist {
-            for (account_id, user_id) in models::LinkedAccount::search_site_account(
-                &ctx.conn,
-                &data.site.to_string(),
-                &artist,
-            )
-            .await?
-            {
-                tracing::info!("new submission belongs to known account");
-
-                let sha256_hash = data.sha256.ok_or(Error::Missing)?;
-
-                let item = models::OwnedMediaItem::add_item(
-                    &ctx.conn,
-                    user_id,
-                    account_id,
-                    data.site_id.clone(),
-                    data.perceptual_hash.map(i64::from_be_bytes),
-                    sha256_hash,
-                    data.page_url.clone(),
-                    None, // TODO: collect title
-                    data.posted_at,
-                )
-                .await?;
-
-                let data = ctx
-                    .client
-                    .get(&data.content_url)
-                    .send()
-                    .await?
-                    .bytes()
-                    .await?;
-                let im = image::load_from_memory(&data)?;
-
-                models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item, im)
-                    .await?;
-            }
-        }
+        common::notify_for_incoming(&ctx, &data).await?;
+        common::import_from_incoming(&ctx, &data).await?;
 
         Ok(())
     });

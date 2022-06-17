@@ -8,6 +8,7 @@ use clap::Parser;
 mod admin;
 mod api;
 mod auth;
+mod common;
 mod error;
 mod jobs;
 mod models;
