@@ -59,7 +59,7 @@ struct Settings<'a> {
     telegram_login: &'a auth::TelegramLoginConfig,
 
     user: &'a models::User,
-    saved: bool,
+    saved_message: Option<(bool, &'a str)>,
 
     email_notifications: setting::EmailNotifications,
     telegram_notifications: setting::TelegramNotifications,
@@ -83,7 +83,7 @@ async fn settings_get(
         telegram_login: &telegram_login,
 
         user: &user,
-        saved: false,
+        saved_message: None,
 
         email_notifications,
         telegram_notifications,
@@ -97,6 +97,7 @@ async fn settings_get(
 async fn settings_post(
     telegram_login: web::Data<auth::TelegramLoginConfig>,
     conn: web::Data<sqlx::PgPool>,
+    faktory: web::Data<jobs::FaktoryClient>,
     user: models::User,
     form: web::Form<HashMap<String, String>>,
 ) -> Result<HttpResponse, Error> {
@@ -123,15 +124,58 @@ async fn settings_post(
         models::User::update_display_name(&conn, user.id, display_name)
     )?;
 
+    let email_address = match form.get("email") {
+        None => None,
+        Some(email) if email.is_empty() => None,
+        Some(email) => Some(email),
+    };
+
+    let email_was_updated = email_address != user.email.as_ref().filter(|s| !s.is_empty());
+
+    let error_saving_email = match email_address {
+        Some(email_address) if email_was_updated => {
+            if !models::User::email_exists(&conn, email_address).await? {
+                models::User::set_email(&conn, user.id, email_address).await?;
+
+                faktory
+                    .enqueue_job(
+                        jobs::JobInitiator::user(user.id),
+                        jobs::email_verification_job(user.id)?,
+                    )
+                    .await?;
+
+                false
+            } else {
+                true
+            }
+        }
+        _ => false,
+    };
+
     let user = models::User::lookup_by_id(&conn, user.id)
         .await?
         .ok_or(Error::Missing)?;
+
+    let (successful, saved_message) = if error_saving_email {
+        (false, "Your email address could not be saved.")
+    } else if email_was_updated {
+        if email_address.is_some() {
+            (
+                true,
+                "Your email address was updated, please verify your account.",
+            )
+        } else {
+            (true, "Your email address was removed.")
+        }
+    } else {
+        (true, "Your settings were saved.")
+    };
 
     let body = Settings {
         telegram_login: &telegram_login,
 
         user: &user,
-        saved: true,
+        saved_message: Some((successful, saved_message)),
 
         email_notifications,
         telegram_notifications,
@@ -268,7 +312,7 @@ struct AccountLink;
 
 #[get("/link")]
 async fn account_link_get(user: models::User) -> Result<HttpResponse, Error> {
-    if !user.has_verified_email() {
+    if !user.has_verified_account() {
         return Err(Error::UserError(
             "You must verify your email address first.".into(),
         ));
@@ -291,7 +335,7 @@ async fn account_link_post(
     user: models::User,
     form: web::Form<AccountLinkForm>,
 ) -> Result<HttpResponse, Error> {
-    if !user.has_verified_email() {
+    if !user.has_verified_account() {
         return Err(Error::UserError(
             "You must verify your email address first.".into(),
         ));

@@ -8,11 +8,13 @@
         <h1 class="title has-text-centered">FuzzySearch OwO</h1>
         <h2 class="subtitle has-text-centered">Settings</h2>
 
-        {% if saved %}
-        <div class="notification is-success">
-          <p>Your settings were saved.</p>
+        {% match saved_message %}
+        {% when Some with ((successful, saved_message)) %}
+        <div class="notification {% if successful %} is-success {% else %} is-danger {% endif %}">
+          <p>{{ saved_message }}</p>
         </div>
-        {% endif %}
+        {% else %}
+        {% endmatch %}
 
         <form method="POST">
           <div class="block">
@@ -24,6 +26,18 @@
                 <input class="input" type="text" placeholder="Name" name="display_name"
                   value="{{ user.display_name() }}" required>
               </div>
+            </div>
+
+            <div class="field">
+              <label class="label">Email address</label>
+              <div class="control">
+                <input class="input" type="email" placeholder="Email" name="email"
+                  value="{{ user.email.as_deref().unwrap_or_default() }}" autocomplete="email">
+              </div>
+
+              {% if user.has_unverified_email() %}
+              <p class="help">A link was sent to your email address, please follow it to verify your account.</p>
+              {% endif %}
             </div>
           </div>
 

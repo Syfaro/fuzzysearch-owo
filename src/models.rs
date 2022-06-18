@@ -37,12 +37,20 @@ impl Debug for User {
 }
 
 impl User {
+    pub fn has_verified_account(&self) -> bool {
+        self.has_verified_email() || self.has_telegram_account()
+    }
+
     pub fn has_verified_email(&self) -> bool {
         self.email.is_some() && self.email_verifier.is_none()
     }
 
     pub fn has_unverified_email(&self) -> bool {
-        self.email.is_some() && self.email_verifier.is_some()
+        matches!(self.email, Some(ref email) if !email.is_empty()) && self.email_verifier.is_some()
+    }
+
+    pub fn has_telegram_account(&self) -> bool {
+        self.telegram_id.is_some()
     }
 
     pub fn display_name(&self) -> &str {

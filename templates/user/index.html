@@ -29,7 +29,7 @@
         <div class="block has-text-centered">
           <h3 class="subtitle is-4">Monitored Accounts</h3>
 
-          {% if user.has_verified_email() %}
+          {% if user.has_verified_account() %}
           {% if monitored_accounts.is_empty() %}
           <a href="/user/account/link" class="button is-primary is-large">Link First Account</a>
           {% else %}
