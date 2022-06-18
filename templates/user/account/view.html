@@ -46,10 +46,10 @@
       </div>
     </div>
 
+    {% match account.verification_key() %}
+    {% when Some with (verification_key) %}
     <div class="columns is-centered">
       <div class="column is-one-third">
-        {% match account.verification_key() %}
-        {% when Some with (verification_key) %}
         <div class="block">
           <article class="message is-warning">
             <div class="message-header">
@@ -74,8 +74,45 @@
             </div>
             </message>
         </div>
+      </div>
+    </div>
+    {% else %}
+    {% endmatch %}
+
+    {% if !recent_media.is_empty() %}
+    <div class="columns is-centered">
+      <div class="column has-text-centered">
+        <h2 class="subtitle is-4">Recent Media</h2>
+
+        {% for item in recent_media %}
+        {% match item.thumb_url %}
+        {% when Some with (thumb_url) %}
+        <figure class="image is-128x128 is-inline-block" style="overflow: hidden;">
+          <a href="/user/media/view/{{ item.id }}">
+            {% match item.content_url %}
+            {% when Some with (content_url) %}
+            <img src="{{ thumb_url }}" alt="{{ item.alt_text() }}">
+            {% else %}
+            <img src="{{ thumb_url }}" alt="{{ item.alt_text() }}">
+            {% endmatch %}
+          </a>
+        </figure>
         {% else %}
         {% endmatch %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="columns is-centered">
+      <div class="column is-one-third">
+        {% if item_count > 20 %}
+        <div class="control">
+          <a href="/user/media/list?account_id={{ account.id }}" class="button is-link is-fullwidth">View All Media</a>
+        </div>
+
+        <hr>
+        {% endif %}
 
         <div class="block">
           <form method="POST" action="/user/account/remove">

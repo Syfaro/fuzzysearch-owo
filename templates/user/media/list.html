@@ -97,6 +97,12 @@
         <div class="columns is-desktop">
           <div class="column is-one-third-desktop">
             <form method="GET">
+              {% match account_id %}
+              {% when Some with (account_id) %}
+              <input type="hidden" name="account_id" value="{{ account_id }}">
+              {% else %}
+              {% endmatch %}
+
               <div class="field has-addons">
                 <div class="control is-expanded">
                   <div class="select is-fullwidth">

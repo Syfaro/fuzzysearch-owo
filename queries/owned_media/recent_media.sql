@@ -19,6 +19,7 @@ FROM
 WHERE
     owner_id = $1
     AND thumb_url IS NOT NULL
+    AND $2::uuid IS NULL OR account_id = $2
 ORDER BY
     last_modified DESC
 LIMIT

@@ -592,10 +592,16 @@ impl OwnedMediaItem {
     pub async fn recent_media(
         conn: &sqlx::Pool<sqlx::Postgres>,
         user_id: Uuid,
+        account_id: Option<Uuid>,
     ) -> Result<Vec<Self>, Error> {
-        let items = sqlx::query_file_as!(Self, "queries/owned_media/recent_media.sql", user_id)
-            .fetch_all(conn)
-            .await?;
+        let items = sqlx::query_file_as!(
+            Self,
+            "queries/owned_media/recent_media.sql",
+            user_id,
+            account_id
+        )
+        .fetch_all(conn)
+        .await?;
 
         Ok(items)
     }
@@ -644,15 +650,19 @@ impl OwnedMediaItem {
         user_id: Uuid,
         page: u32,
         sort: MediaListSort,
+        account_id: Option<Uuid>,
     ) -> Result<Vec<Self>, Error> {
+        const ITEMS_PER_PAGE: i32 = 25;
+
         let media = match sort {
             MediaListSort::Added => {
                 sqlx::query_file_as!(
                     Self,
                     "queries/owned_media/media_before_added.sql",
                     user_id,
-                    25,
+                    ITEMS_PER_PAGE,
                     page as i64,
+                    account_id,
                 )
                 .fetch_all(conn)
                 .await?
@@ -662,8 +672,9 @@ impl OwnedMediaItem {
                     Self,
                     "queries/owned_media/media_before_events.sql",
                     user_id,
-                    25,
+                    ITEMS_PER_PAGE,
                     page as i64,
+                    account_id,
                 )
                 .fetch_all(conn)
                 .await?
@@ -673,8 +684,9 @@ impl OwnedMediaItem {
                     Self,
                     "queries/owned_media/media_before_recent.sql",
                     user_id,
-                    25,
+                    ITEMS_PER_PAGE,
                     page as i64,
+                    account_id,
                 )
                 .fetch_all(conn)
                 .await?

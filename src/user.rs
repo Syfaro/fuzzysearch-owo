@@ -35,7 +35,7 @@ async fn home(
     user: models::User,
 ) -> Result<HttpResponse, Error> {
     let user_item_count = models::OwnedMediaItem::user_item_count(&conn, user.id);
-    let recent_media = models::OwnedMediaItem::recent_media(&conn, user.id);
+    let recent_media = models::OwnedMediaItem::recent_media(&conn, user.id, None);
     let monitored_accounts = models::LinkedAccount::owned_by_user(&conn, user.id);
 
     let ((item_count, total_content_size), recent_media, monitored_accounts) =
@@ -395,6 +395,8 @@ struct AccountView {
 
     item_count: i64,
     total_content_size: i64,
+
+    recent_media: Vec<models::OwnedMediaItem>,
 }
 
 #[get("/{account_id}")]
@@ -416,10 +418,14 @@ async fn account_view(
     let (item_count, total_content_size) =
         models::LinkedAccount::items(&conn, user.id, account_id).await?;
 
+    let recent_media =
+        models::OwnedMediaItem::recent_media(&conn, user.id, Some(account_id)).await?;
+
     let body = AccountView {
         account,
         item_count,
         total_content_size,
+        recent_media,
     }
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
@@ -514,6 +520,7 @@ async fn media_remove(
 
 #[derive(Debug, Deserialize)]
 struct MediaListQuery {
+    account_id: Option<Uuid>,
     page: Option<u32>,
     sort: Option<models::MediaListSort>,
 }
@@ -606,6 +613,7 @@ struct MediaList<'a> {
     media: &'a [models::OwnedMediaItem],
     sort: &'a str,
     pagination_data: PaginationData<'a>,
+    account_id: Option<Uuid>,
 }
 
 #[get("/list")]
@@ -618,7 +626,8 @@ async fn media_list(
     let page = query.page.unwrap_or(0);
     let sort = query.sort.unwrap_or(models::MediaListSort::Added);
 
-    let media = models::OwnedMediaItem::media_page(&conn, user.id, page, sort).await?;
+    let media =
+        models::OwnedMediaItem::media_page(&conn, user.id, page, sort, query.account_id).await?;
 
     let count = models::OwnedMediaItem::count(&conn, user.id).await?;
     let pagination_data = PaginationData::new(request.uri(), 25, count as u32, page);
@@ -627,6 +636,7 @@ async fn media_list(
         media: &media,
         sort: sort.name(),
         pagination_data,
+        account_id: query.account_id,
     }
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))

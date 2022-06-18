@@ -17,7 +17,8 @@ SELECT
 FROM
     owned_media_item
 WHERE
-    owner_id = $1
+    owner_id = $1 AND
+    $4::uuid IS NULL OR account_id = $4
 ORDER BY
     last_modified DESC
 LIMIT
