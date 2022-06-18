@@ -24,6 +24,7 @@ pub struct User {
     pub telegram_name: Option<String>,
     pub is_admin: bool,
     pub display_name: Option<String>,
+    pub unsubscribe_token: Uuid,
 
     hashed_password: Option<String>,
 }

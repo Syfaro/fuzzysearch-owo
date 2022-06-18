@@ -473,26 +473,6 @@ struct EmailVerify<'a> {
     link: &'a str,
 }
 
-#[derive(askama::Template)]
-#[template(path = "notification/similar_email.txt")]
-struct SimilarEmailTemplate<'a> {
-    username: &'a str,
-    source_link: &'a str,
-    site_name: &'a str,
-    poster_name: &'a str,
-    similar_link: &'a str,
-}
-
-#[derive(askama::Template)]
-#[template(path = "notification/similar_telegram.txt")]
-struct SimilarTelegramTemplate<'a> {
-    username: &'a str,
-    source_link: &'a str,
-    site_name: &'a str,
-    poster_name: &'a str,
-    similar_link: &'a str,
-}
-
 pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
     let queues: Vec<String> = ctx
         .worker_config

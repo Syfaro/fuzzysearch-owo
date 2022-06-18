@@ -131,6 +131,11 @@
           "name": "display_name",
           "ordinal": 8,
           "type_info": "Text"
+        },
+        {
+          "name": "unsubscribe_token",
+          "ordinal": 9,
+          "type_info": "Uuid"
         }
       ],
       "nullable": [
@@ -142,7 +147,8 @@
         true,
         true,
         false,
-        true
+        true,
+        false
       ],
       "parameters": {
         "Left": [
@@ -2030,6 +2036,11 @@
           "name": "display_name",
           "ordinal": 8,
           "type_info": "Text"
+        },
+        {
+          "name": "unsubscribe_token",
+          "ordinal": 9,
+          "type_info": "Uuid"
         }
       ],
       "nullable": [
@@ -2041,7 +2052,8 @@
         true,
         true,
         false,
-        true
+        true,
+        false
       ],
       "parameters": {
         "Left": [
@@ -2349,6 +2361,11 @@
           "name": "display_name",
           "ordinal": 8,
           "type_info": "Text"
+        },
+        {
+          "name": "unsubscribe_token",
+          "ordinal": 9,
+          "type_info": "Uuid"
         }
       ],
       "nullable": [
@@ -2360,7 +2377,8 @@
         true,
         true,
         false,
-        true
+        true,
+        false
       ],
       "parameters": {
         "Left": [

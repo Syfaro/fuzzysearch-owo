@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::{
     auth::{self, FuzzySearchSessionToken},
     jobs,
-    models::{self, setting, Site},
+    models::{self, setting, Site, UserSettingItem},
     routes::*,
     ClientIpAddr, Error,
 };
@@ -827,6 +827,67 @@ async fn allowlist_remove(
         .finish())
 }
 
+#[derive(Template)]
+#[template(path = "user/unsubscribe.html")]
+struct Unsubscribe {
+    user: models::User,
+    verifier: Uuid,
+}
+
+#[derive(Deserialize)]
+struct UnsubscribeQuery {
+    #[serde(rename = "u")]
+    user_id: Uuid,
+    #[serde(rename = "t")]
+    verifier: Uuid,
+}
+
+#[get("/unsubscribe")]
+async fn unsubscribe_get(
+    conn: web::Data<sqlx::PgPool>,
+    query: web::Query<UnsubscribeQuery>,
+) -> Result<HttpResponse, Error> {
+    let user = models::User::lookup_by_id(&conn, query.user_id)
+        .await?
+        .ok_or(Error::Missing)?;
+
+    if user.unsubscribe_token != query.verifier {
+        return Err(Error::Missing);
+    }
+
+    let body = Unsubscribe {
+        user,
+        verifier: query.verifier,
+    }
+    .render()?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[post("/unsubscribe")]
+async fn unsubscribe_post(
+    conn: web::Data<sqlx::PgPool>,
+    form: web::Form<UnsubscribeQuery>,
+) -> Result<HttpResponse, Error> {
+    let user = models::User::lookup_by_id(&conn, form.user_id)
+        .await?
+        .ok_or(Error::Missing)?;
+
+    if user.unsubscribe_token != form.verifier {
+        return Err(Error::Missing);
+    }
+
+    models::UserSetting::set(
+        &conn,
+        user.id,
+        &models::setting::EmailNotifications::off_value(),
+    )
+    .await?;
+
+    Ok(HttpResponse::Found()
+        .insert_header(("Location", USER_HOME))
+        .finish())
+}
+
 pub fn service() -> Scope {
     web::scope("/user")
         .service(services![
@@ -835,7 +896,9 @@ pub fn service() -> Scope {
             settings_post,
             delete,
             events,
-            single
+            single,
+            unsubscribe_get,
+            unsubscribe_post,
         ])
         .service(web::scope("/account").service(services![
             account_link_get,

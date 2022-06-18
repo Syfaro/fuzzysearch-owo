@@ -203,6 +203,7 @@ struct SimilarEmailTemplate<'a> {
     site_name: &'a str,
     poster_name: &'a str,
     similar_link: &'a str,
+    unsubscribe_link: String,
 }
 
 async fn notify_email(
@@ -221,6 +222,10 @@ async fn notify_email(
         site_name: &sub.site.to_string(),
         poster_name: sub.posted_by.as_deref().unwrap_or("unknown"),
         similar_link: sub.page_url.as_deref().unwrap_or(&sub.content_url),
+        unsubscribe_link: format!(
+            "{}/user/unsubscribe?u={}&t={}",
+            ctx.config.host_url, user.id, user.unsubscribe_token
+        ),
     }
     .render()?;
 
