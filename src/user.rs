@@ -743,7 +743,8 @@ async fn verify_email(
         let session_id = models::UserSession::create(
             &conn,
             query.user_id,
-            models::UserSessionSource::email_verification(client_ip.ip_addr),
+            models::UserSessionSource::EmailVerification,
+            client_ip.ip_addr.as_deref(),
         )
         .await?;
         session.set_session_token(query.user_id, session_id)?;

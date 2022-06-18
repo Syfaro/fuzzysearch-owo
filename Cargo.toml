@@ -56,6 +56,7 @@ sha2 = "0.10"
 hex = "0.4"
 image = "0.23"
 rand = "0.8"
+ipnetwork = "0.19"
 
 reqwest = { version = "0.11", features = ["json", "cookies"] }
 scraper = "0.13"
@@ -95,5 +96,6 @@ features = [
     "uuid",
     "json",
     "offline",
-    "chrono"
+    "chrono",
+    "ipnetwork"
 ]

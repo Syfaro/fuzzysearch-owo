@@ -124,7 +124,8 @@ async fn register_post(
     let session_id = models::UserSession::create(
         &pool,
         user_id,
-        models::UserSessionSource::registration(client_ip.ip_addr),
+        models::UserSessionSource::Registration,
+        client_ip.ip_addr.as_deref(),
     )
     .await?;
 
@@ -181,7 +182,8 @@ async fn login_post(
         let session_id = models::UserSession::create(
             &pool,
             user.id,
-            models::UserSessionSource::login(client_ip.ip_addr),
+            models::UserSessionSource::Login,
+            client_ip.ip_addr.as_deref(),
         )
         .await?;
         session.set_session_token(user.id, session_id)?;
@@ -282,7 +284,8 @@ async fn telegram(
     let session_id = models::UserSession::create(
         &pool,
         user_id,
-        models::UserSessionSource::telegram(client_ip.ip_addr),
+        models::UserSessionSource::Telegram,
+        client_ip.ip_addr.as_deref(),
     )
     .await?;
     session.set_session_token(user_id, session_id)?;

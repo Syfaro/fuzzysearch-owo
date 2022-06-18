@@ -260,59 +260,21 @@ impl User {
 #[serde(rename_all = "snake_case", tag = "source", content = "source_data")]
 pub enum UserSessionSource {
     Unknown,
-    Registration(Option<std::net::IpAddr>),
-    Login(Option<std::net::IpAddr>),
-    EmailVerification(Option<std::net::IpAddr>),
-    Telegram(Option<std::net::IpAddr>),
+    Registration,
+    Login,
+    EmailVerification,
+    Telegram,
 }
 
 impl UserSessionSource {
     pub fn name(&self) -> &'static str {
         match self {
             Self::Unknown => "unknown",
-            Self::Registration(_) => "registration",
-            Self::Login(_) => "login",
-            Self::EmailVerification(_) => "email verification",
-            Self::Telegram(_) => "Telegram",
+            Self::Registration => "registration",
+            Self::Login => "login",
+            Self::EmailVerification => "email verification",
+            Self::Telegram => "Telegram",
         }
-    }
-
-    pub fn ip_addr(&self) -> Option<std::net::IpAddr> {
-        match *self {
-            Self::Registration(ip) => ip,
-            Self::Login(ip) => ip,
-            Self::EmailVerification(ip) => ip,
-            Self::Telegram(ip) => ip,
-            _ => None,
-        }
-    }
-
-    pub fn display_ip_addr(&self) -> String {
-        if let Some(ip) = self.ip_addr() {
-            ip.to_string()
-        } else {
-            "unknown".to_string()
-        }
-    }
-
-    fn from_remote_addr(remote_addr: Option<String>) -> Option<std::net::IpAddr> {
-        remote_addr.and_then(|addr| addr.parse().ok())
-    }
-
-    pub fn registration(remote_addr: Option<String>) -> Self {
-        Self::Registration(Self::from_remote_addr(remote_addr))
-    }
-
-    pub fn login(remote_addr: Option<String>) -> Self {
-        Self::Login(Self::from_remote_addr(remote_addr))
-    }
-
-    pub fn email_verification(remote_addr: Option<String>) -> Self {
-        Self::EmailVerification(Self::from_remote_addr(remote_addr))
-    }
-
-    pub fn telegram(remote_addr: Option<String>) -> Self {
-        Self::Telegram(Self::from_remote_addr(remote_addr))
     }
 }
 
@@ -322,18 +284,29 @@ pub struct UserSession {
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub last_used: chrono::DateTime<chrono::Utc>,
     pub source: UserSessionSource,
+    pub ip_addr: Option<std::net::IpAddr>,
 }
 
 impl UserSession {
+    pub fn display_ip_addr(&self) -> String {
+        match self.ip_addr {
+            Some(addr) => addr.to_string(),
+            None => "unknown".to_string(),
+        }
+    }
     pub async fn create(
         conn: &sqlx::Pool<sqlx::Postgres>,
         user_id: Uuid,
         source: UserSessionSource,
+        ip_addr: Option<&str>,
     ) -> Result<Uuid, Error> {
         let id = sqlx::query_file_scalar!(
             "queries/user_session/create.sql",
             user_id,
-            serde_json::to_value(source)?
+            serde_json::to_value(source)?,
+            ip_addr
+                .and_then(|ip| ip.parse::<std::net::IpAddr>().ok())
+                .map(ipnetwork::IpNetwork::from),
         )
         .fetch_one(conn)
         .await?;
@@ -386,6 +359,7 @@ impl UserSession {
                 created_at: row.created_at,
                 last_used: row.last_used,
                 source: serde_json::from_value(row.source).unwrap_or(UserSessionSource::Unknown),
+                ip_addr: row.creation_ip.map(|ip| ip.ip()),
             })
             .fetch_all(conn)
             .await?;
