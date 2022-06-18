@@ -736,7 +736,16 @@ async fn verify_email(
     session: actix_session::Session,
 ) -> Result<HttpResponse, Error> {
     if !models::User::verify_email(&conn, query.user_id, query.verifier).await? {
-        return Err(Error::Missing);
+        if models::User::lookup_by_id(&conn, query.user_id)
+            .await?
+            .is_some()
+        {
+            return Err(Error::user_error(
+                "Account has already been verified or an invalid token was provided.",
+            ));
+        } else {
+            return Err(Error::Missing);
+        }
     };
 
     if user.is_none() {
