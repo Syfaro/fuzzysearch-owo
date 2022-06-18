@@ -547,13 +547,13 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
             .parse()
             .map_err(Error::from_displayable)?;
 
+        let verifier = user.email_verifier.ok_or(Error::Missing)?;
+
         let body = EmailVerify {
             username: user.display_name(),
             link: &format!(
                 "{}/user/email/verify?u={}&v={}",
-                ctx.config.host_url,
-                user.id,
-                user.email_verifier.unwrap_or_else(Uuid::new_v4)
+                ctx.config.host_url, user.id, verifier,
             ),
         }
         .render()?;
