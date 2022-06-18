@@ -162,7 +162,7 @@ async fn settings_post(
         if email_address.is_some() {
             (
                 true,
-                "Your email address was updated, please verify your account.",
+                "Your email address was updated, please verify your new email address.",
             )
         } else {
             (true, "Your email address was removed.")
