@@ -91,15 +91,22 @@
     <div class="columns is-centered">
       <div class="column is-two-thirds-desktop">
         <h1 class="title has-text-centered">FuzzySearch OwO</h1>
+        {% match account %}
+        {% when Some with (account) %}
+        <h2 class="subtitle has-text-centered">
+          Media on <a href="/user/account/{{ account.id }}">{{ account.source_site.to_string() }} &mdash; {{ account.username }}</a>
+        </h2>
+        {% else %}
         <h2 class="subtitle has-text-centered">All Media</h2>
+        {% endmatch %}
 
         {% if !media.is_empty() %}
         <div class="columns is-desktop">
           <div class="column is-one-third-desktop">
             <form method="GET">
-              {% match account_id %}
-              {% when Some with (account_id) %}
-              <input type="hidden" name="account_id" value="{{ account_id }}">
+              {% match account %}
+              {% when Some with (account) %}
+              <input type="hidden" name="account_id" value="{{ account.id }}">
               {% else %}
               {% endmatch %}
 

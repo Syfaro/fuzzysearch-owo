@@ -628,7 +628,7 @@ struct MediaList<'a> {
     media: &'a [models::OwnedMediaItem],
     sort: &'a str,
     pagination_data: PaginationData<'a>,
-    account_id: Option<Uuid>,
+    account: Option<models::LinkedAccount>,
 }
 
 #[get("/list")]
@@ -644,6 +644,15 @@ async fn media_list(
     let media =
         models::OwnedMediaItem::media_page(&conn, user.id, page, sort, query.account_id).await?;
 
+    let account = if let Some(account_id) = query.account_id {
+        match models::LinkedAccount::lookup_by_id(&conn, account_id).await? {
+            Some(account) if account.owner_id == user.id => Some(account),
+            _ => return Err(Error::Missing),
+        }
+    } else {
+        None
+    };
+
     let count = models::OwnedMediaItem::count(&conn, user.id).await?;
     let pagination_data = PaginationData::new(request.uri(), 25, count as u32, page);
 
@@ -651,7 +660,7 @@ async fn media_list(
         media: &media,
         sort: sort.name(),
         pagination_data,
-        account_id: query.account_id,
+        account,
     }
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
