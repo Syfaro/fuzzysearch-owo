@@ -344,6 +344,50 @@
     },
     "query": "UPDATE\n    owned_media_item\nSET\n    content_url = $2,\n    content_size = $3,\n    thumb_url = $4\nWHERE\n    id = $1;\n"
   },
+  "0fb99e1367b4a5cdfa85ed52713db6e75167445f98fc71bb634cd47c40057fb6": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text",
+          "Text"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    user_allowlist (owner_id, site, site_username)\nVALUES\n    ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING id;\n"
+  },
+  "152efaf85da3eadb72bde6c7526f0e4ff037066b5eb34043c2aa0b2705a52910": {
+    "describe": {
+      "columns": [
+        {
+          "name": "exists",
+          "ordinal": 0,
+          "type_info": "Bool"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text",
+          "Text"
+        ]
+      }
+    },
+    "query": "SELECT\n    exists(\n        SELECT\n            1\n        FROM\n            user_allowlist\n        WHERE\n            owner_id = $1\n            AND site = $2\n            AND lower(site_username) = lower($3)\n    );\n"
+  },
   "16eaab434285da83fc7156e52f59e4007d8db3ff41b56d91479943a75fb3a030": {
     "describe": {
       "columns": [
@@ -2123,6 +2167,45 @@
     },
     "query": "SELECT\n    coalesce(count(*), 0) \"count!\",\n    coalesce(sum(content_size)::bigint, 0) \"total_content_size!\"\nFROM\n    owned_media_item\nWHERE\n    owner_id = $1;\n"
   },
+  "d4a9946182d20ea15f426942ab400c0b81f8dc12ac4f2159134c113342621943": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "owner_id",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "site",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "site_username",
+          "ordinal": 3,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Jsonb"
+        ]
+      }
+    },
+    "query": "WITH searches AS (\n    SELECT\n        *\n    FROM\n        jsonb_to_recordset($2::jsonb) AS searches (site text, site_username text)\n)\nSELECT\n    user_allowlist.*\nFROM\n    searches\n    JOIN user_allowlist ON user_allowlist.owner_id = $1\n    AND user_allowlist.site = searches.site\n    AND lower(user_allowlist.site_username) = lower(searches.site_username)\n"
+  },
   "d4fc518c647e8ef3d77601a047a431b9206c67497630668029f77bc09ee8fd86": {
     "describe": {
       "columns": [],
@@ -2483,5 +2566,27 @@
       }
     },
     "query": "UPDATE\n    reddit_subreddit\nSET\n    last_updated = current_timestamp,\n    last_page = $2\nWHERE\n    name = $1;\n"
+  },
+  "fd62ce79aa5c60e52b19841b206b5a55d35c3033216465e6cad4630412ec5ef3": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text",
+          "Text"
+        ]
+      }
+    },
+    "query": "DELETE FROM\n    user_allowlist\nWHERE\n    owner_id = $1\n    AND site = $2\n    AND lower(site_username) = lower($3) RETURNING id;\n"
   }
 }
