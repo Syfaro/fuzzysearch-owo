@@ -719,6 +719,13 @@ async fn email_add_post(
         .finish())
 }
 
+#[derive(Template)]
+#[template(path = "user/verify.html")]
+struct EmailVerify {
+    user: models::User,
+    verifier: Uuid,
+}
+
 #[derive(Deserialize)]
 struct EmailVerifyQuery {
     #[serde(rename = "u")]
@@ -728,15 +735,38 @@ struct EmailVerifyQuery {
 }
 
 #[get("/verify")]
-async fn verify_email(
-    client_ip: ClientIpAddr,
+async fn verify_email_get(
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
     query: web::Query<EmailVerifyQuery>,
+) -> Result<HttpResponse, Error> {
+    if !models::User::check_email_verifier_token(&conn, query.user_id, query.verifier).await? {
+        return Err(Error::user_error(
+            "Account has already been verified or an invalid token was provided.",
+        ));
+    }
+
+    let user = models::User::lookup_by_id(&conn, query.user_id)
+        .await?
+        .ok_or(Error::Missing)?;
+
+    let body = EmailVerify {
+        user,
+        verifier: query.verifier,
+    }
+    .render()?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[post("/verify")]
+async fn verify_email_post(
+    client_ip: ClientIpAddr,
+    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    form: web::Form<EmailVerifyQuery>,
     user: Option<models::User>,
     session: actix_session::Session,
 ) -> Result<HttpResponse, Error> {
-    if !models::User::verify_email(&conn, query.user_id, query.verifier).await? {
-        if models::User::lookup_by_id(&conn, query.user_id)
+    if !models::User::verify_email(&conn, form.user_id, form.verifier).await? {
+        if models::User::lookup_by_id(&conn, form.user_id)
             .await?
             .is_some()
         {
@@ -751,12 +781,12 @@ async fn verify_email(
     if user.is_none() {
         let session_id = models::UserSession::create(
             &conn,
-            query.user_id,
+            form.user_id,
             models::UserSessionSource::EmailVerification,
             client_ip.ip_addr.as_deref(),
         )
         .await?;
-        session.set_session_token(query.user_id, session_id)?;
+        session.set_session_token(form.user_id, session_id)?;
     }
 
     Ok(HttpResponse::Found()
@@ -815,6 +845,11 @@ pub fn service() -> Scope {
             account_verify,
         ]))
         .service(web::scope("/media").service(services![media_list, media_view, media_remove]))
-        .service(web::scope("/email").service(services![email_add, email_add_post, verify_email]))
+        .service(web::scope("/email").service(services![
+            email_add,
+            email_add_post,
+            verify_email_get,
+            verify_email_post
+        ]))
         .service(web::scope("/allowlist").service(services![allowlist_add, allowlist_remove]))
 }

@@ -200,6 +200,22 @@ impl User {
         Ok(())
     }
 
+    pub async fn check_email_verifier_token(
+        conn: &sqlx::PgPool,
+        user_id: Uuid,
+        verifier: Uuid,
+    ) -> Result<bool, Error> {
+        let valid_token = sqlx::query_file_scalar!(
+            "queries/user/check_email_verifier_token.sql",
+            user_id,
+            verifier
+        )
+        .fetch_one(conn)
+        .await?;
+
+        Ok(valid_token.unwrap_or(false))
+    }
+
     pub async fn verify_email(
         conn: &sqlx::Pool<sqlx::Postgres>,
         user_id: Uuid,

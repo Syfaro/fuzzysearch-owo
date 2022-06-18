@@ -1309,6 +1309,27 @@
     },
     "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url,\n    event_count,\n    last_event\nFROM\n    owned_media_item\nWHERE\n    owner_id = $1 AND\n    $4::uuid IS NULL OR account_id = $4\nORDER BY\n    last_modified DESC\nLIMIT\n    $2 OFFSET ($3::integer * $2::integer);\n"
   },
+  "747de7a40d550eff40fab9a7fc525f356b0544119de416fb50be2d838d0c2adc": {
+    "describe": {
+      "columns": [
+        {
+          "name": "exists",
+          "ordinal": 0,
+          "type_info": "Bool"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT\n    exists(\n        SELECT\n            1\n        FROM\n            user_account\n        WHERE\n            id = $1\n            AND email_verifier = $2\n    );\n"
+  },
   "751d48d0988dbf5948192377f4bf36b4b65afbb6c90ec23d12d45afffe182dd5": {
     "describe": {
       "columns": [
