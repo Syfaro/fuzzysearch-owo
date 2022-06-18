@@ -105,9 +105,16 @@ pub async fn notify_for_incoming(
 
     let similar_items = models::OwnedMediaItem::find_similar(&ctx.conn, perceptual_hash).await?;
 
+    let similar_image = models::SimilarImage {
+        site: sub.site,
+        posted_by: sub.posted_by.clone(),
+        page_url: sub.page_url.clone(),
+        content_url: sub.content_url.clone(),
+    };
+
     let futs = similar_items
         .into_iter()
-        .map(|item| notify_found(ctx, sub, item));
+        .map(|item| notify_found(ctx, sub, item, &similar_image));
 
     let mut buffered = futures::stream::iter(futs).buffer_unordered(2);
 
@@ -123,17 +130,35 @@ pub async fn notify_for_incoming(
 async fn notify_found(
     ctx: &JobContext,
     sub: &jobs::IncomingSubmission,
-    similar: models::OwnedMediaItem,
+    owned_item: models::OwnedMediaItem,
+    similar: &models::SimilarImage,
 ) -> Result<(), Error> {
-    tracing::debug!("found similar item owned by {}", similar.owner_id);
+    tracing::debug!("found similar item owned by {}", owned_item.owner_id);
 
-    let user = match models::User::lookup_by_id(&ctx.conn, similar.owner_id).await? {
+    let user = match models::User::lookup_by_id(&ctx.conn, owned_item.owner_id).await? {
         Some(user) => user,
         None => {
             tracing::warn!("could not find referenced user");
             return Ok(());
         }
     };
+
+    models::UserEvent::similar_found(
+        &ctx.conn,
+        &ctx.redis,
+        user.id,
+        owned_item.id,
+        similar.clone(),
+        None,
+    )
+    .await?;
+
+    if let Some(ref posted_by) = sub.posted_by {
+        if models::UserAllowlist::is_allowed(&ctx.conn, user.id, sub.site, posted_by).await? {
+            tracing::info!("user allowlisted poster");
+            return Ok(());
+        }
+    }
 
     let emails_enabled: setting::EmailNotifications = models::UserSetting::get(&ctx.conn, user.id)
         .await?
@@ -151,7 +176,7 @@ async fn notify_found(
 
     match user.email {
         Some(ref email) if user.email_verifier.is_none() && emails_enabled.0 => {
-            if let Err(err) = notify_email(ctx, &user, email, sub, &similar).await {
+            if let Err(err) = notify_email(ctx, &user, email, sub, &owned_item).await {
                 tracing::error!("could not send notification email: {}", err);
             }
         }
@@ -160,7 +185,7 @@ async fn notify_found(
 
     match user.telegram_id {
         Some(telegram_id) if telegram_enabled.0 => {
-            if let Err(err) = notify_telegram(ctx, &user, telegram_id, sub, &similar).await {
+            if let Err(err) = notify_telegram(ctx, &user, telegram_id, sub, &owned_item).await {
                 tracing::error!("could not send telegram notification: {}", err);
             }
         }
@@ -185,14 +210,14 @@ async fn notify_email(
     user: &models::User,
     email: &str,
     sub: &jobs::IncomingSubmission,
-    similar: &models::OwnedMediaItem,
+    owned_item: &models::OwnedMediaItem,
 ) -> Result<(), Error> {
     let body = SimilarEmailTemplate {
         username: user.display_name(),
-        source_link: similar
+        source_link: owned_item
             .link
             .as_deref()
-            .unwrap_or_else(|| similar.content_url.as_deref().unwrap_or("unknown")),
+            .unwrap_or_else(|| owned_item.content_url.as_deref().unwrap_or("unknown")),
         site_name: &sub.site.to_string(),
         poster_name: sub.posted_by.as_deref().unwrap_or("unknown"),
         similar_link: sub.page_url.as_deref().unwrap_or(&sub.content_url),
@@ -230,14 +255,14 @@ async fn notify_telegram(
     user: &models::User,
     telegram_id: i64,
     sub: &jobs::IncomingSubmission,
-    similar: &models::OwnedMediaItem,
+    owned_item: &models::OwnedMediaItem,
 ) -> Result<(), Error> {
     let body = SimilarTelegramTemplate {
         username: user.display_name(),
-        source_link: similar
+        source_link: owned_item
             .link
             .as_deref()
-            .unwrap_or_else(|| similar.content_url.as_deref().unwrap_or("unknown")),
+            .unwrap_or_else(|| owned_item.content_url.as_deref().unwrap_or("unknown")),
         site_name: &sub.site.to_string(),
         poster_name: sub.posted_by.as_deref().unwrap_or("unknown"),
         similar_link: sub.page_url.as_deref().unwrap_or(&sub.content_url),
@@ -321,8 +346,8 @@ async fn import_add(
     Ok(())
 }
 
-/// Attempt to download a file, ensuring it does not exceed the maximum download
-/// size.
+/// Attempt to download an image, ensuring it does not exceed the maximum
+/// download size.
 async fn download_image(ctx: &JobContext, url: &str) -> Result<image::DynamicImage, Error> {
     let mut data = ctx.client.get(url).send().await?;
     let mut buf = bytes::BytesMut::new();

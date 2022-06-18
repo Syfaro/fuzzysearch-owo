@@ -1,4 +1,5 @@
 use std::{
+    collections::{HashMap, HashSet},
     fmt::{Debug, Display},
     str::FromStr,
 };
@@ -1011,7 +1012,7 @@ impl LinkedAccount {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "PascalCase")]
 pub enum Site {
     FurAffinity,
@@ -1027,6 +1028,20 @@ pub enum Site {
 }
 
 impl Site {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::FurAffinity => "FurAffinity",
+            Self::E621 => "e621",
+            Self::Weasyl => "Weasyl",
+            Self::Twitter => "Twitter",
+            Self::Patreon => "Patreon",
+            Self::FList => "F-list",
+            Self::DeviantArt => "DeviantArt",
+            Self::Reddit => "Reddit",
+            Self::InternalTesting => "InternalTesting",
+        }
+    }
+
     pub async fn collected_site(
         &self,
         config: &crate::Config,
@@ -1073,7 +1088,10 @@ impl FromStr for Site {
             "DeviantArt" => Site::DeviantArt,
             "Reddit" => Site::Reddit,
             "Internal Testing" => Site::InternalTesting,
-            _ => return Err("unknown source site"),
+            _ => {
+                tracing::warn!(value, "had unknown site");
+                return Err("unknown source site");
+            }
         };
 
         Ok(site)
@@ -1133,6 +1151,12 @@ impl SimilarImage {
             }
             (None, None) => format!("Image was found on {}: {}", self.site, self.content_url),
         }
+    }
+
+    pub fn poster_pair(&self) -> Option<(Site, String)> {
+        self.posted_by
+            .as_deref()
+            .map(|posted_by| (self.site, posted_by.to_lowercase()))
     }
 }
 
@@ -1622,6 +1646,110 @@ impl RedditImage {
             .await?;
 
         Ok(images)
+    }
+}
+
+pub struct UserAllowlist {
+    pub id: Uuid,
+    pub owner_id: Uuid,
+    pub site: Site,
+    pub site_username: String,
+}
+
+#[derive(Serialize)]
+struct AllowlistQueryItem {
+    site: String,
+    site_username: String,
+}
+
+impl UserAllowlist {
+    pub async fn is_allowed(
+        conn: &sqlx::PgPool,
+        owner_id: Uuid,
+        site: Site,
+        site_username: &str,
+    ) -> Result<bool, Error> {
+        let exists = sqlx::query_file_scalar!(
+            "queries/user_allowlist/is_allowed.sql",
+            owner_id,
+            site.to_string(),
+            site_username,
+        )
+        .fetch_one(conn)
+        .await?;
+
+        Ok(exists.unwrap_or(false))
+    }
+
+    pub async fn lookup_many<'a>(
+        conn: &sqlx::PgPool,
+        owner_id: Uuid,
+        items: impl Iterator<Item = (Site, &'a str)>,
+    ) -> Result<HashMap<(Site, String), Uuid>, Error> {
+        let items: HashSet<_> = items.into_iter().collect();
+
+        let query_items: Vec<_> = items
+            .into_iter()
+            .map(|item| AllowlistQueryItem {
+                site: item.0.to_string(),
+                site_username: item.1.to_string(),
+            })
+            .collect();
+
+        let results: HashMap<_, _> = sqlx::query_file!(
+            "queries/user_allowlist/lookup_many.sql",
+            owner_id,
+            serde_json::to_value(query_items)?
+        )
+        .map(|row| Self {
+            id: row.id,
+            owner_id: row.owner_id,
+            site: row.site.parse().unwrap(),
+            site_username: row.site_username,
+        })
+        .fetch_all(conn)
+        .await?
+        .into_iter()
+        .map(|row| ((row.site, row.site_username.to_lowercase()), row.id))
+        .collect();
+
+        Ok(results)
+    }
+
+    pub async fn add(
+        conn: &sqlx::PgPool,
+        owner_id: Uuid,
+        site: Site,
+        site_username: &str,
+    ) -> Result<Option<Uuid>, Error> {
+        let id = sqlx::query_file_scalar!(
+            "queries/user_allowlist/add.sql",
+            owner_id,
+            site.to_string(),
+            site_username
+        )
+        .fetch_optional(conn)
+        .await?;
+
+        Ok(id)
+    }
+
+    pub async fn remove(
+        conn: &sqlx::PgPool,
+        owner_id: Uuid,
+        site: Site,
+        site_username: &str,
+    ) -> Result<Option<Uuid>, Error> {
+        let id = sqlx::query_file_scalar!(
+            "queries/user_allowlist/remove.sql",
+            owner_id,
+            site.to_string(),
+            site_username
+        )
+        .fetch_optional(conn)
+        .await?;
+
+        Ok(id)
     }
 }
 

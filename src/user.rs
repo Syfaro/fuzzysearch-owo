@@ -461,13 +461,16 @@ async fn account_verify(
 #[derive(Template)]
 #[template(path = "user/media/view.html")]
 struct MediaView<'a> {
+    url: String,
     media: models::OwnedMediaItem,
     similar_image_events: &'a [(chrono::DateTime<chrono::Utc>, models::SimilarImage)],
     other_events: &'a [models::UserEvent],
+    allowlisted_users: HashMap<(Site, String), Uuid>,
 }
 
 #[get("/view/{media_id}")]
 async fn media_view(
+    request: actix_web::HttpRequest,
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
     path: web::Path<(Uuid,)>,
     user: models::User,
@@ -491,10 +494,22 @@ async fn media_view(
         })
         .collect();
 
+    let site_user_pairs = similar_events.iter().flat_map(|(_time, similar)| {
+        similar
+            .posted_by
+            .as_deref()
+            .map(|posted_by| (similar.site, posted_by))
+    });
+
+    let allowlisted_users =
+        models::UserAllowlist::lookup_many(&conn, user.id, site_user_pairs).await?;
+
     let body = MediaView {
+        url: request.uri().to_string(),
         media,
         similar_image_events: &similar_events,
         other_events: &other_events,
+        allowlisted_users,
     }
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
@@ -730,6 +745,39 @@ async fn verify_email(
         .finish())
 }
 
+#[derive(Debug, Deserialize)]
+struct AllowlistForm {
+    redirect_url: String,
+    site: Site,
+    site_username: String,
+}
+
+#[post("/add")]
+async fn allowlist_add(
+    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    form: web::Form<AllowlistForm>,
+    user: models::User,
+) -> Result<HttpResponse, Error> {
+    models::UserAllowlist::add(&conn, user.id, form.site, &form.site_username).await?;
+
+    Ok(HttpResponse::Found()
+        .insert_header(("Location", form.redirect_url.to_owned()))
+        .finish())
+}
+
+#[post("/remove")]
+async fn allowlist_remove(
+    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    form: web::Form<AllowlistForm>,
+    user: models::User,
+) -> Result<HttpResponse, Error> {
+    models::UserAllowlist::remove(&conn, user.id, form.site, &form.site_username).await?;
+
+    Ok(HttpResponse::Found()
+        .insert_header(("Location", form.redirect_url.to_owned()))
+        .finish())
+}
+
 pub fn service() -> Scope {
     web::scope("/user")
         .service(services![
@@ -749,4 +797,5 @@ pub fn service() -> Scope {
         ]))
         .service(web::scope("/media").service(services![media_list, media_view, media_remove]))
         .service(web::scope("/email").service(services![email_add, email_add_post, verify_email]))
+        .service(web::scope("/allowlist").service(services![allowlist_add, allowlist_remove]))
 }

@@ -48,7 +48,7 @@
     </div>
 
     <div class="columns is-centered">
-      <div class="column is-two-thirds-desktop">
+      <div class="column">
         <h2 class="subtitle has-text-centered">Matched Images</h2>
 
         <div class="table-container">
@@ -59,6 +59,7 @@
                 <th>Posted By</th>
                 <th>Found</th>
                 <th>Link</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -84,6 +85,23 @@
                   <span class="match-link">
                     <a href="{{ image.best_link() }}" target="_blank">{{ image.best_link() }}</a>
                   </span>
+                </td>
+                <td class="has-text-centered">
+                  <form method="POST">
+                    <input type="hidden" name="redirect_url" value="{{ url }}">
+                    <input type="hidden" name="site" value="{{ image.site.as_str() }}">
+                    <input type="hidden" name="site_username" value="{{ image.posted_by.as_deref().unwrap_or_default() }}">
+                    {% match image.poster_pair() %}
+                    {% when Some with (poster_pair) %}
+                    {% if allowlisted_users.contains_key(poster_pair) %}
+                    <button formaction="/user/allowlist/remove" class="button has-tooltip-left" data-tooltip="Receive notifications when this account posts on this site">Un-allowlist Poster</a>
+                    {% else %}
+                    <button formaction="/user/allowlist/add" class="button has-tooltip-left" data-tooltip="Skip sending notifications when this account posts on this site">Allowlist Poster</a>
+                    {% endif %}
+                    {% else %}
+                    <button class="button is-text" disabled>No Actions Available</button>
+                    {% endmatch %}
+                  </form>
                 </td>
               </tr>
               {% endfor %}
