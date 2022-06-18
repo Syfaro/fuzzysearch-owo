@@ -435,6 +435,11 @@
           "name": "source",
           "ordinal": 4,
           "type_info": "Jsonb"
+        },
+        {
+          "name": "creation_ip",
+          "ordinal": 5,
+          "type_info": "Inet"
         }
       ],
       "nullable": [
@@ -442,7 +447,8 @@
         false,
         false,
         false,
-        false
+        false,
+        true
       ],
       "parameters": {
         "Left": [
@@ -1591,6 +1597,28 @@
     },
     "query": "INSERT INTO\n    reddit_post (\n        fullname,\n        subreddit_name,\n        posted_at,\n        author,\n        permalink,\n        content_link\n    )\nVALUES\n    ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING;\n"
   },
+  "8f4e0086230b5c7d4d81493b63a56de3f721cab7d6d9a7150313265677003fa0": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Jsonb",
+          "Inet"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    user_session (user_id, source, creation_ip)\nVALUES\n    ($1, $2, $3) RETURNING id;\n"
+  },
   "930ae63c1ef71a87799036a706f5ce4a5522872ba7c1aad2f2c8ad68b2d4f883": {
     "describe": {
       "columns": [
@@ -2119,27 +2147,6 @@
       }
     },
     "query": "INSERT INTO\n    reddit_subreddit (name)\nVALUES\n    (lower($1)) ON CONFLICT DO NOTHING;\n"
-  },
-  "cdae457cecd94db4aa519b8d230466eea08bb0783348aabcc09a9fcef8364c25": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Uuid"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Jsonb"
-        ]
-      }
-    },
-    "query": "INSERT INTO\n    user_session (user_id, source)\nVALUES\n    ($1, $2) RETURNING id;\n"
   },
   "d323b8bbcee14a2712722f63fe7d5fbdcd9ee5589640eb1679779e8eeecd70ea": {
     "describe": {
