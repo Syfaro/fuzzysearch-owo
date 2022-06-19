@@ -4,7 +4,7 @@ use rand::Rng;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
-use crate::{jobs, models, Error};
+use crate::{jobs, models, Error, WrappedTemplate};
 
 pub fn service() -> Scope {
     web::scope("/admin").service(services![
@@ -24,7 +24,11 @@ struct Admin {
 }
 
 #[get("/tools")]
-async fn admin(conn: web::Data<sqlx::PgPool>, user: models::User) -> Result<HttpResponse, Error> {
+async fn admin(
+    request: actix_web::HttpRequest,
+    conn: web::Data<sqlx::PgPool>,
+    user: models::User,
+) -> Result<HttpResponse, Error> {
     if !user.is_admin {
         return Err(actix_web::error::ErrorUnauthorized("Unauthorized").into());
     }
@@ -38,6 +42,7 @@ async fn admin(conn: web::Data<sqlx::PgPool>, user: models::User) -> Result<Http
         subreddits,
         recent_flist_runs,
     }
+    .wrap(&request, Some(&user))
     .render()?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))

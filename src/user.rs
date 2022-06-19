@@ -14,13 +14,13 @@ use crate::{
     jobs,
     models::{self, setting, Site, UserSettingItem},
     routes::*,
-    ClientIpAddr, Error,
+    ClientIpAddr, Error, WrappedTemplate,
 };
 
 #[derive(Template)]
 #[template(path = "user/index.html")]
-struct Home {
-    user: models::User,
+struct Home<'a> {
+    user: &'a models::User,
 
     item_count: i64,
     total_content_size: i64,
@@ -31,6 +31,7 @@ struct Home {
 
 #[get("/home")]
 async fn home(
+    request: actix_web::HttpRequest,
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
@@ -42,12 +43,13 @@ async fn home(
         futures::try_join!(user_item_count, recent_media, monitored_accounts)?;
 
     let body = Home {
-        user,
+        user: &user,
         item_count,
         total_content_size,
         recent_media,
         monitored_accounts,
     }
+    .wrap(&request, Some(&user))
     .render()?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
@@ -67,6 +69,7 @@ struct Settings<'a> {
 
 #[get("/settings")]
 async fn settings_get(
+    request: actix_web::HttpRequest,
     telegram_login: web::Data<auth::TelegramLoginConfig>,
     conn: web::Data<sqlx::PgPool>,
     user: models::User,
@@ -88,6 +91,7 @@ async fn settings_get(
         email_notifications,
         telegram_notifications,
     }
+    .wrap(&request, Some(&user))
     .render()?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
@@ -95,6 +99,7 @@ async fn settings_get(
 
 #[post("/settings")]
 async fn settings_post(
+    request: actix_web::HttpRequest,
     telegram_login: web::Data<auth::TelegramLoginConfig>,
     conn: web::Data<sqlx::PgPool>,
     faktory: web::Data<jobs::FaktoryClient>,
@@ -180,6 +185,7 @@ async fn settings_post(
         email_notifications,
         telegram_notifications,
     }
+    .wrap(&request, Some(&user))
     .render()?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
@@ -311,14 +317,17 @@ async fn single(
 struct AccountLink;
 
 #[get("/link")]
-async fn account_link_get(user: models::User) -> Result<HttpResponse, Error> {
+async fn account_link_get(
+    request: actix_web::HttpRequest,
+    user: models::User,
+) -> Result<HttpResponse, Error> {
     if !user.has_verified_account() {
         return Err(Error::UserError(
             "You must verify your email address first.".into(),
         ));
     }
 
-    let body = AccountLink.render()?;
+    let body = AccountLink.wrap(&request, Some(&user)).render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
@@ -401,6 +410,7 @@ struct AccountView {
 
 #[get("/{account_id}")]
 async fn account_view(
+    request: actix_web::HttpRequest,
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
     path: web::Path<(Uuid,)>,
     user: models::User,
@@ -427,6 +437,7 @@ async fn account_view(
         total_content_size,
         recent_media,
     }
+    .wrap(&request, Some(&user))
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -511,6 +522,7 @@ async fn media_view(
         other_events: &other_events,
         allowlisted_users,
     }
+    .wrap(&request, Some(&user))
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -639,7 +651,7 @@ async fn media_list(
     query: web::Query<MediaListQuery>,
 ) -> Result<HttpResponse, Error> {
     let page = query.page.unwrap_or(0);
-    let sort = query.sort.unwrap_or(models::MediaListSort::Added);
+    let sort = query.sort.unwrap_or(models::MediaListSort::Recent);
 
     let media =
         models::OwnedMediaItem::media_page(&conn, user.id, page, sort, query.account_id).await?;
@@ -662,6 +674,7 @@ async fn media_list(
         pagination_data,
         account,
     }
+    .wrap(&request, Some(&user))
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -673,10 +686,14 @@ struct AddEmail {
 }
 
 #[get("/add")]
-async fn email_add(_user: models::User) -> Result<HttpResponse, Error> {
+async fn email_add(
+    request: actix_web::HttpRequest,
+    user: models::User,
+) -> Result<HttpResponse, Error> {
     let body = AddEmail {
         error_message: None,
     }
+    .wrap(&request, Some(&user))
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -721,8 +738,8 @@ async fn email_add_post(
 
 #[derive(Template)]
 #[template(path = "user/verify.html")]
-struct EmailVerify {
-    user: models::User,
+struct EmailVerify<'a> {
+    user: &'a models::User,
     verifier: Uuid,
 }
 
@@ -736,6 +753,7 @@ struct EmailVerifyQuery {
 
 #[get("/verify")]
 async fn verify_email_get(
+    request: actix_web::HttpRequest,
     conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
     query: web::Query<EmailVerifyQuery>,
 ) -> Result<HttpResponse, Error> {
@@ -750,9 +768,10 @@ async fn verify_email_get(
         .ok_or(Error::Missing)?;
 
     let body = EmailVerify {
-        user,
+        user: &user,
         verifier: query.verifier,
     }
+    .wrap(&request, Some(&user))
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -829,8 +848,8 @@ async fn allowlist_remove(
 
 #[derive(Template)]
 #[template(path = "user/unsubscribe.html")]
-struct Unsubscribe {
-    user: models::User,
+struct Unsubscribe<'a> {
+    user: &'a models::User,
     verifier: Uuid,
 }
 
@@ -844,6 +863,7 @@ struct UnsubscribeQuery {
 
 #[get("/unsubscribe")]
 async fn unsubscribe_get(
+    request: actix_web::HttpRequest,
     conn: web::Data<sqlx::PgPool>,
     query: web::Query<UnsubscribeQuery>,
 ) -> Result<HttpResponse, Error> {
@@ -856,9 +876,10 @@ async fn unsubscribe_get(
     }
 
     let body = Unsubscribe {
-        user,
+        user: &user,
         verifier: query.verifier,
     }
+    .wrap(&request, Some(&user))
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }

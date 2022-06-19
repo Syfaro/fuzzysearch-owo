@@ -1,14 +1,10 @@
-{% extends "_base.html" %}
-
-{% block content %}
 <section class="section">
   <div class="container">
     <div class="columns is-centered">
       <div class="column is-one-third">
-        <h1 class="title has-text-centered">FuzzySearch OwO</h1>
-        <h2 class="subtitle has-text-centered">
+        <h1 class="title has-text-centered">
           Welcome, {{ user.display_name() }}!
-        </h2>
+        </h1>
 
         <nav class="level">
           <div class="level-item has-text-centered">
@@ -27,7 +23,7 @@
         </nav>
 
         <div class="block has-text-centered">
-          <h3 class="subtitle is-4">Monitored Accounts</h3>
+          <h2 class="subtitle is-4">Monitored Accounts</h2>
 
           {% if user.has_verified_account() %}
           {% if monitored_accounts.is_empty() %}
@@ -61,7 +57,7 @@
         </div>
 
         <div class="block has-text-centered">
-          <h3 class="subtitle is-4">Manual Upload</h3>
+          <h2 class="subtitle is-4">Manual Upload</h2>
 
           <form method="POST" action="/user/single" enctype="multipart/form-data">
             <div class="field">
@@ -121,28 +117,7 @@
           <a href="/user/media/list" class="button is-link is-fullwidth">View All Media</a>
         </div>
         {% endif %}
-
-        <hr>
-
-        <div class="block">
-          <form method="POST" action="/auth/logout">
-            <div class="field">
-              <a class="button is-primary is-fullwidth" href="/user/settings">Settings</a>
-            </div>
-
-            <div class="field is-grouped">
-              <div class="control is-flex-grow-1">
-                <button class="button is-danger is-outlined is-fullwidth">Sign Out</button>
-              </div>
-
-              <div class="control is-flex-grow-1">
-                <a class="button is-info is-outlined is-fullwidth" href="/auth/sessions">Active Sessions</a>
-              </div>
-            </div>
-          </form>
-        </div>
       </div>
     </div>
   </div>
 </section>
-{% endblock %}

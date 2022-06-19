@@ -1,12 +1,8 @@
-{% extends "_base.html" %}
-
-{% block content %}
 <section class="section">
   <div class="container">
     <div class="columns is-centered">
       <div class="column is-one-third">
-        <h1 class="title has-text-centered">FuzzySearch OwO</h1>
-        <h2 class="subtitle has-text-centered">Link Account</h2>
+        <h1 class="title has-text-centered">Link Account</h1>
 
         <div class="block">
           <form method="POST" action="/user/account/link">
@@ -44,6 +40,7 @@
   </div>
 </section>
 
+{% block footer %}
 <script>
   const noFormSites = ['Patreon', 'DeviantArt'];
 

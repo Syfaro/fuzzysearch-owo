@@ -1,12 +1,8 @@
-{% extends "_base.html" %}
-
-{% block content %}
 <section class="section">
   <div class="container">
     <div class="columns is-centered">
       <div class="column is-one-third">
-        <h1 class="title has-text-centered">FuzzySearch OwO</h1>
-        <h2 class="subtitle has-text-centered">Settings</h2>
+        <h1 class="title has-text-centered">Settings</h1>
 
         {% match saved_message %}
         {% when Some with ((successful, saved_message)) %}
@@ -18,7 +14,7 @@
 
         <form method="POST">
           <div class="block">
-            <h3 class="subtitle is-4">Profile</h3>
+            <h2 class="subtitle is-4">Profile</h2>
 
             <div class="field">
               <label class="label">Name</label>
@@ -42,7 +38,7 @@
           </div>
 
           <div class="block">
-            <h3 class="subtitle is-4">Notifications</h3>
+            <h2 class="subtitle is-4">Notifications</h2>
 
             <div class="field">
               <label class="checkbox">
@@ -75,21 +71,21 @@
             </div>
           </div>
 
-          <div class="field">
+          <div class="block">
+            <h2 class="subtitle is-4">Security</h2>
+
+            <a class="button is-link is-outlined" href="/auth/sessions">Active Sessions </a>
+          </div>
+
+          <div class="field mt-6">
             <div class="control">
               <button class="button is-primary is-fullwidth">Save Settings</button>
             </div>
           </div>
 
-          <div class="field">
-            <div class="control">
-              <a href="/user/home" class="button is-link is-fullwidth">Return Home</a>
-            </div>
-          </div>
-
           <div class="field mt-6">
             <div class="control">
-              <button id="delete-account" class="button is-danger is-outline is-fullwidth"
+              <button id="delete-account" class="button is-danger is-outlined"
                 formaction="/user/delete">Delete Account</button>
             </div>
           </div>
@@ -98,7 +94,6 @@
     </div>
   </div>
 </section>
-{% endblock %}
 
 {% block footer %}
 <script>

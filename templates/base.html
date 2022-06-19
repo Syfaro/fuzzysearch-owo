@@ -1,0 +1,61 @@
+{% extends "_base.html" %}
+
+{% macro naventry(class, name, path) %}
+<a class="{{ class }} {% if uri.path() == path %} is-active {% endif %}" href="{{ path }}">
+  {{ name }}
+</a>
+{% endmacro %}
+
+{% macro navitem(name, path) %}
+{% call naventry("navbar-item", name, path) %}
+{% endmacro %}
+
+{% block content %}
+<nav class="navbar is-primary">
+  <div class="container">
+    <div class="navbar-brand">
+      <a class="navbar-item" href="/">FuzzySearch OwO</a>
+    </div>
+
+    <div class="navbar-menu">
+      <div class="navbar-start">
+        {% match user %}
+        {% when Some with (user) %}
+        {% call navitem("Home", "/user/home") %}
+        {% call navitem("All Media", "/user/media/list") %}
+        {% else %}
+        {% call navitem("Home", "/") %}
+        {% endmatch %}
+      </div>
+
+      <div class="navbar-end">
+        {% match user %}
+        {% when Some with (user) %}
+        {% if user.is_admin %}
+        {% call navitem("Admin Tools", "/admin/tools") %}
+        {% endif %}
+
+        <div class="navbar-item has-dropdown is-hoverable">
+          {% call naventry("navbar-link", user.display_name(), "/user/settings") %}
+
+          <div class="navbar-dropdown">
+            {% call navitem("Settings", "/user/settings") %}
+            <hr class="navbar-divider">
+
+            <form method="POST" action="/auth/logout">
+              <div class="navbar-item">
+                <button class="button is-small is-outlined is-danger is-fullwidth">Sign Out</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        {% else %}
+        {% call navitem("Sign In", "/auth/login") %}
+        {% endmatch %}
+      </div>
+    </div>
+  </div>
+</nav>
+
+{{ content|safe }}
+{% endblock %}

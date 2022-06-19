@@ -217,18 +217,52 @@ fn load_config() -> Config {
 }
 
 #[derive(Template)]
+#[template(path = "base.html")]
+pub struct BaseTemplate<'a, T: std::fmt::Display + askama::Template> {
+    pub user: Option<&'a models::User>,
+    pub uri: &'a actix_web::http::Uri,
+
+    pub content: &'a T,
+}
+
+pub trait WrappedTemplate: Sized + std::fmt::Display + askama::Template {
+    fn wrap<'a>(
+        &'a self,
+        request: &'a actix_web::HttpRequest,
+        user: Option<&'a models::User>,
+    ) -> BaseTemplate<'a, Self>;
+}
+
+impl<T: Sized + std::fmt::Display + askama::Template> WrappedTemplate for T {
+    fn wrap<'a>(
+        &'a self,
+        request: &'a actix_web::HttpRequest,
+        user: Option<&'a models::User>,
+    ) -> BaseTemplate<'a, Self> {
+        BaseTemplate {
+            user,
+            uri: request.uri(),
+            content: &self,
+        }
+    }
+}
+
+#[derive(Template)]
 #[template(path = "index.html")]
 struct Home;
 
 #[actix_web::get("/")]
-async fn index(user: Option<models::User>) -> Result<HttpResponse, Error> {
+async fn index(
+    request: actix_web::HttpRequest,
+    user: Option<models::User>,
+) -> Result<HttpResponse, Error> {
     if user.is_some() {
         return Ok(HttpResponse::Found()
             .insert_header(("Location", routes::USER_HOME))
             .finish());
     }
 
-    let body = Home.render()?;
+    let body = Home.wrap(&request, user.as_ref()).render()?;
     Ok(HttpResponse::Ok().body(body))
 }
 

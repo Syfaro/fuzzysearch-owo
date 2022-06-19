@@ -1,12 +1,8 @@
-{% extends "_base.html" %}
-
-{% block content %}
 <section class="section">
   <div class="container">
     <div class="columns is-centered">
       <div class="column is-one-third">
-        <h1 class="title has-text-centered">FuzzySearch OwO</h1>
-        <h2 class="subtitle has-text-centered">Sessions</h2>
+        <h1 class="title has-text-centered">Active Sessions</h1>
 
         {% for session in sessions %}
         <div class="block">
@@ -33,19 +29,14 @@
               {% else %}
               <form method="POST" action="/auth/sessions/remove" class="card-footer-item is-paddingless">
                 <input type="hidden" name="session_id" value="{{ session.id }}">
-                <button class="button is-fullwidth is-danger">Remove Session</button>
+                <button class="button is-fullwidth is-danger">End Session</button>
               </form>
               {% endif %}
             </footer>
           </div>
         </div>
         {% endfor %}
-
-        <div class="control">
-          <a href="/user/home" class="button is-link is-fullwidth">Return Home</a>
-        </div>
       </div>
     </div>
   </div>
 </section>
-{% endblock %}

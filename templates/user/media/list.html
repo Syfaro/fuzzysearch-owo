@@ -1,5 +1,3 @@
-{% extends "_base.html" %}
-
 {% macro small_pagination(data) %}
 <nav class="pagination is-justify-content-end">
   {% let last_page = data.last_page() %}
@@ -85,19 +83,17 @@
   </option>
 {% endmacro %}
 
-{% block content %}
 <section class="section">
   <div class="container">
     <div class="columns is-centered">
       <div class="column is-two-thirds-desktop">
-        <h1 class="title has-text-centered">FuzzySearch OwO</h1>
         {% match account %}
         {% when Some with (account) %}
-        <h2 class="subtitle has-text-centered">
+        <h1 class="title has-text-centered">
           Media on <a href="/user/account/{{ account.id }}">{{ account.source_site.to_string() }} &mdash; {{ account.username }}</a>
-        </h2>
+        </h1>
         {% else %}
-        <h2 class="subtitle has-text-centered">All Media</h2>
+        <h1 class="title has-text-centered">All Media</h1>
         {% endmatch %}
 
         {% if !media.is_empty() %}
@@ -209,14 +205,5 @@
         {% call pagination(pagination_data) %}
       </div>
     </div>
-
-    <div class="columns is-centered">
-      <div class="column is-one-third">
-        <div class="control">
-          <a href="/user/home" class="button is-link is-fullwidth is-outlined">Return Home</a>
-        </div>
-      </div>
-    </div>
   </div>
 </section>
-{% endblock %}

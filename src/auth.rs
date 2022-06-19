@@ -12,7 +12,7 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 use zxcvbn::zxcvbn;
 
-use crate::{models, routes::*, ClientIpAddr, Error};
+use crate::{models, routes::*, ClientIpAddr, Error, WrappedTemplate};
 
 pub trait FuzzySearchSessionToken {
     const TOKEN_NAME: &'static str;
@@ -57,12 +57,14 @@ struct Register<'a> {
 
 #[get("/register")]
 async fn register_get(
+    request: actix_web::HttpRequest,
     telegram_login: web::Data<TelegramLoginConfig>,
 ) -> Result<HttpResponse, Error> {
     let body = Register {
         telegram_login: &telegram_login,
         error_messages: None,
     }
+    .wrap(&request, None)
     .render()?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
@@ -145,6 +147,7 @@ struct Login<'a> {
 
 #[get("/login")]
 async fn login_get(
+    request: actix_web::HttpRequest,
     telegram_login: web::Data<TelegramLoginConfig>,
     session: Session,
 ) -> Result<HttpResponse, Error> {
@@ -158,6 +161,7 @@ async fn login_get(
         telegram_login: &telegram_login,
         error_message: None,
     }
+    .wrap(&request, None)
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -321,6 +325,7 @@ struct Sessions {
 
 #[get("/sessions")]
 async fn sessions(
+    request: actix_web::HttpRequest,
     session: Session,
     user: models::User,
     conn: web::Data<sqlx::PgPool>,
@@ -335,6 +340,7 @@ async fn sessions(
         current_session_id: session_token.session_id,
         sessions,
     }
+    .wrap(&request, Some(&user))
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }

@@ -1,12 +1,8 @@
-{% extends "_base.html" %}
-
-{% block content %}
 <section class="section">
   <div class="container">
     <div class="columns is-centered">
       <div class="column is-one-third">
-        <h1 class="title has-text-centered">FuzzySearch OwO</h1>
-        <h2 class="subtitle has-text-centered">Sign In</h2>
+        <h1 class="title has-text-centered">Sign In</h1>
 
         {% match error_message %}
         {% when Some with (msg) %}
@@ -49,4 +45,3 @@
     </div>
   </div>
 </section>
-{% endblock %}
