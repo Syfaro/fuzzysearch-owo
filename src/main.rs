@@ -263,7 +263,20 @@ async fn index(
     }
 
     let body = Home.wrap(&request, user.as_ref()).render()?;
-    Ok(HttpResponse::Ok().body(body))
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[derive(Template)]
+#[template(path = "changelog.html")]
+struct Changelog;
+
+#[actix_web::get("/changelog")]
+async fn changelog(
+    request: actix_web::HttpRequest,
+    user: Option<models::User>,
+) -> Result<HttpResponse, Error> {
+    let body = Changelog.wrap(&request, user.as_ref()).render()?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
 async fn not_found() -> Result<HttpResponse, Error> {
@@ -459,6 +472,7 @@ async fn main() {
                     .service(admin::service())
                     .service(files)
                     .service(index)
+                    .service(changelog)
                     .default_service(web::to(not_found))
             })
             .workers(http_workers)
