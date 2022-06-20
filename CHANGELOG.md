@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.10.0 — June 20th, 2022
+
+* Added new event feed view which shows events for all media and provides
+  options to filter results by site or allowlist status.
+
 ## v0.9.2 — June 20th, 2022
 
 * Added changelog.
