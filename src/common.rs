@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use askama::Template;
 use futures::{StreamExt, TryFutureExt};
 use lettre::AsyncTransport;
@@ -103,8 +105,6 @@ pub async fn notify_for_incoming(
         return Ok(());
     }
 
-    let similar_items = models::OwnedMediaItem::find_similar(&ctx.conn, perceptual_hash).await?;
-
     let similar_image = models::SimilarImage {
         site: sub.site,
         posted_by: sub.posted_by.clone(),
@@ -112,9 +112,18 @@ pub async fn notify_for_incoming(
         content_url: sub.content_url.clone(),
     };
 
-    let futs = similar_items
+    let mut items_by_owner = HashMap::new();
+
+    for item in models::OwnedMediaItem::find_similar(&ctx.conn, perceptual_hash).await? {
+        items_by_owner
+            .entry(item.owner_id)
+            .or_insert_with(Vec::new)
+            .push(item);
+    }
+
+    let futs = items_by_owner
         .into_iter()
-        .map(|item| notify_found(ctx, sub, item, &similar_image));
+        .map(|(owner_id, items)| notify_found(ctx, sub, owner_id, items, &similar_image));
 
     let mut buffered = futures::stream::iter(futs).buffer_unordered(2);
 
@@ -130,12 +139,17 @@ pub async fn notify_for_incoming(
 async fn notify_found(
     ctx: &JobContext,
     sub: &jobs::IncomingSubmission,
-    owned_item: models::OwnedMediaItem,
+    owner_id: Uuid,
+    owned_items: Vec<models::OwnedMediaItem>,
     similar: &models::SimilarImage,
 ) -> Result<(), Error> {
-    tracing::debug!("found similar item owned by {}", owned_item.owner_id);
+    tracing::debug!(
+        "found {} similar items owned by {}",
+        owned_items.len(),
+        owner_id
+    );
 
-    let user = match models::User::lookup_by_id(&ctx.conn, owned_item.owner_id).await? {
+    let user = match models::User::lookup_by_id(&ctx.conn, owner_id).await? {
         Some(user) => user,
         None => {
             tracing::warn!("could not find referenced user");
@@ -143,19 +157,27 @@ async fn notify_found(
         }
     };
 
-    models::UserEvent::similar_found(
-        &ctx.conn,
-        &ctx.redis,
-        user.id,
-        owned_item.id,
-        similar.clone(),
-        None,
-    )
-    .await?;
+    let mut buffered = futures::stream::iter(owned_items.iter().map(|item| {
+        models::UserEvent::similar_found(
+            &ctx.conn,
+            &ctx.redis,
+            user.id,
+            item.id,
+            similar.clone(),
+            None,
+        )
+    }))
+    .buffer_unordered(2);
+
+    while let Some(result) = buffered.next().await {
+        if let Err(err) = result {
+            tracing::error!("could not create event: {}", err);
+        }
+    }
 
     if let Some(ref posted_by) = sub.posted_by {
         if models::UserAllowlist::is_allowed(&ctx.conn, user.id, sub.site, posted_by).await? {
-            tracing::info!("user allowlisted poster");
+            tracing::debug!("user allowlisted poster");
             return Ok(());
         }
     }
@@ -174,9 +196,14 @@ async fn notify_found(
         return Ok(());
     }
 
+    let most_recent_owned_item = owned_items
+        .iter()
+        .max_by_key(|item| item.last_modified)
+        .ok_or(Error::Missing)?;
+
     match user.email {
         Some(ref email) if user.email_verifier.is_none() && emails_enabled.0 => {
-            if let Err(err) = notify_email(ctx, &user, email, sub, &owned_item).await {
+            if let Err(err) = notify_email(ctx, &user, email, sub, most_recent_owned_item).await {
                 tracing::error!("could not send notification email: {}", err);
             }
         }
@@ -185,7 +212,9 @@ async fn notify_found(
 
     match user.telegram_id {
         Some(telegram_id) if telegram_enabled.0 => {
-            if let Err(err) = notify_telegram(ctx, &user, telegram_id, sub, &owned_item).await {
+            if let Err(err) =
+                notify_telegram(ctx, &user, telegram_id, sub, most_recent_owned_item).await
+            {
                 tracing::error!("could not send telegram notification: {}", err);
             }
         }
