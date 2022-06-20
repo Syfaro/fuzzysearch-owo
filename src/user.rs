@@ -685,6 +685,19 @@ struct FeedQuery {
 
     #[serde(default, with = "serde_with::rust::string_empty_as_none")]
     site: Option<models::Site>,
+    #[serde(default, deserialize_with = "deserialize_checkbox")]
+    filter_allowlisted: bool,
+}
+
+fn deserialize_checkbox<'de, D: serde::de::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<bool, D::Error> {
+    let s: &str = serde::de::Deserialize::deserialize(deserializer)?;
+
+    match s {
+        "on" => Ok(true),
+        _ => Err(serde::de::Error::unknown_variant(s, &["on"])),
+    }
 }
 
 #[derive(Template)]
@@ -694,6 +707,7 @@ struct Feed<'a> {
 
     visible_sites: &'a [String],
     site: Option<&'a str>,
+    filtering_allowlisted: bool,
 
     pagination_data: PaginationData<'a>,
 }
@@ -710,17 +724,32 @@ async fn feed(
 
     let visible_sites = models::Site::visible_sites();
 
-    let count = models::UserEvent::count(&conn, user.id, Some("similar_image"), query.site).await?;
+    let count = models::UserEvent::count(
+        &conn,
+        user.id,
+        Some("similar_image"),
+        query.site,
+        query.filter_allowlisted,
+    )
+    .await?;
     let pagination_data = PaginationData::new(request.uri(), 25, count as u32, page);
 
-    let entries =
-        models::UserEvent::feed(&conn, user.id, "similar_image", query.site, page).await?;
+    let entries = models::UserEvent::feed(
+        &conn,
+        user.id,
+        "similar_image",
+        query.site,
+        query.filter_allowlisted,
+        page,
+    )
+    .await?;
 
     let body = Feed {
         entries: &entries,
         pagination_data,
         visible_sites: &visible_sites,
         site: site.as_deref(),
+        filtering_allowlisted: query.filter_allowlisted,
     }
     .wrap(&request, Some(&user))
     .render()?;

@@ -263,6 +263,29 @@
     },
     "query": "SELECT\n  owned_media_item.id,\n  owned_media_item.owner_id,\n  owned_media_item.account_id,\n  owned_media_item.source_id,\n  owned_media_item.perceptual_hash,\n  owned_media_item.sha256_hash \"sha256_hash: Sha256Hash\",\n  owned_media_item.link,\n  owned_media_item.title,\n  owned_media_item.posted_at,\n  owned_media_item.last_modified,\n  owned_media_item.content_url,\n  owned_media_item.content_size,\n  owned_media_item.thumb_url,\n  owned_media_item.event_count,\n  owned_media_item.last_event\nFROM\n  owned_media_item\n  JOIN linked_account on owned_media_item.account_id = linked_account.id\nWHERE\n  linked_account.source_site = $1\n  AND source_id = $2;\n"
   },
+  "04f7e9e6657a88cbf4d30f57837088dd1ddfe03203baa09da822122e90ca8802": {
+    "describe": {
+      "columns": [
+        {
+          "name": "count",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text",
+          "Text",
+          "Bool"
+        ]
+      }
+    },
+    "query": "SELECT\n    count(*)\nFROM\n    user_event\nWHERE\n    owner_id = $1\n    AND (\n        $2::text IS NULL\n        OR event_name = $2\n    )\n    AND (\n        $3::text IS NULL\n        OR data->'SimilarImage'->>'site' = $3\n    )\n    AND (\n        NOT $4::boolean\n        OR (\n            data->'SimilarImage'->>'site',\n            lower(data->'SimilarImage'->>'posted_by')\n        ) NOT IN (\n            SELECT\n                site,\n                lower(site_username)\n            FROM\n                user_allowlist\n            WHERE\n                owner_id = $1\n        )\n    );\n"
+  },
   "062d84cc9d91b43796d0d7ebfe39dc4ac37aa1e0f3e9ce2228fa1e4fc66730a1": {
     "describe": {
       "columns": [
@@ -879,6 +902,111 @@
     },
     "query": "SELECT\n    *\nfrom\n    flist_import_run\nORDER BY\n    finished_at DESC NULLS FIRST\nLIMIT\n    1;\n"
   },
+  "4cf58eb47ee79502a4f681d655f2c1a46fcb37d90c0df751ac13cbeb5c2a2936": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "owner_id",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "account_id",
+          "ordinal": 2,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "source_id",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "perceptual_hash",
+          "ordinal": 4,
+          "type_info": "Int8"
+        },
+        {
+          "name": "sha256_hash: Sha256Hash",
+          "ordinal": 5,
+          "type_info": "Bytea"
+        },
+        {
+          "name": "link",
+          "ordinal": 6,
+          "type_info": "Text"
+        },
+        {
+          "name": "title",
+          "ordinal": 7,
+          "type_info": "Text"
+        },
+        {
+          "name": "posted_at",
+          "ordinal": 8,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "last_modified",
+          "ordinal": 9,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "content_url",
+          "ordinal": 10,
+          "type_info": "Text"
+        },
+        {
+          "name": "content_size",
+          "ordinal": 11,
+          "type_info": "Int8"
+        },
+        {
+          "name": "thumb_url",
+          "ordinal": 12,
+          "type_info": "Text"
+        },
+        {
+          "name": "event_count",
+          "ordinal": 13,
+          "type_info": "Int4"
+        },
+        {
+          "name": "last_event",
+          "ordinal": 14,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "UuidArray",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url,\n    event_count,\n    last_event\nFROM\n    owned_media_item\nWHERE\n    id = any($1)\n    AND owner_id = $2;\n"
+  },
   "530670baabea0aade25a8c44559c04eaeeed20c4accedef1e502a2c87c4fd563": {
     "describe": {
       "columns": [],
@@ -956,6 +1084,11 @@
           "name": "data",
           "ordinal": 6,
           "type_info": "Jsonb"
+        },
+        {
+          "name": "last_updated",
+          "ordinal": 7,
+          "type_info": "Timestamptz"
         }
       ],
       "nullable": [
@@ -965,7 +1098,8 @@
         false,
         false,
         true,
-        true
+        true,
+        false
       ],
       "parameters": {
         "Left": [
@@ -1548,6 +1682,73 @@
     },
     "query": "SELECT\n    *\nFROM\n    flist_import_run\nORDER BY\n    started_at DESC\nLIMIT\n    10;\n"
   },
+  "7f4ad7815fd813f0b7c37078df00089044d6ba4bbd73e31484d2cc50c27f6f9b": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "owner_id",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "related_to_media_item_id",
+          "ordinal": 2,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 3,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "message",
+          "ordinal": 4,
+          "type_info": "Text"
+        },
+        {
+          "name": "event_name",
+          "ordinal": 5,
+          "type_info": "Text"
+        },
+        {
+          "name": "data",
+          "ordinal": 6,
+          "type_info": "Jsonb"
+        },
+        {
+          "name": "last_updated",
+          "ordinal": 7,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        true,
+        false,
+        false,
+        true,
+        true,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Int4",
+          "Int4",
+          "Text",
+          "Text",
+          "Bool"
+        ]
+      }
+    },
+    "query": "SELECT\n    *\nFROM\n    user_event\nWHERE\n    owner_id = $1\n    AND (\n        $4::text IS NULL\n        OR event_name = $4\n    )\n    AND (\n        $5::text IS NULL\n        OR data->'SimilarImage'->>'site' = $5\n    )\n    AND (\n        NOT $6::boolean\n        OR (\n            data->'SimilarImage'->>'site',\n            lower(data->'SimilarImage'->>'posted_by')\n        ) NOT IN (\n            SELECT\n                site,\n                lower(site_username)\n            FROM\n                user_allowlist\n            WHERE\n                owner_id = $1\n        )\n    )\nORDER BY\n    last_updated DESC\nLIMIT\n    $2 OFFSET ($3::integer * $2::integer);\n"
+  },
   "8bc6979ea098c101a062b14542bb9b0f5ddfe871649c6144b23c4832d9ddf1cc": {
     "describe": {
       "columns": [
@@ -1763,6 +1964,11 @@
           "name": "data",
           "ordinal": 6,
           "type_info": "Jsonb"
+        },
+        {
+          "name": "last_updated",
+          "ordinal": 7,
+          "type_info": "Timestamptz"
         }
       ],
       "nullable": [
@@ -1772,7 +1978,8 @@
         false,
         false,
         true,
-        true
+        true,
+        false
       ],
       "parameters": {
         "Left": [

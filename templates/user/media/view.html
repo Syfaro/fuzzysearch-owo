@@ -84,7 +84,7 @@
                 <td class="has-text-centered">
                   <form method="POST">
                     <input type="hidden" name="redirect_url" value="{{ url }}">
-                    <input type="hidden" name="site" value="{{ image.site.as_str() }}">
+                    <input type="hidden" name="site" value="{{ image.site.to_string() }}">
                     <input type="hidden" name="site_username" value="{{ image.posted_by.as_deref().unwrap_or_default() }}">
                     {% match image.poster_pair() %}
                     {% when Some with (poster_pair) %}

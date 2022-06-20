@@ -9,6 +9,7 @@ use image::GenericImageView;
 use redis::AsyncCommands;
 use rusoto_s3::S3;
 use serde::{Deserialize, Serialize};
+use serde_with::{DeserializeFromStr, SerializeDisplay};
 use sha2::Digest;
 use uuid::Uuid;
 
@@ -1020,11 +1021,9 @@ impl LinkedAccount {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[serde(rename_all = "PascalCase")]
+#[derive(Debug, Clone, Copy, DeserializeFromStr, SerializeDisplay, PartialEq, Eq, Hash)]
 pub enum Site {
     FurAffinity,
-    #[serde(rename = "e621")]
     E621,
     Weasyl,
     Twitter,
@@ -1048,20 +1047,6 @@ impl Site {
         ]
         .map(|site| site.to_string())
         .to_vec()
-    }
-
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::FurAffinity => "FurAffinity",
-            Self::E621 => "e621",
-            Self::Weasyl => "Weasyl",
-            Self::Twitter => "Twitter",
-            Self::Patreon => "Patreon",
-            Self::FList => "F-list",
-            Self::DeviantArt => "DeviantArt",
-            Self::Reddit => "Reddit",
-            Self::InternalTesting => "InternalTesting",
-        }
     }
 
     pub async fn collected_site(
@@ -1309,12 +1294,14 @@ impl UserEvent {
         user_id: Uuid,
         event_name: Option<&str>,
         site: Option<Site>,
+        filter_allowlisted: bool,
     ) -> Result<i64, Error> {
         let count = sqlx::query_file_scalar!(
             "queries/user_event/count.sql",
             user_id,
             event_name,
-            site.map(|site| site.to_string())
+            site.map(|site| site.to_string()),
+            filter_allowlisted,
         )
         .fetch_one(conn)
         .await?;
@@ -1327,6 +1314,7 @@ impl UserEvent {
         user_id: Uuid,
         event_name: &str,
         site: Option<Site>,
+        filter_allowlisted: bool,
         page: u32,
     ) -> Result<Vec<EventAndRelatedMedia>, Error> {
         let entries = sqlx::query_file!(
@@ -1336,6 +1324,7 @@ impl UserEvent {
             page as i64,
             event_name,
             site.map(|site| site.to_string()),
+            filter_allowlisted,
         )
         .map(|row| Self {
             id: row.id,
