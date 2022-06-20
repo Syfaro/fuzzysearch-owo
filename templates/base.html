@@ -29,6 +29,7 @@
         {% when Some with (user) %}
         {% call navitem("Home", "/user/home") %}
         {% call navitem("All Media", "/user/media/list") %}
+        {% call navitem("Event Feed", "/user/feed") %}
         {% else %}
         {% call navitem("Home", "/") %}
         {% endmatch %}

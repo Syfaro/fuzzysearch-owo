@@ -1,0 +1,98 @@
+{% macro small_pagination(data) %}
+<nav class="pagination is-justify-content-end">
+  {% let last_page = data.last_page() %}
+
+  {% match data.previous_page() %}
+  {% when Some with (previous_page) %}
+  <a class="pagination-previous" href="{{ data.url(previous_page) }}">Previous</a>
+  {% else %}
+  <a class="pagination-previous is-disabled" href="{{ data.url(0) }}" title="This is the first page" disabled>
+    Previous
+  </a>
+  {% endmatch %}
+
+  {% match data.next_page() %}
+  {% when Some with (next_page) %}
+  <a class="pagination-next" href="{{ data.url(next_page) }}">Next page</a>
+  {% else %}
+  <a class="pagination-next is-disabled" href="{{ data.url(last_page) }}" title="This is the last page" disabled>
+    Next page
+  </a>
+  {% endmatch %}
+</nav>
+{% endmacro %}
+
+{% macro pagination(data) %}
+<nav class="pagination">
+  {% let last_page = data.last_page() %}
+
+  {% match data.previous_page() %}
+  {% when Some with (previous_page) %}
+  <a class="pagination-previous" href="{{ data.url(previous_page) }}">Previous</a>
+  {% else %}
+  <a class="pagination-previous is-disabled" href="{{ data.url(0) }}" title="This is the first page" disabled>
+    Previous
+  </a>
+  {% endmatch %}
+
+  {% match data.next_page() %}
+  {% when Some with (next_page) %}
+  <a class="pagination-next" href="{{ data.url(next_page) }}">Next page</a>
+  {% else %}
+  <a class="pagination-next is-disabled" href="{{ data.url(last_page) }}" title="This is the last page" disabled>
+    Next page
+  </a>
+  {% endmatch %}
+
+  <ul class="pagination-list">
+    <li>
+      <a class="pagination-link {% if data.current_page == 0 %}is-current{% endif %}" href="{{ data.url(0) }}">1</a>
+    </li>
+
+    {% if data.current_page > 2 %}
+    <li class="is-hidden-touch">
+      <span class="pagination-ellipsis">&hellip;</span>
+    </li>
+    {% endif %}
+
+    {% for page_number in data.display_lower()..data.display_upper() %}
+    <li>
+      <a class="pagination-link {% if page_number == data.current_page %}is-current{% endif %}" href="{{ data.url(page_number) }}">{{ page_number + 1 }}</a>
+    </li>
+    {% endfor %}
+
+    {% if last_page != 0 %}
+    {% if data.current_page < last_page.saturating_sub(3) %}
+    <li class="is-hidden-touch">
+      <span class="pagination-ellipsis">&hellip;</span>
+    </li>
+    {% endif %}
+
+    <li>
+      <a class="pagination-link {% if data.current_page == last_page %}is-current{% endif %}" href="{{ data.url(last_page) }}">{{ last_page + 1 }}</a>
+    </li>
+    {% endif %}
+  </ul>
+</nav>
+{% endmacro %}
+
+{% macro option(name, value, selected) %}
+  {% let is_selected = selected == value %}
+  <option value="{{ value }}" {% if is_selected %}selected{% endif %}>
+    {{ name }}
+  </option>
+{% endmacro %}
+
+{% macro optoption(name, value, selected) %}
+  {% let is_selected = selected == value %}
+  {% match value %}
+  {% when Some with (value) %}
+  <option value="{{ value }}" {% if is_selected %}selected{% endif %}>
+    {{ name }}
+  </option>
+  {% else %}
+  <option value="" {% if is_selected %}selected{% endif %}>
+    {{ name }}
+  </option>
+  {% endmatch %}
+{% endmacro %}

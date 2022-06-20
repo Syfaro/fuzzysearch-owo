@@ -696,6 +696,23 @@ impl OwnedMediaItem {
 
         Ok(count)
     }
+
+    pub async fn resolve(
+        conn: &sqlx::PgPool,
+        user_id: Uuid,
+        media_ids: impl Iterator<Item = Uuid>,
+    ) -> Result<HashMap<Uuid, Self>, Error> {
+        let items = sqlx::query_file_as!(
+            Self,
+            "queries/owned_media/resolve_media.sql",
+            &media_ids.collect::<Vec<Uuid>>(),
+            user_id
+        )
+        .fetch_all(conn)
+        .await?;
+
+        Ok(items.into_iter().map(|item| (item.id, item)).collect())
+    }
 }
 
 async fn upload_image(
@@ -1019,6 +1036,20 @@ pub enum Site {
 }
 
 impl Site {
+    pub fn visible_sites() -> Vec<String> {
+        [
+            Self::FurAffinity,
+            Self::E621,
+            Self::Weasyl,
+            Self::Twitter,
+            Self::FList,
+            Self::DeviantArt,
+            Self::Reddit,
+        ]
+        .map(|site| site.to_string())
+        .to_vec()
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::FurAffinity => "FurAffinity",
@@ -1176,9 +1207,15 @@ pub struct UserEvent {
     pub owner_id: Uuid,
     pub related_to_media_item_id: Option<Uuid>,
     pub created_at: chrono::DateTime<chrono::Utc>,
+    pub last_updated: chrono::DateTime<chrono::Utc>,
 
     pub message: String,
     pub data: Option<UserEventData>,
+}
+
+pub struct EventAndRelatedMedia {
+    pub event: UserEvent,
+    pub media: Option<OwnedMediaItem>,
 }
 
 impl UserEvent {
@@ -1259,11 +1296,76 @@ impl UserEvent {
                 created_at: row.created_at,
                 message: row.message,
                 data: row.data.and_then(|data| serde_json::from_value(data).ok()),
+                last_updated: row.last_updated,
             })
             .fetch_all(conn)
             .await?;
 
         Ok(events)
+    }
+
+    pub async fn count(
+        conn: &sqlx::PgPool,
+        user_id: Uuid,
+        event_name: Option<&str>,
+        site: Option<Site>,
+    ) -> Result<i64, Error> {
+        let count = sqlx::query_file_scalar!(
+            "queries/user_event/count.sql",
+            user_id,
+            event_name,
+            site.map(|site| site.to_string())
+        )
+        .fetch_one(conn)
+        .await?;
+
+        Ok(count.unwrap_or(0))
+    }
+
+    pub async fn feed(
+        conn: &sqlx::PgPool,
+        user_id: Uuid,
+        event_name: &str,
+        site: Option<Site>,
+        page: u32,
+    ) -> Result<Vec<EventAndRelatedMedia>, Error> {
+        let entries = sqlx::query_file!(
+            "queries/user_event/event_feed.sql",
+            user_id,
+            25,
+            page as i64,
+            event_name,
+            site.map(|site| site.to_string()),
+        )
+        .map(|row| Self {
+            id: row.id,
+            owner_id: row.owner_id,
+            related_to_media_item_id: row.related_to_media_item_id,
+            created_at: row.created_at,
+            message: row.message,
+            data: row.data.and_then(|data| serde_json::from_value(data).ok()),
+            last_updated: row.last_updated,
+        })
+        .fetch_all(conn)
+        .await?;
+
+        let media = OwnedMediaItem::resolve(
+            conn,
+            user_id,
+            entries
+                .iter()
+                .flat_map(|entry| entry.related_to_media_item_id),
+        )
+        .await?;
+
+        let entries_and_media = entries.into_iter().map(|entry| EventAndRelatedMedia {
+            media: entry
+                .related_to_media_item_id
+                .and_then(|media_id| media.get(&media_id).cloned()),
+            event: entry,
+        });
+
+        Ok(entries_and_media.collect())
     }
 
     pub async fn recent_events_for_media(
@@ -1276,13 +1378,14 @@ impl UserEvent {
             user_id,
             media_id
         )
-        .map(|row| UserEvent {
+        .map(|row| Self {
             id: row.id,
             owner_id: row.owner_id,
             related_to_media_item_id: row.related_to_media_item_id,
             created_at: row.created_at,
             message: row.message,
             data: row.data.and_then(|data| serde_json::from_value(data).ok()),
+            last_updated: row.last_updated,
         })
         .fetch_all(conn)
         .await?;

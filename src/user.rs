@@ -679,6 +679,54 @@ async fn media_list(
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
+#[derive(Debug, Deserialize)]
+struct FeedQuery {
+    page: Option<u32>,
+
+    #[serde(default, with = "serde_with::rust::string_empty_as_none")]
+    site: Option<models::Site>,
+}
+
+#[derive(Template)]
+#[template(path = "user/feed.html")]
+struct Feed<'a> {
+    entries: &'a [models::EventAndRelatedMedia],
+
+    visible_sites: &'a [String],
+    site: Option<&'a str>,
+
+    pagination_data: PaginationData<'a>,
+}
+
+#[get("/feed")]
+async fn feed(
+    request: actix_web::HttpRequest,
+    conn: web::Data<sqlx::PgPool>,
+    user: models::User,
+    query: web::Query<FeedQuery>,
+) -> Result<HttpResponse, Error> {
+    let page = query.page.unwrap_or(0);
+    let site = query.site.map(|site| site.to_string());
+
+    let visible_sites = models::Site::visible_sites();
+
+    let count = models::UserEvent::count(&conn, user.id, Some("similar_image"), query.site).await?;
+    let pagination_data = PaginationData::new(request.uri(), 25, count as u32, page);
+
+    let entries =
+        models::UserEvent::feed(&conn, user.id, "similar_image", query.site, page).await?;
+
+    let body = Feed {
+        entries: &entries,
+        pagination_data,
+        visible_sites: &visible_sites,
+        site: site.as_deref(),
+    }
+    .wrap(&request, Some(&user))
+    .render()?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
 #[derive(Template)]
 #[template(path = "user/email/add.html")]
 struct AddEmail {
@@ -920,6 +968,7 @@ pub fn service() -> Scope {
             single,
             unsubscribe_get,
             unsubscribe_post,
+            feed,
         ])
         .service(web::scope("/account").service(services![
             account_link_get,

@@ -1,0 +1,119 @@
+{% import "_pagination.html" as pagination %}
+
+<section class="section">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column">
+        <h1 class="title has-text-centered">Event Feed</h1>
+      </div>
+    </div>
+
+    <div class="columns is-centered">
+      <div class="column is-one-quarter-desktop">
+        <h2 class="subtitle">Event Filters</h2>
+
+        <form method="GET">
+          <div class="field">
+            <label class="label">Site</label>
+
+            <div class="control is-expanded">
+              <div class="select is-fullwidth">
+                <select name="site">
+                  {% call pagination::optoption("All Sites", None, site) %}
+                  {% for site_opt in visible_sites %}
+                  {% call pagination::optoption(site_opt, Some(site_opt.as_str()), site) %}
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="control">
+              <button class="button is-primary">Filter Events</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="column is-three-quarters-desktop">
+      {% if entries.is_empty() %}
+      <div class="notification is-warning">
+        No items were found, try <a href="/user/feed">clearing your filters</a>.
+      </div>
+      {% else %}
+      {% call pagination::pagination(pagination_data) %}
+
+      <div class="table-container">
+        <table class="table is-fullwidth">
+          <thead class="has-text-left">
+            <tr>
+              <th>Preview</th>
+              <th>Site</th>
+              <th>Posted By</th>
+              <th>Found</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in entries %}
+            {% match entry.media %}
+            {% when Some with (media) %}
+            <tr>
+              <td>
+                {% match media.thumb_url %}
+                {% when Some with (thumb_url) %}
+                <figure class="image is-128x128 is-inline-block" style="overflow: hidden;">
+                  <a href="/user/media/view/{{ media.id }}">
+                    <img src="{{ thumb_url }}" alt="{{ media.alt_text() }}">
+                  </a>
+                </figure>
+                {% else %}
+                <p class="image is-128x128 has-text-centered">
+                  <a href="/user/media/view/{{ media.id }}">
+                    No preview available
+                  </a>
+                </p>
+                {% endmatch %}
+              </td>
+
+              {% match entry.event.data %}
+              {% when Some with (models::UserEventData::SimilarImage(similar)) %}
+              <td>
+                {{ similar.site }}
+              </td>
+              <td>
+                {% match similar.posted_by %}
+                {% when Some with (posted_by) %}
+                {{ posted_by }}
+                {% else %}
+                <span class="has-text-grey">Unknown</span>
+                {% endmatch %}
+              </td>
+              <td>
+                <span class="relative-time" data-timestamp="{{ entry.event.last_updated.timestamp() }}">
+                  {{ entry.event.last_updated }}
+                </span>
+              </td>
+              <td>
+                <a class="button is-link is-outlined" href="{{ similar.best_link() }}" target="_blank" rel="nofollow">View</a>
+              </td>
+              {% else %}
+              <td><span class="has-text-grey">Unknown</span></td>
+              <td><span class="has-text-grey">Unknown</span></td>
+              <td><span class="has-text-grey">Unknown</span></td>
+              <td></td>
+              {% endmatch %}
+            </tr>
+            {% else %}
+            {% endmatch %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% call pagination::pagination(pagination_data) %}
+      {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
