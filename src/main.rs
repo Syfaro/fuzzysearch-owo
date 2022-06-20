@@ -242,7 +242,7 @@ impl<T: Sized + std::fmt::Display + askama::Template> WrappedTemplate for T {
         BaseTemplate {
             user,
             uri: request.uri(),
-            content: &self,
+            content: self,
         }
     }
 }

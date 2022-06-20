@@ -6,8 +6,9 @@
   <title>FuzzySearch OwO</title>
 
   <meta name="viewport" content="width=device-width">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.min.css">
-  <link rel="stylesheet" href="https://unpkg.com/@creativebulma/bulma-tooltip@1.2.0/dist/bulma-tooltip.min.css">
+
+  <link rel="stylesheet" href="/static/css/bulma.min.css?v0.9.3">
+  <link rel="stylesheet" href="/static/css/bulma-tooltip.min.css?v1.2.0">
 
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
 
@@ -21,7 +22,7 @@
   </script>
 
   <script async defer data-website-id="41fafea0-34e2-4cb2-a4b8-50068ef34dec" data-host-url="https://u.syfaro.com"
-    data-domains="owo.fuzzysearch.net" src="/static/js/event.js"></script>
+    data-domains="owo.fuzzysearch.net" src="/static/js/event.js?v1"></script>
 
   {% block header %}{% endblock %}
 </head>
@@ -55,8 +56,8 @@
     </div>
   </footer>
 
-  <script src="https://unpkg.com/bulma-toast@2.4.1/dist/bulma-toast.min.js"></script>
-  <script src="/static/js/app.js"></script>
+  <script src="/static/js/bulma-toast.min.js?v2.4.1"></script>
+  <script src="/static/js/app.js?v{{ env!("CARGO_PKG_VERSION") }}"></script>
 
   {% block footer %}{% endblock %}
 </body>

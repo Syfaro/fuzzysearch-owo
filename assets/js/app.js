@@ -185,3 +185,11 @@ const singleUploadButton = document.getElementById('single-upload-button');
     singleUploadButton?.removeAttribute('disabled');
   });
 });
+
+[...document.querySelectorAll('.navbar-burger')].forEach((burger) => {
+  burger.addEventListener('click', () => {
+    const target = document.querySelector(burger.dataset.target);
+
+    [burger, target].forEach((el) => el.classList.toggle('is-active'));
+  });
+});
