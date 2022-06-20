@@ -56,9 +56,3 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
-      - name: Remove old package versions
-        uses: actions/delete-package-versions@v2
-        with:
-          package-name: "fuzzysearch-owo"
-          min-versions-to-keep: 2
