@@ -197,8 +197,8 @@ async fn process_submission(
         })?
         .ok_or(Error::Missing)?;
 
-    if sub.content.url().contains("/stories/") {
-        tracing::debug!("submission was story, skipping");
+    if sub.content.url().contains("/stories/") || sub.content.url().contains("/music/") {
+        tracing::debug!("submission was story or music, skipping");
         return Ok(());
     }
 
