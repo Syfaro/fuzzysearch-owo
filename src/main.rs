@@ -267,15 +267,34 @@ async fn index(
 }
 
 #[derive(Template)]
-#[template(path = "changelog.html")]
-struct Changelog;
+#[template(path = "markdown.html")]
+struct MarkdownPage {
+    content: &'static str,
+}
 
 #[actix_web::get("/changelog")]
 async fn changelog(
     request: actix_web::HttpRequest,
     user: Option<models::User>,
 ) -> Result<HttpResponse, Error> {
-    let body = Changelog.wrap(&request, user.as_ref()).render()?;
+    let body = MarkdownPage {
+        content: include_str!("../content/CHANGELOG.md"),
+    }
+    .wrap(&request, user.as_ref())
+    .render()?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[actix_web::get("/faq")]
+async fn faq(
+    request: actix_web::HttpRequest,
+    user: Option<models::User>,
+) -> Result<HttpResponse, Error> {
+    let body = MarkdownPage {
+        content: include_str!("../content/FAQ.md"),
+    }
+    .wrap(&request, user.as_ref())
+    .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
@@ -473,6 +492,7 @@ async fn main() {
                     .service(files)
                     .service(index)
                     .service(changelog)
+                    .service(faq)
                     .default_service(web::to(not_found))
             })
             .workers(http_workers)

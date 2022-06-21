@@ -3,9 +3,17 @@
     <div class="columns is-centered">
       <div class="column is-two-thirds">
         <div class="content">
-          {{ include_str!("../CHANGELOG.md")|markdown }}
+          {{ content|markdown }}
         </div>
       </div>
     </div>
   </div>
 </section>
+
+{% block header %}
+<style>
+  .content h1 {
+    text-align: center;
+  }
+</style>
+{% endblock %}

@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.10.2 — June 20th, 2022
+
+* Added a frequently asked questions page.
+
 ## v0.10.1 — June 20th, 2022
 
 * Fixed an issue causing F-list events to no longer display correctly.
