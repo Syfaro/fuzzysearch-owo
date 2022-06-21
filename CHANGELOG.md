@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.10.1 — June 20th, 2022
+
+* Fixed an issue causing F-list events to no longer display correctly.
+
 ## v0.10.0 — June 20th, 2022
 
 * Added new event feed view which shows events for all media and provides
