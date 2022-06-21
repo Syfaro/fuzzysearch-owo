@@ -25,8 +25,8 @@ feedback you have on the site.
 ## What are the upcoming features?
 
 You can find the public feedback and suggestion board
-[here](https://owo-feedback.fuzzysearch.net). This board is generally kept up to
-date with requested and work in progress features.
+[here](https://owo-feedback.fuzzysearch.net). It is generally kept up to date
+with requested and work in progress features.
 
 For a list of what features have been added, see the [changelog](/changelog).
 
@@ -39,8 +39,10 @@ account and all of your associated data on the [settings page](/user/settings).
 
 A minimal amount of user data is collected. HTTP requests are routed through
 Cloudflare and error messages are shared with Sentry. IP addresses are retained
-for security purposes. User-provided information such as names, emails, and
-images are stored securely and are only used for site functionality.
+for security purposes. Some aggregated and non-identifiable information is
+recorded to understand how the site is used. User-provided information such as
+names, emails, and images are stored securely and are only used for site
+functionality.
 
 ## Why is an image not showing up?
 

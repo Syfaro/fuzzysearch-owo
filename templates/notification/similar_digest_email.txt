@@ -1,0 +1,10 @@
+Hi {{ username }},
+
+{{ items.len() }} matches were found since your last update.
+
+{% for item in items -%}
+- {{ item.source_link }} was posted to {{ item.site_name }} by {{ item.posted_by }}: {{ item.found_link }}
+
+{% endfor %}
+
+To unsubscribe from future notification emails, please click here: {{ unsubscribe_link }}

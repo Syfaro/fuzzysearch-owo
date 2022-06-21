@@ -169,9 +169,14 @@ async fn notify_found(
     }))
     .buffer_unordered(2);
 
+    let mut event_ids = Vec::with_capacity(owned_items.len());
+
     while let Some(result) = buffered.next().await {
-        if let Err(err) = result {
-            tracing::error!("could not create event: {}", err);
+        match result {
+            Ok(event_id) => event_ids.push(event_id),
+            Err(err) => {
+                tracing::error!("could not create event: {}", err)
+            }
         }
     }
 
@@ -182,7 +187,7 @@ async fn notify_found(
         }
     }
 
-    let emails_enabled: setting::EmailNotifications = models::UserSetting::get(&ctx.conn, user.id)
+    let email_settings: setting::EmailFrequency = models::UserSetting::get(&ctx.conn, user.id)
         .await?
         .unwrap_or_default();
 
@@ -191,7 +196,7 @@ async fn notify_found(
             .await?
             .unwrap_or_default();
 
-    if !emails_enabled.0 && !telegram_enabled.0 {
+    if email_settings.0 == models::setting::Frequency::Never && !telegram_enabled.0 {
         tracing::info!("user had all notifications disabled, skipping");
         return Ok(());
     }
@@ -202,8 +207,18 @@ async fn notify_found(
         .ok_or(Error::Missing)?;
 
     match user.email {
-        Some(ref email) if user.email_verifier.is_none() && emails_enabled.0 => {
-            if let Err(err) = notify_email(ctx, &user, email, sub, most_recent_owned_item).await {
+        Some(ref email) if user.email_verifier.is_none() => {
+            if let Err(err) = notify_email(
+                ctx,
+                &user,
+                email_settings.0,
+                email,
+                &event_ids,
+                sub,
+                most_recent_owned_item,
+            )
+            .await
+            {
                 tracing::error!("could not send notification email: {}", err);
             }
         }
@@ -238,10 +253,35 @@ struct SimilarEmailTemplate<'a> {
 async fn notify_email(
     ctx: &JobContext,
     user: &models::User,
+    frequency: models::setting::Frequency,
     email: &str,
+    event_ids: &[Uuid],
     sub: &jobs::IncomingSubmission,
     owned_item: &models::OwnedMediaItem,
 ) -> Result<(), Error> {
+    if frequency == models::setting::Frequency::Never {
+        tracing::info!("user does not want emails, skipping");
+
+        return Ok(());
+    }
+
+    if frequency.is_digest() {
+        tracing::info!(
+            "frequency is digest, inserting {} pending notifications",
+            event_ids.len()
+        );
+
+        for event_id in event_ids.iter().copied() {
+            if let Err(err) =
+                models::PendingNotification::create(&ctx.conn, user.id, event_id).await
+            {
+                tracing::error!("could not create pending notification: {}", err);
+            }
+        }
+
+        return Ok(());
+    }
+
     let body = SimilarEmailTemplate {
         username: user.display_name(),
         source_link: owned_item

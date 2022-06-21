@@ -63,7 +63,7 @@ struct Settings<'a> {
     user: &'a models::User,
     saved_message: Option<(bool, &'a str)>,
 
-    email_notifications: setting::EmailNotifications,
+    email_frequency: String,
     telegram_notifications: setting::TelegramNotifications,
 }
 
@@ -74,7 +74,7 @@ async fn settings_get(
     conn: web::Data<sqlx::PgPool>,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
-    let email_notifications = models::UserSetting::get(&conn, user.id)
+    let email_frequency = models::UserSetting::get::<setting::EmailFrequency>(&conn, user.id)
         .await?
         .unwrap_or_default();
 
@@ -88,7 +88,7 @@ async fn settings_get(
         user: &user,
         saved_message: None,
 
-        email_notifications,
+        email_frequency: serde_plain::to_string(&email_frequency.0)?,
         telegram_notifications,
     }
     .wrap(&request, Some(&user))
@@ -108,9 +108,13 @@ async fn settings_post(
 ) -> Result<HttpResponse, Error> {
     tracing::trace!("got settings: {:?}", form);
 
-    let email_notifications = form
-        .get("email-notifications")
-        .map(|value| setting::EmailNotifications(value == "on"))
+    let email_frequency = form
+        .get("email-frequency")
+        .and_then(|value| {
+            serde_plain::from_str(value)
+                .ok()
+                .map(models::setting::EmailFrequency)
+        })
         .unwrap_or_else(models::UserSettingItem::off_value);
 
     let telegram_notifications = form
@@ -124,7 +128,7 @@ async fn settings_post(
     };
 
     futures::try_join!(
-        models::UserSetting::set(&conn, user.id, &email_notifications),
+        models::UserSetting::set(&conn, user.id, &email_frequency),
         models::UserSetting::set(&conn, user.id, &telegram_notifications),
         models::User::update_display_name(&conn, user.id, display_name)
     )?;
@@ -182,7 +186,7 @@ async fn settings_post(
         user: &user,
         saved_message: Some((successful, saved_message)),
 
-        email_notifications,
+        email_frequency: serde_plain::to_string(&email_frequency.0)?,
         telegram_notifications,
     }
     .wrap(&request, Some(&user))

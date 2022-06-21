@@ -1748,6 +1748,7 @@ dependencies = [
  "sentry-actix",
  "serde",
  "serde_json",
+ "serde_plain",
  "serde_with",
  "sha2 0.10.2",
  "sqlx",
@@ -3947,6 +3948,15 @@ name = "serde_path_to_error"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7868ad3b8196a8a0aea99a8220b124278ee5320a55e4fde97794b6f85b1a377"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "serde_plain"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95455e7e29fada2052e72170af226fbe368a4ca33dee847875325d9fdb133858"
 dependencies = [
  "serde",
 ]

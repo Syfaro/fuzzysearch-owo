@@ -27,6 +27,8 @@ pub enum Error {
     Actix(#[from] actix_web::Error),
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("plain error: {0}")]
+    Plain(#[from] serde_plain::Error),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
     #[error("image error: {0}")]

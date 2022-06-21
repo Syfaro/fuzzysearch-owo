@@ -74,6 +74,9 @@ pub mod job {
     pub const REDDIT_CHECK_SUBREDDITS: &str = "reddit_check";
     pub const REDDIT_UPDATE_SUBREDDIT: &str = "reddit_subreddit";
     pub const REDDIT_LOAD_POST: &str = "reddit_post";
+
+    pub const CREATE_EMAIL_DIGESTS: &str = "create_email_digests";
+    pub const SEND_EMAIL_DIGEST: &str = "send_email_digest";
 }
 
 lazy_static::lazy_static! {
@@ -246,6 +249,12 @@ pub fn reddit_post_job(subreddit: &str, post: site::RedditPost) -> Result<faktor
     let args = serialize_args!(subreddit, post);
 
     Ok(faktory::Job::new(job::REDDIT_LOAD_POST, args).fuzzy_queue(FaktoryQueue::Outgoing))
+}
+
+pub fn send_email_digest_job(owner_id: Uuid, event_ids: Vec<Uuid>) -> Result<faktory::Job, Error> {
+    let args = serialize_args!(owner_id, event_ids);
+
+    Ok(faktory::Job::new(job::SEND_EMAIL_DIGEST, args).fuzzy_queue(FaktoryQueue::Outgoing))
 }
 
 #[derive(Clone)]
@@ -471,6 +480,21 @@ impl WorkerEnvironment {
 struct EmailVerify<'a> {
     username: &'a str,
     link: &'a str,
+}
+
+struct SimilarItem {
+    source_link: String,
+    site_name: String,
+    posted_by: String,
+    found_link: String,
+}
+
+#[derive(askama::Template)]
+#[template(path = "notification/similar_digest_email.txt")]
+struct SimilarDigestEmail<'a> {
+    username: &'a str,
+    items: &'a [SimilarItem],
+    unsubscribe_link: String,
 }
 
 pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
@@ -744,6 +768,123 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                 )
                 .await?;
         }
+
+        Ok(())
+    });
+
+    environment.register(job::CREATE_EMAIL_DIGESTS, |ctx, job| async move {
+        let mut args = job.args().iter();
+        let (frequency,) = extract_args!(args, models::setting::Frequency);
+
+        let mut notifications_by_owner = HashMap::new();
+
+        let pending_notifications =
+            models::PendingNotification::ready(&ctx.conn, frequency).await?;
+
+        for notif in pending_notifications {
+            notifications_by_owner
+                .entry(notif.owner_id)
+                .or_insert_with(Vec::new)
+                .push((notif.id, notif.user_event_id));
+        }
+
+        for (owner_id, ids) in notifications_by_owner {
+            tracing::debug!("found {} events for {}", ids.len(), owner_id);
+
+            let (notification_ids, event_ids): (Vec<_>, Vec<_>) = ids.into_iter().unzip();
+
+            let mut tx = ctx.conn.begin().await?;
+            models::PendingNotification::remove(&mut tx, &notification_ids).await?;
+
+            if let Err(err) = ctx
+                .faktory
+                .enqueue_job(
+                    JobInitiator::Schedule,
+                    send_email_digest_job(owner_id, event_ids)?,
+                )
+                .await
+            {
+                tracing::error!("could not enqueue digest email job: {}", err);
+            }
+
+            tx.commit().await?;
+        }
+
+        Ok(())
+    });
+
+    environment.register(job::SEND_EMAIL_DIGEST, |ctx, job| async move {
+        let mut args = job.args().iter();
+        let (owner_id, event_ids) = extract_args!(args, Uuid, Vec<Uuid>);
+
+        let user = models::User::lookup_by_id(&ctx.conn, owner_id)
+            .await?
+            .ok_or(Error::Missing)?;
+
+        let display_name = user.display_name().to_owned();
+
+        let email = match user.email {
+            Some(email) if user.email_verifier.is_none() => email,
+            _ => return Err(Error::Missing),
+        };
+
+        let events = models::UserEvent::resolve(&ctx.conn, event_ids.iter().copied()).await?;
+        let media = models::OwnedMediaItem::resolve(
+            &ctx.conn,
+            owner_id,
+            events
+                .iter()
+                .flat_map(|(_event_id, event)| event.related_to_media_item_id),
+        )
+        .await?;
+
+        let items: Vec<_> = event_ids
+            .into_iter()
+            .flat_map(|event_id| events.get(&event_id))
+            .flat_map(|event| match event.data {
+                Some(models::UserEventData::SimilarImage(ref similar)) => event
+                    .related_to_media_item_id
+                    .map(|media_id| (media_id, similar)),
+                _ => None,
+            })
+            .flat_map(|(media_id, event)| media.get(&media_id).map(|media| (media, event)))
+            .map(|(media, event)| SimilarItem {
+                source_link: media
+                    .link
+                    .as_deref()
+                    .unwrap_or_else(|| media.content_url.as_deref().unwrap_or("unknown"))
+                    .to_owned(),
+                site_name: event.site.to_string(),
+                posted_by: event
+                    .posted_by
+                    .clone()
+                    .unwrap_or_else(|| "unknown".to_string()),
+                found_link: event.best_link().to_owned(),
+            })
+            .collect();
+
+        let body = SimilarDigestEmail {
+            username: &display_name,
+            items: &items,
+            unsubscribe_link: format!(
+                "{}/user/unsubscribe?u={}&t={}",
+                ctx.config.host_url, user.id, user.unsubscribe_token
+            ),
+        }
+        .render()?;
+
+        let email = lettre::Message::builder()
+            .header(lettre::message::header::ContentType::TEXT_PLAIN)
+            .from(ctx.config.smtp_from.clone())
+            .reply_to(ctx.config.smtp_reply_to.clone())
+            .to(lettre::message::Mailbox::new(
+                Some(display_name),
+                email.parse().map_err(Error::from_displayable)?,
+            ))
+            .subject("FuzzySearch OwO match digest")
+            .body(body)?;
+
+        ctx.mailer.send(email).await?;
 
         Ok(())
     });

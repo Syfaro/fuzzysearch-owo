@@ -1388,6 +1388,29 @@ impl UserEvent {
             _ => "Unknown event".to_string(),
         }
     }
+
+    pub async fn resolve(
+        conn: &sqlx::PgPool,
+        event_ids: impl Iterator<Item = Uuid>,
+    ) -> Result<HashMap<Uuid, Self>, Error> {
+        let items = sqlx::query_file!(
+            "queries/user_event/resolve.sql",
+            &event_ids.collect::<Vec<Uuid>>()
+        )
+        .map(|row| UserEvent {
+            id: row.id,
+            owner_id: row.owner_id,
+            related_to_media_item_id: row.related_to_media_item_id,
+            created_at: row.created_at,
+            message: row.message,
+            data: row.data.and_then(|data| serde_json::from_value(data).ok()),
+            last_updated: row.last_updated,
+        })
+        .fetch_all(conn)
+        .await?;
+
+        Ok(items.into_iter().map(|item| (item.id, item)).collect())
+    }
 }
 
 pub struct AuthState;
@@ -1836,6 +1859,57 @@ impl UserAllowlist {
     }
 }
 
+pub struct PendingNotification {
+    pub id: Uuid,
+    pub owner_id: Uuid,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub user_event_id: Uuid,
+}
+
+impl PendingNotification {
+    pub async fn create(
+        conn: &sqlx::PgPool,
+        owner_id: Uuid,
+        user_event_id: Uuid,
+    ) -> Result<Uuid, Error> {
+        let id = sqlx::query_file_scalar!(
+            "queries/pending_notification/create.sql",
+            owner_id,
+            user_event_id
+        )
+        .fetch_one(conn)
+        .await?;
+
+        Ok(id)
+    }
+
+    pub async fn ready(
+        conn: &sqlx::PgPool,
+        frequency: setting::Frequency,
+    ) -> Result<Vec<Self>, Error> {
+        let notifications = sqlx::query_file_as!(
+            Self,
+            "queries/pending_notification/ready.sql",
+            serde_json::to_value(frequency)?
+        )
+        .fetch_all(conn)
+        .await?;
+
+        Ok(notifications)
+    }
+
+    pub async fn remove(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        notification_ids: &[Uuid],
+    ) -> Result<(), Error> {
+        sqlx::query_file!("queries/pending_notification/remove.sql", notification_ids)
+            .execute(tx)
+            .await?;
+
+        Ok(())
+    }
+}
+
 pub trait UserSettingItem:
     Clone + Default + serde::Serialize + serde::de::DeserializeOwned
 {
@@ -1911,6 +1985,38 @@ pub mod setting {
 
         fn off_value() -> Self {
             Self(false)
+        }
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+    #[serde(rename_all = "lowercase")]
+    pub enum Frequency {
+        Never,
+        Instantly,
+        Daily,
+        Weekly,
+    }
+
+    impl Default for Frequency {
+        fn default() -> Self {
+            Self::Never
+        }
+    }
+
+    impl Frequency {
+        pub fn is_digest(&self) -> bool {
+            matches!(self, Frequency::Daily | Frequency::Weekly)
+        }
+    }
+
+    #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+    pub struct EmailFrequency(pub Frequency);
+
+    impl UserSettingItem for EmailFrequency {
+        const SETTING_NAME: &'static str = "email-frequency";
+
+        fn off_value() -> Self {
+            Self(Frequency::Never)
         }
     }
 }

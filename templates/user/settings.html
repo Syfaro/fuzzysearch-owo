@@ -1,3 +1,5 @@
+{% import "_pagination.html" as pagination %}
+
 <section class="section">
   <div class="container">
     <div class="columns is-centered">
@@ -41,14 +43,23 @@
             <h2 class="subtitle is-4">Notifications</h2>
 
             <div class="field">
-              <label class="checkbox">
-                <input type="checkbox" name="email-notifications" {% if user.email_verifier.is_some() %} disabled {%
-                  else if email_notifications.0 %} checked {% endif %}>
-                Email notifications
-              </label>
+              <label class="label">Email frequency</label>
+
+              <div class="control is-expanded">
+                <div class="select is-fullwidth">
+                  <select name="email-frequency" {% if user.email_verifier.is_some() %} disabled {% endif %}>
+                    {% call pagination::option("Never", "never", email_frequency) %}
+                    {% call pagination::option("Instantly", "instantly", email_frequency) %}
+                    {% call pagination::option("Daily", "daily", email_frequency) %}
+                    {% call pagination::option("Weekly", "weekly", email_frequency) %}
+                  </select>
+                </div>
+              </div>
 
               {% if user.email_verifier.is_some() %}
               <p class="help">You must verify your email address before receiving notifications.</p>
+              {% else %}
+              <p class="help">Select how frequently you want to receive email notifications.</p>
               {% endif %}
             </div>
 
@@ -67,6 +78,8 @@
                   data-telegram-login="{{ telegram_login.bot_username }}" data-size="large"
                   data-auth-url="{{ telegram_login.auth_url }}" data-request-access="write"></script>
               </div>
+              {% else %}
+              <p class="help">Telegram notifications are sent as soon as matches are found.</p>
               {% endif %}
             </div>
           </div>
