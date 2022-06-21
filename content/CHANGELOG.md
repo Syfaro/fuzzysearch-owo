@@ -2,7 +2,7 @@
 
 ## v0.11.0 — June 21st, 2022
 
-* Added  daily or weekly digest feature to reduce frequency of emailed alerts.
+* Added daily or weekly digest feature to reduce frequency of emailed alerts.
 * Fixed an issue where the FAQ link would only be visible to authenticated
   users.
 
