@@ -298,6 +298,19 @@ async fn faq(
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
+#[actix_web::get("/takedown")]
+async fn takedown(
+    request: actix_web::HttpRequest,
+    user: Option<models::User>,
+) -> Result<HttpResponse, Error> {
+    let body = MarkdownPage {
+        content: include_str!("../content/takedowns.md"),
+    }
+    .wrap(&request, user.as_ref())
+    .render()?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
 async fn not_found() -> Result<HttpResponse, Error> {
     Err(Error::Missing)
 }
@@ -493,6 +506,7 @@ async fn main() {
                     .service(index)
                     .service(changelog)
                     .service(faq)
+                    .service(takedown)
                     .default_service(web::to(not_found))
             })
             .workers(http_workers)
