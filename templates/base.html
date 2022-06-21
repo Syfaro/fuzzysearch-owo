@@ -36,13 +36,13 @@
       </div>
 
       <div class="navbar-end">
+        {% call navitem("FAQ", "/faq") %}
+
         {% match user %}
         {% when Some with (user) %}
         {% if user.is_admin %}
         {% call navitem("Admin Tools", "/admin/tools") %}
         {% endif %}
-
-        {% call navitem("FAQ", "/faq") %}
 
         <div class="navbar-item has-dropdown is-hoverable">
           {% call naventry("navbar-link", user.display_name(), "/user/settings") %}
