@@ -1,18 +1,21 @@
 use actix_web::{get, services, web, HttpResponse, Scope};
 use async_trait::async_trait;
+use foxlib::jobs::{FaktoryForge, FaktoryJob, FaktoryProducer, Job, JobExtra};
 use oauth2::{
     AccessToken, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, RedirectUrl,
     TokenResponse, TokenUrl,
 };
+use serde::{Deserialize, Serialize};
 use sha2::Digest;
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::collections::HashSet;
 use uuid::Uuid;
 
-use crate::jobs::{self, search_existing_submissions_job, JobContext, JobInitiator};
+use crate::jobs::{
+    self, JobContext, JobInitiator, JobInitiatorExt, Queue, SearchExistingSubmissionsJob,
+};
 use crate::models::{LinkedAccount, Site};
-use crate::site::{CollectedSite, SiteFromConfig, SiteJob, SiteServices};
-use crate::{extract_args, models, Config, Error};
+use crate::site::{CollectedSite, SiteFromConfig, SiteServices};
+use crate::{models, Config, Error};
 
 pub struct DeviantArt {
     auth_url: AuthUrl,
@@ -59,7 +62,7 @@ impl DeviantArt {
 
     async fn refresh_credentials(
         &self,
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         redlock: &redlock::RedLock,
         data: &types::DeviantArtData,
         account_id: Uuid,
@@ -119,23 +122,10 @@ impl CollectedSite for DeviantArt {
         Some("/deviantart/auth")
     }
 
-    fn jobs(&self) -> HashMap<&'static str, SiteJob> {
-        [
-            (
-                jobs::job::ADD_SUBMISSION_DEVIANTART,
-                super::wrap_job(add_submission_deviantart),
-            ),
-            (
-                jobs::job::DEVIANTART_COLLECT_ACCOUNTS,
-                super::wrap_job(collect_accounts),
-            ),
-            (
-                jobs::job::DEVIANTART_UPDATE_ACCOUNT,
-                super::wrap_job(update_account),
-            ),
-        ]
-        .into_iter()
-        .collect()
+    fn register_jobs(&self, forge: &mut FaktoryForge<jobs::JobContext, Error>) {
+        AddSubmissionDeviantArtJob::register(forge, add_submission_deviantart);
+        CollectAccountsJob::register(forge, collect_accounts);
+        UpdateAccountJob::register(forge, update_account);
     }
 
     #[tracing::instrument(skip(self, ctx, account), fields(user_id = %account.owner_id, account_id = %account.id))]
@@ -177,12 +167,15 @@ impl CollectedSite for DeviantArt {
             .await?;
 
         super::queue_new_submissions(
-            &ctx.faktory,
+            &ctx.producer,
             account.owner_id,
             account.id,
             subs,
-            |user_id, account_id, sub| {
-                jobs::add_submission_deviantart_job(user_id, account_id, sub, true)
+            |user_id, account_id, sub| AddSubmissionDeviantArtJob {
+                user_id,
+                account_id,
+                sub,
+                was_import: true,
             },
         )
         .await?;
@@ -197,12 +190,95 @@ impl SiteServices for DeviantArt {
     }
 }
 
-#[tracing::instrument(skip(ctx, job), fields(job_id = job.id()))]
-async fn add_submission_deviantart(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(), Error> {
-    let mut args = job.args().iter();
-    let (user_id, account_id, sub, was_import) =
-        extract_args!(args, Uuid, Uuid, types::DeviantArtSubmission, bool);
+#[derive(Serialize, Deserialize)]
+pub struct AddSubmissionDeviantArtJob {
+    pub user_id: Uuid,
+    pub account_id: Uuid,
+    pub sub: types::DeviantArtSubmission,
+    pub was_import: bool,
+}
 
+impl Job for AddSubmissionDeviantArtJob {
+    const NAME: &'static str = "add_submission_deviantart";
+    type Data = Self;
+    type Queue = Queue;
+
+    fn queue(&self) -> Self::Queue {
+        Queue::Outgoing
+    }
+
+    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
+        Ok(None)
+    }
+
+    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+        Ok(vec![serde_json::to_value(self)?])
+    }
+
+    fn deserialize(mut args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
+        serde_json::from_value(args.remove(0))
+    }
+}
+
+pub struct CollectAccountsJob;
+
+impl Job for CollectAccountsJob {
+    const NAME: &'static str = "deviantart_accounts";
+    type Data = ();
+    type Queue = Queue;
+
+    fn queue(&self) -> Self::Queue {
+        Queue::Core
+    }
+
+    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
+        Ok(None)
+    }
+
+    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+        Ok(vec![])
+    }
+
+    fn deserialize(_args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
+        Ok(())
+    }
+}
+
+pub struct UpdateAccountJob(Uuid);
+
+impl Job for UpdateAccountJob {
+    const NAME: &'static str = "deviantart_account_update";
+    type Data = Uuid;
+    type Queue = Queue;
+
+    fn queue(&self) -> Self::Queue {
+        Queue::Outgoing
+    }
+
+    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
+        Ok(None)
+    }
+
+    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+        Ok(vec![serde_json::to_value(self.0)?])
+    }
+
+    fn deserialize(mut args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
+        serde_json::from_value(args.remove(0))
+    }
+}
+
+#[tracing::instrument(skip(ctx, job), fields(job_id = job.id()))]
+async fn add_submission_deviantart(
+    ctx: JobContext,
+    job: FaktoryJob,
+    AddSubmissionDeviantArtJob {
+        user_id,
+        account_id,
+        sub,
+        was_import,
+    }: AddSubmissionDeviantArtJob,
+) -> Result<(), Error> {
     let image_url = match sub.content {
         Some(content) => content.src,
         None => {
@@ -263,10 +339,13 @@ async fn add_submission_deviantart(ctx: Arc<JobContext>, job: faktory::Job) -> R
     if let Some(im) = im {
         models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im).await?;
 
-        ctx.faktory
+        ctx.producer
             .enqueue_job(
-                JobInitiator::User { user_id },
-                search_existing_submissions_job(user_id, item_id)?,
+                SearchExistingSubmissionsJob {
+                    user_id,
+                    media_id: item_id,
+                }
+                .initiated_by(JobInitiator::user(user_id)),
             )
             .await?;
     }
@@ -280,16 +359,13 @@ async fn add_submission_deviantart(ctx: Arc<JobContext>, job: faktory::Job) -> R
     Ok(())
 }
 
-async fn collect_accounts(ctx: Arc<JobContext>, _job: faktory::Job) -> Result<(), Error> {
-    let accounts = models::LinkedAccount::all_site_accounts(&ctx.conn, Site::DeviantArt).await?;
+async fn collect_accounts(ctx: JobContext, _job: FaktoryJob, _args: ()) -> Result<(), Error> {
+    let account_ids = models::LinkedAccount::all_site_accounts(&ctx.conn, Site::DeviantArt).await?;
 
-    for account in accounts {
+    for account_id in account_ids {
         if let Err(err) = ctx
-            .faktory
-            .enqueue_job(
-                JobInitiator::Schedule,
-                jobs::deviantart_update_account_job(account)?,
-            )
+            .producer
+            .enqueue_job(UpdateAccountJob(account_id).initiated_by(JobInitiator::Schedule))
             .await
         {
             tracing::error!("could not enqueue deviantart account check: {:?}", err);
@@ -299,10 +375,7 @@ async fn collect_accounts(ctx: Arc<JobContext>, _job: faktory::Job) -> Result<()
     Ok(())
 }
 
-async fn update_account(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(), Error> {
-    let mut args = job.args().iter();
-    let (account_id,) = crate::extract_args!(args, Uuid);
-
+async fn update_account(ctx: JobContext, _job: FaktoryJob, account_id: Uuid) -> Result<(), Error> {
     let account = models::LinkedAccount::lookup_by_id(&ctx.conn, account_id)
         .await?
         .ok_or(Error::Missing)?;
@@ -327,10 +400,15 @@ async fn update_account(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(), E
             continue;
         }
 
-        ctx.faktory
+        ctx.producer
             .enqueue_job(
-                JobInitiator::Schedule,
-                jobs::add_submission_deviantart_job(account.owner_id, account_id, sub, false)?,
+                AddSubmissionDeviantArtJob {
+                    user_id: account.owner_id,
+                    account_id,
+                    sub,
+                    was_import: false,
+                }
+                .initiated_by(JobInitiator::Schedule),
             )
             .await?;
     }
@@ -341,7 +419,7 @@ async fn update_account(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(), E
 #[get("/auth")]
 async fn auth(
     config: web::Data<crate::Config>,
-    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    conn: web::Data<sqlx::PgPool>,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
     let da = DeviantArt::site_from_config(&config).await?;
@@ -363,8 +441,8 @@ async fn auth(
 #[get("/callback")]
 async fn callback(
     config: web::Data<crate::Config>,
-    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
-    faktory: web::Data<jobs::FaktoryClient>,
+    conn: web::Data<sqlx::PgPool>,
+    faktory: web::Data<FaktoryProducer>,
     user: models::User,
     query: web::Query<types::DeviantArtOAuthCallback>,
 ) -> Result<HttpResponse, Error> {
@@ -435,8 +513,11 @@ async fn callback(
 
             faktory
                 .enqueue_job(
-                    jobs::JobInitiator::user(user.id),
-                    jobs::add_account_job(user.id, account.id)?,
+                    jobs::AddAccountJob {
+                        user_id: user.id,
+                        account_id: account.id,
+                    }
+                    .initiated_by(jobs::JobInitiator::user(user.id)),
                 )
                 .await?;
 

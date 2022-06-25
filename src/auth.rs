@@ -82,7 +82,7 @@ async fn register_post(
     telegram_login: web::Data<TelegramLoginConfig>,
     client_ip: ClientIpAddr,
     session: Session,
-    pool: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    pool: web::Data<sqlx::PgPool>,
     form: web::Form<RegisterFormData>,
 ) -> Result<HttpResponse, Error> {
     let mut error_messages = Vec::with_capacity(1);
@@ -177,7 +177,7 @@ async fn login_post(
     telegram_login: web::Data<TelegramLoginConfig>,
     client_ip: ClientIpAddr,
     session: Session,
-    pool: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    pool: web::Data<sqlx::PgPool>,
     form: web::Form<LoginFormData>,
 ) -> Result<HttpResponse, Error> {
     let user = models::User::lookup_by_login(&pool, &form.username, &form.password).await?;
@@ -402,7 +402,7 @@ impl FromRequest for models::User {
     ) -> Self::Future {
         let session = Session::from_request(req, payload);
         let db = req
-            .app_data::<web::Data<sqlx::Pool<sqlx::Postgres>>>()
+            .app_data::<web::Data<sqlx::PgPool>>()
             .expect("app was missing database connection")
             .clone();
 

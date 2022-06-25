@@ -87,6 +87,7 @@ furaffinity-rs = { git = "https://github.com/Syfaro/furaffinity-rs.git" }
 fuzzysearch = { git = "https://github.com/Syfaro/fuzzysearch-rs.git", features = ["trace", "local_hash"] }
 tgbotapi = { git = "https://github.com/Syfaro/tgbotapi-rs.git" }
 
+foxlib = { git = "https://github.com/Syfaro/foxlib.git", features = ["jobs"] }
 fuzzysearch-common = { git = "https://github.com/Syfaro/fuzzysearch.git", features = ["queue"] }
 
 [dependencies.sqlx]

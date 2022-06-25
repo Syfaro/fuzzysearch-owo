@@ -1,7 +1,6 @@
-use std::collections::HashMap;
-
 use actix_web::{get, post, services, web, HttpRequest, HttpResponse};
 use async_trait::async_trait;
+use foxlib::jobs::{FaktoryForge, FaktoryProducer};
 use hmac::{Hmac, Mac};
 use oauth2::{
     AccessToken, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, RedirectUrl,
@@ -9,9 +8,9 @@ use oauth2::{
 };
 use uuid::Uuid;
 
-use crate::jobs::JobContext;
+use crate::jobs::{JobContext, JobInitiatorExt};
 use crate::models::{LinkedAccount, Site};
-use crate::site::{CollectedSite, SiteFromConfig, SiteJob, SiteServices};
+use crate::site::{CollectedSite, SiteFromConfig, SiteServices};
 use crate::{jobs, models, Error};
 
 pub struct Patreon {
@@ -59,7 +58,7 @@ impl Patreon {
 
     async fn refresh_credentials(
         &self,
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         redlock: &redlock::RedLock,
         data: &types::SavedPatreonData,
         account_id: Uuid,
@@ -122,9 +121,7 @@ impl CollectedSite for Patreon {
         Some("/patreon/auth")
     }
 
-    fn jobs(&self) -> HashMap<&'static str, SiteJob> {
-        Default::default()
-    }
+    fn register_jobs(&self, _forge: &mut FaktoryForge<jobs::JobContext, Error>) {}
 
     #[tracing::instrument(skip(self, ctx, account), fields(user_id = %account.owner_id, account_id = %account.id))]
     async fn add_account(&self, ctx: &JobContext, account: LinkedAccount) -> Result<(), Error> {
@@ -186,7 +183,7 @@ impl SiteServices for Patreon {
 #[get("/auth")]
 async fn auth(
     config: web::Data<crate::Config>,
-    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    conn: web::Data<sqlx::PgPool>,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
     let patreon = Patreon::site_from_config(&config).await?;
@@ -210,8 +207,8 @@ async fn auth(
 #[get("/callback")]
 async fn callback(
     config: web::Data<crate::Config>,
-    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
-    faktory: web::Data<jobs::FaktoryClient>,
+    conn: web::Data<sqlx::PgPool>,
+    faktory: web::Data<FaktoryProducer>,
     user: models::User,
     query: web::Query<types::PatreonOAuthCallback>,
 ) -> Result<HttpResponse, Error> {
@@ -307,8 +304,11 @@ async fn callback(
 
             faktory
                 .enqueue_job(
-                    jobs::JobInitiator::user(user.id),
-                    jobs::add_account_job(user.id, account.id)?,
+                    jobs::AddAccountJob {
+                        user_id: user.id,
+                        account_id: account.id,
+                    }
+                    .initiated_by(jobs::JobInitiator::user(user.id)),
                 )
                 .await?;
 
@@ -404,7 +404,7 @@ async fn callback(
 
 #[post("/webhook")]
 async fn webhook_post(
-    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    conn: web::Data<sqlx::PgPool>,
     req: HttpRequest,
     query: web::Query<types::WebhookPostQuery>,
     body: web::Bytes,

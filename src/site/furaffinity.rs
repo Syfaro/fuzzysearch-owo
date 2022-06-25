@@ -1,12 +1,11 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use async_trait::async_trait;
+use foxlib::jobs::{FaktoryForge, FaktoryJob, Job, JobExtra};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::jobs::{JobContext, JobInitiator};
+use crate::jobs::{JobContext, JobInitiator, JobInitiatorExt, Queue, SearchExistingSubmissionsJob};
 use crate::models::LinkedAccount;
-use crate::site::{CollectedSite, SiteFromConfig, SiteJob};
+use crate::site::{CollectedSite, SiteFromConfig};
 use crate::{jobs, models, Config, Error};
 
 pub struct FurAffinity {
@@ -101,13 +100,8 @@ impl CollectedSite for FurAffinity {
         None
     }
 
-    fn jobs(&self) -> HashMap<&'static str, SiteJob> {
-        [(
-            jobs::job::ADD_SUBMISSION_FURAFFINITY,
-            super::wrap_job(add_submission_furaffinity),
-        )]
-        .into_iter()
-        .collect()
+    fn register_jobs(&self, forge: &mut FaktoryForge<jobs::JobContext, Error>) {
+        AddSubmissionFurAffinityJob::register(forge, add_submission_furaffinity);
     }
 
     #[tracing::instrument(skip(self, ctx, account), fields(user_id = %account.owner_id, account_id = %account.id))]
@@ -138,12 +132,15 @@ impl CollectedSite for FurAffinity {
         .await?;
 
         super::queue_new_submissions(
-            &ctx.faktory,
+            &ctx.producer,
             account.owner_id,
             account.id,
             ids,
-            |user_id, account_id, id| {
-                jobs::add_furaffinity_submission_job(user_id, account_id, id, true)
+            |user_id, account_id, id| AddSubmissionFurAffinityJob {
+                user_id,
+                account_id,
+                sub_id: id,
+                was_import: true,
             },
         )
         .await?;
@@ -152,12 +149,47 @@ impl CollectedSite for FurAffinity {
     }
 }
 
-#[tracing::instrument(skip(ctx, job), fields(job_id = job.id()))]
-async fn add_submission_furaffinity(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(), Error> {
-    let mut args = job.args().iter();
-    let (user_id, account_id, sub_id, was_import) =
-        crate::extract_args!(args, Uuid, Uuid, i32, bool);
+#[derive(Deserialize, Serialize)]
+pub struct AddSubmissionFurAffinityJob {
+    pub user_id: Uuid,
+    pub account_id: Uuid,
+    pub sub_id: i32,
+    pub was_import: bool,
+}
 
+impl Job for AddSubmissionFurAffinityJob {
+    const NAME: &'static str = "add_submission_furaffinity";
+    type Data = Self;
+    type Queue = Queue;
+
+    fn queue(&self) -> Self::Queue {
+        Queue::Outgoing
+    }
+
+    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
+        Ok(None)
+    }
+
+    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+        Ok(vec![serde_json::to_value(self)?])
+    }
+
+    fn deserialize(mut args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
+        serde_json::from_value(args.remove(0))
+    }
+}
+
+#[tracing::instrument(skip(ctx, job), fields(job_id = job.id()))]
+async fn add_submission_furaffinity(
+    ctx: JobContext,
+    job: FaktoryJob,
+    AddSubmissionFurAffinityJob {
+        user_id,
+        account_id,
+        sub_id,
+        was_import,
+    }: AddSubmissionFurAffinityJob,
+) -> Result<(), Error> {
     let fa = furaffinity_rs::FurAffinity::new(
         ctx.config.furaffinity_cookie_a.clone(),
         ctx.config.furaffinity_cookie_b.clone(),
@@ -231,10 +263,13 @@ async fn process_submission(
     let im = image::load_from_memory(&sub.file.ok_or(Error::Missing)?)?;
     models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im).await?;
 
-    ctx.faktory
+    ctx.producer
         .enqueue_job(
-            JobInitiator::User { user_id },
-            jobs::search_existing_submissions_job(user_id, item_id)?,
+            SearchExistingSubmissionsJob {
+                user_id,
+                media_id: item_id,
+            }
+            .initiated_by(JobInitiator::user(user_id)),
         )
         .await?;
 

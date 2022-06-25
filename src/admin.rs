@@ -1,10 +1,14 @@
 use actix_web::{get, post, services, web, HttpResponse, Scope};
 use askama::Template;
+use foxlib::jobs::FaktoryProducer;
 use rand::Rng;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
-use crate::{jobs, models, Error, WrappedTemplate};
+use crate::{
+    jobs::{JobInitiator, JobInitiatorExt, NewSubmissionJob},
+    models, Error, WrappedTemplate,
+};
 
 pub fn service() -> Scope {
     web::scope("/admin").service(services![
@@ -65,7 +69,7 @@ struct InjectForm {
 
 #[post("/inject")]
 async fn inject_post(
-    faktory: web::Data<jobs::FaktoryClient>,
+    faktory: web::Data<FaktoryProducer>,
     user: models::User,
     form: web::Form<InjectForm>,
 ) -> Result<HttpResponse, Error> {
@@ -101,10 +105,8 @@ async fn inject_post(
         posted_at: None,
     };
 
-    let job = jobs::new_submission_job(sub)?;
-
     faktory
-        .enqueue_job(jobs::JobInitiator::user(user.id), job)
+        .enqueue_job(NewSubmissionJob(sub).initiated_by(JobInitiator::user(user.id)))
         .await?;
 
     Ok(HttpResponse::Found()

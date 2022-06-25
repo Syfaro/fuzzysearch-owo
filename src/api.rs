@@ -8,11 +8,16 @@ use actix_http::ws::CloseCode;
 use actix_session::Session;
 use actix_web::{get, post, services, web, HttpRequest, HttpResponse, Scope};
 use actix_web_actors::ws;
+use foxlib::jobs::FaktoryProducer;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{auth::FuzzySearchSessionToken, jobs, models, Error};
+use crate::{
+    auth::FuzzySearchSessionToken,
+    jobs::{JobInitiator, JobInitiatorExt, NewSubmissionJob},
+    models, Error,
+};
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(60);
@@ -270,7 +275,7 @@ struct FuzzySearchParams {
 async fn fuzzysearch(
     path: web::Path<FuzzySearchParams>,
     data: web::Json<fuzzysearch_common::faktory::WebHookData>,
-    faktory: web::Data<jobs::FaktoryClient>,
+    faktory: web::Data<FaktoryProducer>,
     config: web::Data<crate::Config>,
 ) -> Result<HttpResponse, Error> {
     if path.secret != config.fuzzysearch_api_key {
@@ -280,8 +285,7 @@ async fn fuzzysearch(
     tracing::info!("got webhook data: {:?}", data.0);
     faktory
         .enqueue_job(
-            jobs::JobInitiator::external("fuzzysearch"),
-            jobs::new_submission_job(data.0)?,
+            NewSubmissionJob(data.0.into()).initiated_by(JobInitiator::external("fuzzysearch")),
         )
         .await?;
 

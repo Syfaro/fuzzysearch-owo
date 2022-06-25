@@ -1,11 +1,11 @@
-use std::{collections::HashMap, sync::Arc};
-
 use async_trait::async_trait;
+use foxlib::jobs::{FaktoryForge, FaktoryJob, Job, JobExtra};
+use serde::{Deserialize, Serialize};
 use sha2::Digest;
 
-use super::{SiteFromConfig, SiteJob, WatchedSite};
+use super::{SiteFromConfig, WatchedSite};
 use crate::{
-    jobs::{self, JobContext},
+    jobs::{self, JobContext, JobInitiator, JobInitiatorExt, NewSubmissionJob, Queue},
     models, Error,
 };
 
@@ -26,44 +26,104 @@ impl SiteFromConfig for Reddit {
 
 #[async_trait(?Send)]
 impl WatchedSite for Reddit {
-    fn jobs(&self) -> HashMap<&'static str, SiteJob> {
-        [
-            (
-                jobs::job::REDDIT_CHECK_SUBREDDITS,
-                super::wrap_job(check_subreddits),
-            ),
-            (
-                jobs::job::REDDIT_UPDATE_SUBREDDIT,
-                super::wrap_job(update_subreddit),
-            ),
-            (jobs::job::REDDIT_LOAD_POST, super::wrap_job(load_post)),
-        ]
-        .into_iter()
-        .collect()
+    fn register_jobs(&self, forge: &mut FaktoryForge<jobs::JobContext, Error>) {
+        CheckSubredditsJob::register(forge, check_subreddits);
+        UpdateSubredditJob::register(forge, update_subreddit);
+        LoadRedditPostJob::register(forge, load_post);
     }
 }
 
-async fn check_subreddits(ctx: Arc<JobContext>, _job: faktory::Job) -> Result<(), Error> {
+pub struct CheckSubredditsJob;
+
+impl Job for CheckSubredditsJob {
+    const NAME: &'static str = "reddit_check";
+    type Data = ();
+    type Queue = Queue;
+
+    fn queue(&self) -> Self::Queue {
+        Queue::Core
+    }
+
+    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
+        Ok(None)
+    }
+
+    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+        Ok(vec![])
+    }
+
+    fn deserialize(_args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
+        Ok(())
+    }
+}
+
+pub struct UpdateSubredditJob<'a>(pub &'a str);
+
+impl Job for UpdateSubredditJob<'_> {
+    const NAME: &'static str = "reddit_subreddit";
+    type Data = String;
+    type Queue = Queue;
+
+    fn queue(&self) -> Self::Queue {
+        Queue::Outgoing
+    }
+
+    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
+        Ok(None)
+    }
+
+    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+        Ok(vec![self.0.into()])
+    }
+
+    fn deserialize(mut args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
+        serde_json::from_value(args.remove(0))
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct LoadRedditPostJob {
+    pub subreddit_name: String,
+    pub post: types::RedditPost,
+}
+
+impl Job for LoadRedditPostJob {
+    const NAME: &'static str = "reddit_post";
+    type Data = Self;
+    type Queue = Queue;
+
+    fn queue(&self) -> Self::Queue {
+        Queue::Outgoing
+    }
+
+    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
+        Ok(None)
+    }
+
+    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+        Ok(vec![serde_json::to_value(self)?])
+    }
+
+    fn deserialize(mut args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
+        serde_json::from_value(args.remove(0))
+    }
+}
+
+async fn check_subreddits(ctx: JobContext, _job: FaktoryJob, _args: ()) -> Result<(), Error> {
     let subs = models::RedditSubreddit::needing_update(&ctx.conn).await?;
 
     for sub in subs {
         tracing::info!("queueing subreddit {}", sub.name);
 
-        ctx.faktory
-            .enqueue_job(
-                jobs::JobInitiator::Schedule,
-                jobs::reddit_update_subreddit_job(&sub.name),
-            )
+        ctx.producer
+            .enqueue_job(UpdateSubredditJob(&sub.name).initiated_by(JobInitiator::Schedule))
             .await?;
     }
 
     Ok(())
 }
 
-async fn update_subreddit(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(), Error> {
-    let mut args = job.args().iter();
-    let (name,) = crate::extract_args!(args, String);
-
+async fn update_subreddit(ctx: JobContext, _job: FaktoryJob, name: String) -> Result<(), Error> {
     let data = models::RedditSubreddit::get_by_name(&ctx.conn, &name)
         .await?
         .ok_or(Error::Missing)?;
@@ -127,10 +187,13 @@ async fn update_subreddit(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(),
                 continue;
             }
 
-            ctx.faktory
+            ctx.producer
                 .enqueue_job(
-                    jobs::JobInitiator::external("reddit"),
-                    jobs::reddit_post_job(&data.name, types::RedditPost::from(post.data))?,
+                    LoadRedditPostJob {
+                        subreddit_name: data.name.clone(),
+                        post: types::RedditPost::from(post.data),
+                    }
+                    .initiated_by(JobInitiator::external("reddit")),
                 )
                 .await?;
         }
@@ -151,10 +214,14 @@ async fn update_subreddit(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(),
     Ok(())
 }
 
-async fn load_post(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(), Error> {
-    let mut args = job.args().iter();
-    let (subreddit_name, post) = crate::extract_args!(args, String, types::RedditPost);
-
+async fn load_post(
+    ctx: JobContext,
+    _job: FaktoryJob,
+    LoadRedditPostJob {
+        subreddit_name,
+        post,
+    }: LoadRedditPostJob,
+) -> Result<(), Error> {
     if models::RedditPost::exists(&ctx.conn, &post.id).await? {
         tracing::info!("post had already been loaded, skipping");
         return Ok(());
@@ -221,11 +288,8 @@ async fn load_post(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(), Error>
             posted_at: None,
         };
 
-        ctx.faktory
-            .enqueue_job(
-                jobs::JobInitiator::external("reddit"),
-                jobs::new_submission_job(data)?,
-            )
+        ctx.producer
+            .enqueue_job(NewSubmissionJob(data).initiated_by(JobInitiator::external("reddit")))
             .await?;
     }
 

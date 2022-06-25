@@ -1,12 +1,12 @@
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::collections::HashSet;
 
 use async_trait::async_trait;
+use foxlib::jobs::{FaktoryForge, FaktoryJob, Job, JobExtra};
 use sha2::Digest;
 
-use crate::jobs::{self, JobContext, JobInitiator};
-use crate::site::{SiteFromConfig, SiteJob, WatchedSite};
-use crate::{extract_args, models, Config, Error};
+use crate::jobs::{self, JobContext, JobInitiator, JobInitiatorExt, NewSubmissionJob, Queue};
+use crate::site::{SiteFromConfig, WatchedSite};
+use crate::{models, Config, Error};
 
 pub struct FList;
 
@@ -25,16 +25,57 @@ impl SiteFromConfig for FList {
 
 #[async_trait(?Send)]
 impl WatchedSite for FList {
-    fn jobs(&self) -> HashMap<&'static str, SiteJob> {
-        [
-            (
-                jobs::job::FLIST_COLLECT_GALLERY_IMAGES,
-                super::wrap_job(collect_gallery_images),
-            ),
-            (jobs::job::FLIST_HASH_IMAGE, super::wrap_job(hash_image)),
-        ]
-        .into_iter()
-        .collect()
+    fn register_jobs(&self, forge: &mut FaktoryForge<jobs::JobContext, Error>) {
+        CollectGalleryImagesJob::register(forge, collect_gallery_images);
+        HashImageJob::register(forge, hash_image);
+    }
+}
+
+pub struct CollectGalleryImagesJob;
+
+impl Job for CollectGalleryImagesJob {
+    const NAME: &'static str = "flist_gallery";
+    type Data = ();
+    type Queue = Queue;
+
+    fn queue(&self) -> Self::Queue {
+        Queue::Outgoing
+    }
+
+    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
+        Ok(None)
+    }
+
+    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+        Ok(vec![])
+    }
+
+    fn deserialize(_args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
+        Ok(())
+    }
+}
+
+pub struct HashImageJob(i32);
+
+impl Job for HashImageJob {
+    const NAME: &'static str = "flist_hash";
+    type Data = i32;
+    type Queue = Queue;
+
+    fn queue(&self) -> Self::Queue {
+        Queue::Outgoing
+    }
+
+    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
+        Ok(None)
+    }
+
+    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+        Ok(vec![self.0.into()])
+    }
+
+    fn deserialize(mut args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
+        serde_json::from_value(args.remove(0))
     }
 }
 
@@ -179,9 +220,17 @@ impl FListClient {
     }
 }
 
-async fn collect_gallery_images(ctx: Arc<JobContext>, _job: faktory::Job) -> Result<(), Error> {
+async fn collect_gallery_images(ctx: JobContext, _job: FaktoryJob, _args: ()) -> Result<(), Error> {
     let previous_run = models::FListImportRun::previous_run(&ctx.conn).await?;
     let previous_max = match previous_run {
+        Some(run)
+            if run.finished_at.is_none()
+                && chrono::Utc::now().signed_duration_since(run.started_at)
+                    >= chrono::Duration::minutes(30) =>
+        {
+            tracing::warn!("previous run never finished, restarting");
+            run.starting_id
+        }
         Some(run) if run.finished_at.is_none() => {
             tracing::info!("previous run has not yet finished, skipping");
             return Ok(());
@@ -222,11 +271,8 @@ async fn collect_gallery_images(ctx: Arc<JobContext>, _job: faktory::Job) -> Res
 
         // Only enqueue jobs after changes have been committed
         for id in ids.iter().copied() {
-            ctx.faktory
-                .enqueue_job(
-                    JobInitiator::external("flist"),
-                    jobs::flist_hash_image_job(id),
-                )
+            ctx.producer
+                .enqueue_job(HashImageJob(id).initiated_by(JobInitiator::external("flist")))
                 .await?;
         }
 
@@ -247,10 +293,7 @@ async fn collect_gallery_images(ctx: Arc<JobContext>, _job: faktory::Job) -> Res
     Ok(())
 }
 
-async fn hash_image(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(), Error> {
-    let mut args = job.args().iter();
-    let (id,) = extract_args!(args, i32);
-
+async fn hash_image(ctx: JobContext, _job: FaktoryJob, id: i32) -> Result<(), Error> {
     let file = models::FListFile::get_by_id(&ctx.conn, id)
         .await?
         .ok_or(Error::Missing)?;
@@ -298,11 +341,8 @@ async fn hash_image(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(), Error
         posted_at: None,
     };
 
-    ctx.faktory
-        .enqueue_job(
-            JobInitiator::external("flist"),
-            jobs::new_submission_job(data)?,
-        )
+    ctx.producer
+        .enqueue_job(NewSubmissionJob(data).initiated_by(JobInitiator::external("flist")))
         .await?;
 
     Ok(())

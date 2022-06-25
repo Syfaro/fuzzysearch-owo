@@ -17,6 +17,7 @@ mod site;
 mod user;
 
 pub use error::Error;
+use foxlib::jobs::FaktoryProducer;
 
 type Mailer = lettre::AsyncSmtpTransport<lettre::Tokio1Executor>;
 
@@ -58,7 +59,7 @@ pub struct WorkerConfig {
     pub faktory_workers: usize,
     /// Queues to fetch jobs from.
     #[clap(long, env("FAKTORY_QUEUES"), arg_enum, use_value_delimiter = true)]
-    pub faktory_queues: Vec<jobs::FaktoryQueue>,
+    pub faktory_queues: Vec<jobs::Queue>,
 }
 
 #[derive(Clone, clap::Subcommand)]
@@ -83,6 +84,15 @@ pub struct Config {
     #[clap(long, env("RUN_MIGRATIONS"))]
     pub run_migrations: bool,
 
+    /// OTLP agent for tracing spans.
+    #[clap(long, env("OTLP_AGENT"))]
+    pub otlp_agent: String,
+    /// If logs should output in JSON format.
+    #[clap(env("JSON_LOGS"))]
+    pub json_logs: bool,
+    /// Metrics host for prometheus.
+    #[clap(long, env("METRICS_HOST"))]
+    pub metrics_host: Option<std::net::SocketAddr>,
     /// Sentry DSN.
     #[clap(long, env("SENTRY_DSN"))]
     pub sentry_dsn: Option<String>,
@@ -360,8 +370,22 @@ impl actix_web::FromRequest for ClientIpAddr {
 async fn main() {
     let config = load_config();
 
-    fuzzysearch_common::trace::configure_tracing("fuzzysearch-owo");
-    fuzzysearch_common::trace::serve_metrics().await;
+    let name = match config.service_mode {
+        ServiceMode::Web(ref _config) => "web",
+        ServiceMode::BackgroundWorker(ref _config) => "worker",
+    };
+
+    foxlib::metrics::configure_tracing(
+        &config.otlp_agent,
+        env!("CARGO_PKG_NAME"),
+        name,
+        env!("CARGO_PKG_VERSION"),
+        config.json_logs,
+    );
+
+    if let Some(host) = config.metrics_host {
+        foxlib::metrics::serve(host).await;
+    }
 
     let pool = sqlx::PgPool::connect(&config.database_url)
         .await
@@ -402,14 +426,14 @@ async fn main() {
         client: Default::default(),
     });
 
-    let faktory = jobs::FaktoryClient::connect(config.faktory_host.clone())
-        .await
-        .expect("could not connect to faktory");
-
     let client = reqwest::ClientBuilder::default()
         .user_agent(&config.user_agent)
         .build()
         .expect("could not create http client");
+
+    let producer = FaktoryProducer::connect(Some(config.faktory_host.clone()))
+        .await
+        .expect("could not connect to faktory");
 
     let _guard = config.sentry_dsn.as_deref().map(|dsn| {
         sentry::init((
@@ -439,7 +463,7 @@ async fn main() {
             let telegram = Arc::new(tgbotapi::Telegram::new(config.telegram_bot_token.clone()));
 
             jobs::start_job_processing(jobs::JobContext {
-                faktory,
+                producer,
                 conn: pool,
                 redis: redis_manager,
                 redlock: std::sync::Arc::new(redlock),
@@ -494,9 +518,9 @@ async fn main() {
                     .app_data(web::Data::new(s3.clone()))
                     .app_data(web::Data::new(redis_client.clone()))
                     .app_data(web::Data::new(redis_manager.clone()))
-                    .app_data(web::Data::new(faktory.clone()))
                     .app_data(web::Data::new(config.clone()))
                     .app_data(web::Data::new(telegram_login.clone()))
+                    .app_data(web::Data::new(producer.clone()))
                     .service(auth::service())
                     .service(user::service())
                     .service(api::service())

@@ -1,12 +1,13 @@
+use std::collections::HashSet;
+use std::future::Future;
+
 use async_trait::async_trait;
+use foxlib::jobs::{FaktoryForge, FaktoryProducer, Job};
 use oauth2::{AccessToken, RefreshToken, TokenResponse};
 use redis::AsyncCommands;
-use std::collections::{HashMap, HashSet};
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::jobs::JobInitiatorExt;
 use crate::Error;
 use crate::{jobs, models};
 
@@ -24,12 +25,6 @@ pub use patreon::Patreon;
 pub use reddit::{types::RedditPost, Reddit};
 pub use weasyl::{Weasyl, WeasylSubmission};
 
-/// A function that is executed to handle a job.
-pub type SiteJob = Box<dyn Fn(Arc<jobs::JobContext>, faktory::Job) -> SiteJobFut + Send + Sync>;
-
-/// A future returned by a job handler function.
-pub type SiteJobFut = Pin<Box<dyn Future<Output = Result<(), Error>>>>;
-
 /// Initialize a site from the global config.
 #[async_trait(?Send)]
 pub trait SiteFromConfig: Sized {
@@ -41,7 +36,7 @@ pub trait SiteFromConfig: Sized {
 #[async_trait(?Send)]
 pub trait WatchedSite {
     /// Jobs to register for this site.
-    fn jobs(&self) -> HashMap<&'static str, SiteJob>;
+    fn register_jobs(&self, forge: &mut FaktoryForge<jobs::JobContext, Error>);
 }
 
 /// A site that can create owned submissions.
@@ -51,7 +46,7 @@ pub trait CollectedSite {
     fn oauth_page(&self) -> Option<&'static str>;
 
     /// Jobs to register for this site.
-    fn jobs(&self) -> HashMap<&'static str, SiteJob>;
+    fn register_jobs(&self, forge: &mut FaktoryForge<jobs::JobContext, Error>);
 
     /// Actions to perform when the account is added.
     ///
@@ -68,14 +63,6 @@ pub trait SiteServices {
     fn services() -> Vec<actix_web::Scope>;
 }
 
-pub fn wrap_job<F, Fut>(job_fn: F) -> SiteJob
-where
-    F: Fn(Arc<jobs::JobContext>, faktory::Job) -> Fut + Sync + Send + 'static,
-    Fut: Future<Output = Result<(), Error>> + 'static,
-{
-    Box::new(move |ctx, job| Box::pin(job_fn(ctx, job)))
-}
-
 /// Get all services for all sites.
 pub fn service() -> Vec<actix_web::Scope> {
     deviantart::DeviantArt::services()
@@ -85,17 +72,21 @@ pub fn service() -> Vec<actix_web::Scope> {
 }
 
 /// Get all jobs for all watched and collected sites.
-pub async fn jobs(config: &crate::Config) -> Result<HashMap<&'static str, SiteJob>, Error> {
-    let watched_site_jobs = watched_sites(config)
+pub async fn register_jobs(
+    config: &crate::Config,
+    forge: &mut FaktoryForge<jobs::JobContext, Error>,
+) -> Result<(), Error> {
+    watched_sites(config)
         .await?
         .into_iter()
-        .flat_map(|site| site.jobs());
-    let collected_site_jobs = collected_sites(config)
-        .await?
-        .into_iter()
-        .flat_map(|site| site.jobs());
+        .for_each(|site| site.register_jobs(forge));
 
-    Ok(watched_site_jobs.chain(collected_site_jobs).collect())
+    collected_sites(config)
+        .await?
+        .into_iter()
+        .for_each(|site| site.register_jobs(forge));
+
+    Ok(())
 }
 
 /// Get all watched sites.
@@ -141,7 +132,7 @@ fn get_authenticated_client(
 /// Set IDs of submissions that are still loading for a given account. Used to send progress events
 /// to the user.
 async fn set_loading_submissions<S, I>(
-    conn: &sqlx::Pool<sqlx::Postgres>,
+    conn: &sqlx::PgPool,
     redis: &mut redis::aio::ConnectionManager,
     user_id: Uuid,
     account_id: Uuid,
@@ -186,8 +177,8 @@ where
 }
 
 /// Queue newly discovered submissions for evaluation.
-async fn queue_new_submissions<S, Sub, F>(
-    faktory: &crate::jobs::FaktoryClient,
+async fn queue_new_submissions<S, Sub, J, F>(
+    producer: &FaktoryProducer,
     user_id: Uuid,
     account_id: Uuid,
     submissions: S,
@@ -195,13 +186,14 @@ async fn queue_new_submissions<S, Sub, F>(
 ) -> Result<(), Error>
 where
     S: IntoIterator<Item = Sub>,
-    F: Fn(Uuid, Uuid, Sub) -> Result<faktory::Job, Error>,
+    J: Job,
+    F: Fn(Uuid, Uuid, Sub) -> J,
 {
     for sub in submissions {
-        let job = job_fn(user_id, account_id, sub)?;
+        let job = job_fn(user_id, account_id, sub);
 
-        faktory
-            .enqueue_job(jobs::JobInitiator::User { user_id }, job)
+        producer
+            .enqueue_job(job.initiated_by(jobs::JobInitiator::user(user_id)))
             .await?;
     }
 
@@ -209,7 +201,7 @@ where
 }
 
 async fn update_import_progress<S: ToString>(
-    conn: &sqlx::Pool<sqlx::Postgres>,
+    conn: &sqlx::PgPool,
     redis: &mut redis::aio::ConnectionManager,
     user_id: Uuid,
     account_id: Uuid,

@@ -3,6 +3,7 @@ use std::borrow::Cow;
 use actix_http::StatusCode;
 use actix_web::{http, HttpResponse, HttpResponseBuilder};
 use askama::Template;
+use foxlib::jobs::ForgeError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -21,8 +22,8 @@ pub enum Error {
     Template(#[from] askama::Error),
     #[error("redis error: {0}")]
     Redis(#[from] redis::RedisError),
-    #[error("faktory error: {0}")]
-    Faktory(faktory::Error),
+    #[error("job error: {0}")]
+    Job(#[from] foxlib::jobs::Error),
     #[error("actix error: {0}")]
     Actix(#[from] actix_web::Error),
     #[error("json error: {0}")]
@@ -88,13 +89,17 @@ impl Error {
             _ => true,
         }
     }
-}
 
-impl Error {
     pub fn from_displayable<D: std::fmt::Display>(displayable: D) -> Self {
         let display = displayable.to_string();
 
         Self::UnknownMessage(display.into())
+    }
+}
+
+impl ForgeError for Error {
+    fn is_retryable(&self) -> bool {
+        self.should_retry()
     }
 }
 

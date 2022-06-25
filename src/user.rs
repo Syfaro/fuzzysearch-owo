@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use actix_web::{get, post, services, web, HttpResponse, Scope};
 use askama::Template;
+use foxlib::jobs::FaktoryProducer;
 use futures::TryStreamExt;
 use rand::Rng;
 use serde::Deserialize;
@@ -11,7 +12,7 @@ use uuid::Uuid;
 
 use crate::{
     auth::{self, FuzzySearchSessionToken},
-    jobs,
+    jobs::{self, JobInitiator, JobInitiatorExt, SearchExistingSubmissionsJob},
     models::{self, setting, Site, UserSettingItem},
     routes::*,
     ClientIpAddr, Error, WrappedTemplate,
@@ -32,7 +33,7 @@ struct Home<'a> {
 #[get("/home")]
 async fn home(
     request: actix_web::HttpRequest,
-    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    conn: web::Data<sqlx::PgPool>,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
     let user_item_count = models::OwnedMediaItem::user_item_count(&conn, user.id);
@@ -102,7 +103,7 @@ async fn settings_post(
     request: actix_web::HttpRequest,
     telegram_login: web::Data<auth::TelegramLoginConfig>,
     conn: web::Data<sqlx::PgPool>,
-    faktory: web::Data<jobs::FaktoryClient>,
+    faktory: web::Data<FaktoryProducer>,
     user: models::User,
     form: web::Form<HashMap<String, String>>,
 ) -> Result<HttpResponse, Error> {
@@ -148,8 +149,8 @@ async fn settings_post(
 
                 faktory
                     .enqueue_job(
-                        jobs::JobInitiator::user(user.id),
-                        jobs::email_verification_job(user.id)?,
+                        jobs::EmailVerificationJob { user_id: user.id }
+                            .initiated_by(jobs::JobInitiator::user(user.id)),
                     )
                     .await?;
 
@@ -211,7 +212,7 @@ async fn delete(
 
 #[get("/events")]
 async fn events(
-    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    conn: web::Data<sqlx::PgPool>,
     user: models::User,
 ) -> Result<web::Json<Vec<models::UserEvent>>, Error> {
     let events = models::UserEvent::recent_events(&conn, user.id).await?;
@@ -221,11 +222,11 @@ async fn events(
 
 #[post("/single")]
 async fn single(
-    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    conn: web::Data<sqlx::PgPool>,
     redis: web::Data<redis::aio::ConnectionManager>,
     s3: web::Data<rusoto_s3::S3Client>,
     config: web::Data<crate::Config>,
-    faktory: web::Data<jobs::FaktoryClient>,
+    faktory: web::Data<FaktoryProducer>,
     user: models::User,
     mut form: actix_multipart::Multipart,
 ) -> Result<HttpResponse, Error> {
@@ -305,8 +306,11 @@ async fn single(
 
         faktory
             .enqueue_job(
-                jobs::JobInitiator::user(user.id),
-                jobs::search_existing_submissions_job(user.id, id)?,
+                SearchExistingSubmissionsJob {
+                    user_id: user.id,
+                    media_id: id,
+                }
+                .initiated_by(JobInitiator::user(user.id)),
             )
             .await?;
     }
@@ -344,7 +348,7 @@ struct AccountLinkForm {
 #[post("/link")]
 async fn account_link_post(
     config: web::Data<crate::Config>,
-    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    conn: web::Data<sqlx::PgPool>,
     user: models::User,
     form: web::Form<AccountLinkForm>,
 ) -> Result<HttpResponse, Error> {
@@ -390,7 +394,7 @@ struct AccountIdForm {
 
 #[post("/remove")]
 async fn account_remove(
-    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    conn: web::Data<sqlx::PgPool>,
     user: models::User,
     form: web::Form<AccountIdForm>,
 ) -> Result<HttpResponse, Error> {
@@ -415,7 +419,7 @@ struct AccountView {
 #[get("/{account_id}")]
 async fn account_view(
     request: actix_web::HttpRequest,
-    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    conn: web::Data<sqlx::PgPool>,
     path: web::Path<(Uuid,)>,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
@@ -448,8 +452,8 @@ async fn account_view(
 
 #[post("/verify")]
 async fn account_verify(
-    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
-    faktory: web::Data<jobs::FaktoryClient>,
+    conn: web::Data<sqlx::PgPool>,
+    faktory: web::Data<FaktoryProducer>,
     user: models::User,
     form: web::Form<AccountIdForm>,
 ) -> Result<HttpResponse, Error> {
@@ -463,8 +467,11 @@ async fn account_verify(
 
     faktory
         .enqueue_job(
-            jobs::JobInitiator::user(user.id),
-            jobs::verify_account_job(user.id, account.id)?,
+            jobs::VerifyAccountJob {
+                user_id: user.id,
+                account_id: account.id,
+            }
+            .initiated_by(jobs::JobInitiator::user(user.id)),
         )
         .await?;
 
@@ -486,7 +493,7 @@ struct MediaView<'a> {
 #[get("/view/{media_id}")]
 async fn media_view(
     request: actix_web::HttpRequest,
-    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    conn: web::Data<sqlx::PgPool>,
     path: web::Path<(Uuid,)>,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
@@ -538,7 +545,7 @@ struct MediaRemoveForm {
 
 #[post("/remove")]
 async fn media_remove(
-    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    conn: web::Data<sqlx::PgPool>,
     user: models::User,
     form: web::Form<MediaRemoveForm>,
 ) -> Result<HttpResponse, Error> {
@@ -786,8 +793,8 @@ struct AddEmailForm {
 
 #[post("/add")]
 async fn email_add_post(
-    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
-    faktory: web::Data<jobs::FaktoryClient>,
+    conn: web::Data<sqlx::PgPool>,
+    faktory: web::Data<FaktoryProducer>,
     user: models::User,
     form: web::Form<AddEmailForm>,
 ) -> Result<HttpResponse, Error> {
@@ -807,8 +814,8 @@ async fn email_add_post(
 
     faktory
         .enqueue_job(
-            jobs::JobInitiator::user(user.id),
-            jobs::email_verification_job(user.id)?,
+            jobs::EmailVerificationJob { user_id: user.id }
+                .initiated_by(jobs::JobInitiator::user(user.id)),
         )
         .await?;
 
@@ -835,7 +842,7 @@ struct EmailVerifyQuery {
 #[get("/verify")]
 async fn verify_email_get(
     request: actix_web::HttpRequest,
-    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    conn: web::Data<sqlx::PgPool>,
     query: web::Query<EmailVerifyQuery>,
 ) -> Result<HttpResponse, Error> {
     if !models::User::check_email_verifier_token(&conn, query.user_id, query.verifier).await? {
@@ -860,7 +867,7 @@ async fn verify_email_get(
 #[post("/verify")]
 async fn verify_email_post(
     client_ip: ClientIpAddr,
-    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    conn: web::Data<sqlx::PgPool>,
     form: web::Form<EmailVerifyQuery>,
     user: Option<models::User>,
     session: actix_session::Session,
@@ -903,7 +910,7 @@ struct AllowlistForm {
 
 #[post("/add")]
 async fn allowlist_add(
-    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    conn: web::Data<sqlx::PgPool>,
     form: web::Form<AllowlistForm>,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
@@ -916,7 +923,7 @@ async fn allowlist_add(
 
 #[post("/remove")]
 async fn allowlist_remove(
-    conn: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    conn: web::Data<sqlx::PgPool>,
     form: web::Form<AllowlistForm>,
     user: models::User,
 ) -> Result<HttpResponse, Error> {

@@ -68,10 +68,7 @@ impl User {
         }
     }
 
-    pub async fn lookup_by_id(
-        conn: &sqlx::Pool<sqlx::Postgres>,
-        id: Uuid,
-    ) -> Result<Option<User>, Error> {
+    pub async fn lookup_by_id(conn: &sqlx::PgPool, id: Uuid) -> Result<Option<User>, Error> {
         let user = sqlx::query_file_as!(User, "queries/user/lookup_id.sql", id)
             .fetch_optional(conn)
             .await?;
@@ -80,7 +77,7 @@ impl User {
     }
 
     pub async fn lookup_by_login(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         username: &str,
         password: &str,
     ) -> Result<Option<User>, Error> {
@@ -113,7 +110,7 @@ impl User {
     }
 
     pub async fn create(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         username: &str,
         password: &str,
     ) -> Result<Uuid, Error> {
@@ -142,10 +139,7 @@ impl User {
         Ok(id)
     }
 
-    pub async fn username_exists(
-        conn: &sqlx::Pool<sqlx::Postgres>,
-        username: &str,
-    ) -> Result<bool, Error> {
+    pub async fn username_exists(conn: &sqlx::PgPool, username: &str) -> Result<bool, Error> {
         let exists = sqlx::query_file_scalar!("queries/user/username_exists.sql", username)
             .fetch_one(conn)
             .await?;
@@ -153,10 +147,7 @@ impl User {
         Ok(exists)
     }
 
-    pub async fn email_exists(
-        conn: &sqlx::Pool<sqlx::Postgres>,
-        email: &str,
-    ) -> Result<bool, Error> {
+    pub async fn email_exists(conn: &sqlx::PgPool, email: &str) -> Result<bool, Error> {
         let exists = sqlx::query_file_scalar!("queries/user/email_exists.sql", email)
             .fetch_one(conn)
             .await?;
@@ -190,11 +181,7 @@ impl User {
         Ok(hash)
     }
 
-    pub async fn set_email(
-        conn: &sqlx::Pool<sqlx::Postgres>,
-        user_id: Uuid,
-        email: &str,
-    ) -> Result<(), Error> {
+    pub async fn set_email(conn: &sqlx::PgPool, user_id: Uuid, email: &str) -> Result<(), Error> {
         sqlx::query_file!("queries/user/set_email.sql", user_id, email)
             .execute(conn)
             .await?;
@@ -219,7 +206,7 @@ impl User {
     }
 
     pub async fn verify_email(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         user_id: Uuid,
         verifier: Uuid,
     ) -> Result<bool, Error> {
@@ -313,7 +300,7 @@ impl UserSession {
         }
     }
     pub async fn create(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         user_id: Uuid,
         source: UserSessionSource,
         ip_addr: Option<&str>,
@@ -455,7 +442,7 @@ impl MediaListSort {
 
 impl OwnedMediaItem {
     pub async fn get_by_id(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         id: Uuid,
         user_id: Uuid,
     ) -> Result<Option<Self>, Error> {
@@ -467,7 +454,7 @@ impl OwnedMediaItem {
     }
 
     pub async fn lookup_by_site_id<S: ToString>(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         site: Site,
         site_id: S,
     ) -> Result<Option<Self>, Error> {
@@ -483,10 +470,7 @@ impl OwnedMediaItem {
         Ok(item)
     }
 
-    pub async fn user_item_count(
-        conn: &sqlx::Pool<sqlx::Postgres>,
-        user_id: Uuid,
-    ) -> Result<(i64, i64), Error> {
+    pub async fn user_item_count(conn: &sqlx::PgPool, user_id: Uuid) -> Result<(i64, i64), Error> {
         let stats = sqlx::query_file!("queries/owned_media/user_item_count.sql", user_id)
             .fetch_one(conn)
             .await?;
@@ -495,7 +479,7 @@ impl OwnedMediaItem {
     }
 
     pub async fn add_manual_item(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         user_id: Uuid,
         perceptual_hash: i64,
         sha256_hash: [u8; 32],
@@ -518,7 +502,7 @@ impl OwnedMediaItem {
 
     #[allow(clippy::too_many_arguments)]
     pub async fn add_item<ID: ToString>(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         user_id: Uuid,
         account_id: Uuid,
         source_id: ID,
@@ -546,7 +530,7 @@ impl OwnedMediaItem {
     }
 
     pub async fn update_media(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         s3: &rusoto_s3::S3Client,
         config: &crate::Config,
         id: Uuid,
@@ -583,7 +567,7 @@ impl OwnedMediaItem {
     }
 
     pub async fn recent_media(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         user_id: Uuid,
         account_id: Option<Uuid>,
     ) -> Result<Vec<Self>, Error> {
@@ -611,7 +595,7 @@ impl OwnedMediaItem {
     }
 
     pub async fn find_similar(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         perceptual_hash: i64,
     ) -> Result<Vec<Self>, Error> {
         let items = sqlx::query_file_as!(
@@ -626,11 +610,7 @@ impl OwnedMediaItem {
         Ok(items)
     }
 
-    pub async fn remove(
-        conn: &sqlx::Pool<sqlx::Postgres>,
-        user_id: Uuid,
-        media_id: Uuid,
-    ) -> Result<(), Error> {
+    pub async fn remove(conn: &sqlx::PgPool, user_id: Uuid, media_id: Uuid) -> Result<(), Error> {
         sqlx::query_file!("queries/owned_media/remove.sql", user_id, media_id)
             .execute(conn)
             .await?;
@@ -796,7 +776,7 @@ pub struct LinkedAccount {
 
 impl LinkedAccount {
     pub async fn create(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         user_id: Uuid,
         source_site: Site,
         username: &str,
@@ -826,10 +806,7 @@ impl LinkedAccount {
         Ok(id)
     }
 
-    pub async fn lookup_by_id(
-        conn: &sqlx::Pool<sqlx::Postgres>,
-        id: Uuid,
-    ) -> Result<Option<Self>, Error> {
+    pub async fn lookup_by_id(conn: &sqlx::PgPool, id: Uuid) -> Result<Option<Self>, Error> {
         let account = sqlx::query_file!("queries/linked_account/lookup_by_id.sql", id)
             .map(|row| LinkedAccount {
                 id: row.id,
@@ -849,7 +826,7 @@ impl LinkedAccount {
     }
 
     pub async fn lookup_by_site_id(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         user_id: Uuid,
         site: Site,
         site_id: &str,
@@ -877,10 +854,7 @@ impl LinkedAccount {
         Ok(account)
     }
 
-    pub async fn owned_by_user(
-        conn: &sqlx::Pool<sqlx::Postgres>,
-        user_id: Uuid,
-    ) -> Result<Vec<Self>, Error> {
+    pub async fn owned_by_user(conn: &sqlx::PgPool, user_id: Uuid) -> Result<Vec<Self>, Error> {
         let accounts = sqlx::query_file!("queries/linked_account/owned_by_user.sql", user_id)
             .map(|row| LinkedAccount {
                 id: row.id,
@@ -916,7 +890,7 @@ impl LinkedAccount {
     }
 
     pub async fn update_loading_state(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         redis: &redis::aio::ConnectionManager,
         user_id: Uuid,
         account_id: Uuid,
@@ -946,7 +920,7 @@ impl LinkedAccount {
     }
 
     pub async fn update_data(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         account_id: Uuid,
         data: Option<serde_json::Value>,
     ) -> Result<(), Error> {
@@ -957,11 +931,7 @@ impl LinkedAccount {
         Ok(())
     }
 
-    pub async fn remove(
-        conn: &sqlx::Pool<sqlx::Postgres>,
-        user_id: Uuid,
-        account_id: Uuid,
-    ) -> Result<(), Error> {
+    pub async fn remove(conn: &sqlx::PgPool, user_id: Uuid, account_id: Uuid) -> Result<(), Error> {
         sqlx::query_file!("queries/linked_account/remove.sql", user_id, account_id)
             .execute(conn)
             .await?;
@@ -970,7 +940,7 @@ impl LinkedAccount {
     }
 
     pub async fn items(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         user_id: Uuid,
         account_id: Uuid,
     ) -> Result<(i64, i64), Error> {
@@ -982,7 +952,7 @@ impl LinkedAccount {
     }
 
     pub async fn search_site_account(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         site_name: &str,
         username: &str,
     ) -> Result<Vec<(Uuid, Uuid)>, Error> {
@@ -998,10 +968,7 @@ impl LinkedAccount {
         Ok(account)
     }
 
-    pub async fn all_site_accounts(
-        conn: &sqlx::Pool<sqlx::Postgres>,
-        site: Site,
-    ) -> Result<Vec<Uuid>, Error> {
+    pub async fn all_site_accounts(conn: &sqlx::PgPool, site: Site) -> Result<Vec<Uuid>, Error> {
         let accounts = sqlx::query_file_scalar!(
             "queries/linked_account/all_site_accounts.sql",
             site.to_string()
@@ -1205,7 +1172,7 @@ pub struct EventAndRelatedMedia {
 
 impl UserEvent {
     pub async fn notify<M: AsRef<str>>(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         redis: &redis::aio::ConnectionManager,
         user_id: Uuid,
         message: M,
@@ -1234,7 +1201,7 @@ impl UserEvent {
     }
 
     pub async fn similar_found(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         redis: &redis::aio::ConnectionManager,
         user_id: Uuid,
         media_id: Uuid,
@@ -1269,10 +1236,7 @@ impl UserEvent {
         Ok(notification_id)
     }
 
-    pub async fn recent_events(
-        conn: &sqlx::Pool<sqlx::Postgres>,
-        user_id: Uuid,
-    ) -> Result<Vec<Self>, Error> {
+    pub async fn recent_events(conn: &sqlx::PgPool, user_id: Uuid) -> Result<Vec<Self>, Error> {
         let events = sqlx::query_file!("queries/user_event/recent_events.sql", user_id)
             .map(|row| UserEvent {
                 id: row.id,
@@ -1358,7 +1322,7 @@ impl UserEvent {
     }
 
     pub async fn recent_events_for_media(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         user_id: Uuid,
         media_id: Uuid,
     ) -> Result<Vec<Self>, Error> {
@@ -1416,11 +1380,7 @@ impl UserEvent {
 pub struct AuthState;
 
 impl AuthState {
-    pub async fn create(
-        conn: &sqlx::Pool<sqlx::Postgres>,
-        user_id: Uuid,
-        state: &str,
-    ) -> Result<Uuid, Error> {
+    pub async fn create(conn: &sqlx::PgPool, user_id: Uuid, state: &str) -> Result<Uuid, Error> {
         let id = sqlx::query_file_scalar!("queries/auth_state/create.sql", user_id, state)
             .fetch_one(conn)
             .await?;
@@ -1428,11 +1388,7 @@ impl AuthState {
         Ok(id)
     }
 
-    pub async fn lookup(
-        conn: &sqlx::Pool<sqlx::Postgres>,
-        user_id: Uuid,
-        state: &str,
-    ) -> Result<bool, Error> {
+    pub async fn lookup(conn: &sqlx::PgPool, user_id: Uuid, state: &str) -> Result<bool, Error> {
         let state = sqlx::query_file_scalar!("queries/auth_state/lookup.sql", user_id, state)
             .fetch_optional(conn)
             .await?;
@@ -1440,11 +1396,7 @@ impl AuthState {
         Ok(state.is_some())
     }
 
-    pub async fn remove(
-        conn: &sqlx::Pool<sqlx::Postgres>,
-        user_id: Uuid,
-        state: &str,
-    ) -> Result<(), Error> {
+    pub async fn remove(conn: &sqlx::PgPool, user_id: Uuid, state: &str) -> Result<(), Error> {
         sqlx::query_file!("queries/auth_state/remove.sql", user_id, state)
             .execute(conn)
             .await?;
@@ -1457,7 +1409,7 @@ pub struct PatreonWebhookEvent;
 
 impl PatreonWebhookEvent {
     pub async fn log(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         linked_account_id: Uuid,
         event: serde_json::Value,
     ) -> Result<Uuid, Error> {
@@ -1484,7 +1436,7 @@ pub struct FListFile {
 
 impl FListFile {
     pub async fn similar_images(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         perceptual_hash: i64,
     ) -> Result<Vec<Self>, Error> {
         let images =
@@ -1508,10 +1460,7 @@ impl FListFile {
         Ok(())
     }
 
-    pub async fn get_by_id(
-        conn: &sqlx::Pool<sqlx::Postgres>,
-        id: i32,
-    ) -> Result<Option<Self>, Error> {
+    pub async fn get_by_id(conn: &sqlx::PgPool, id: i32) -> Result<Option<Self>, Error> {
         let item = sqlx::query_file_as!(Self, "queries/flist/get_by_id.sql", id)
             .fetch_optional(conn)
             .await?;
@@ -1520,7 +1469,7 @@ impl FListFile {
     }
 
     pub async fn update(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         id: i32,
         size: i32,
         sha256: Vec<u8>,
@@ -1549,7 +1498,7 @@ pub struct FListImportRun {
 }
 
 impl FListImportRun {
-    pub async fn previous_run(conn: &sqlx::Pool<sqlx::Postgres>) -> Result<Option<Self>, Error> {
+    pub async fn previous_run(conn: &sqlx::PgPool) -> Result<Option<Self>, Error> {
         let previous_run = sqlx::query_file_as!(Self, "queries/flist/previous_run.sql")
             .fetch_optional(conn)
             .await?;
@@ -1557,7 +1506,7 @@ impl FListImportRun {
         Ok(previous_run)
     }
 
-    pub async fn start(conn: &sqlx::Pool<sqlx::Postgres>, starting_id: i32) -> Result<Uuid, Error> {
+    pub async fn start(conn: &sqlx::PgPool, starting_id: i32) -> Result<Uuid, Error> {
         let id = sqlx::query_file_scalar!("queries/flist/start.sql", starting_id)
             .fetch_one(conn)
             .await?;
@@ -1565,11 +1514,7 @@ impl FListImportRun {
         Ok(id)
     }
 
-    pub async fn complete(
-        conn: &sqlx::Pool<sqlx::Postgres>,
-        id: Uuid,
-        max_id: i32,
-    ) -> Result<(), Error> {
+    pub async fn complete(conn: &sqlx::PgPool, id: Uuid, max_id: i32) -> Result<(), Error> {
         sqlx::query_file!("queries/flist/complete.sql", id, max_id)
             .execute(conn)
             .await?;
@@ -1602,7 +1547,7 @@ pub struct RedditSubreddit {
 }
 
 impl RedditSubreddit {
-    pub async fn needing_update(conn: &sqlx::Pool<sqlx::Postgres>) -> Result<Vec<Self>, Error> {
+    pub async fn needing_update(conn: &sqlx::PgPool) -> Result<Vec<Self>, Error> {
         let subs = sqlx::query_file_as!(Self, "queries/reddit/needing_update.sql")
             .fetch_all(conn)
             .await?;
@@ -1610,10 +1555,7 @@ impl RedditSubreddit {
         Ok(subs)
     }
 
-    pub async fn get_by_name(
-        conn: &sqlx::Pool<sqlx::Postgres>,
-        name: &str,
-    ) -> Result<Option<Self>, Error> {
+    pub async fn get_by_name(conn: &sqlx::PgPool, name: &str) -> Result<Option<Self>, Error> {
         let sub = sqlx::query_file_as!(Self, "queries/reddit/get_by_name.sql", name)
             .fetch_optional(conn)
             .await?;
@@ -1622,7 +1564,7 @@ impl RedditSubreddit {
     }
 
     pub async fn update_position(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         name: &str,
         position: &str,
     ) -> Result<(), Error> {
@@ -1672,7 +1614,7 @@ pub struct RedditPost {
 }
 
 impl RedditPost {
-    pub async fn create(conn: &sqlx::Pool<sqlx::Postgres>, post: Self) -> Result<(), Error> {
+    pub async fn create(conn: &sqlx::PgPool, post: Self) -> Result<(), Error> {
         sqlx::query_file!(
             "queries/reddit/create_post.sql",
             post.fullname,
@@ -1688,7 +1630,7 @@ impl RedditPost {
         Ok(())
     }
 
-    pub async fn exists(conn: &sqlx::Pool<sqlx::Postgres>, id: &str) -> Result<bool, Error> {
+    pub async fn exists(conn: &sqlx::PgPool, id: &str) -> Result<bool, Error> {
         let exists = sqlx::query_file_scalar!("queries/reddit/exists.sql", id)
             .fetch_one(conn)
             .await?;
@@ -1709,7 +1651,7 @@ pub struct RedditImage {
 
 impl RedditImage {
     pub async fn create(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         post_fullname: &str,
         size: i32,
         sha256: [u8; 32],
@@ -1729,7 +1671,7 @@ impl RedditImage {
     }
 
     pub async fn similar_images(
-        conn: &sqlx::Pool<sqlx::Postgres>,
+        conn: &sqlx::PgPool,
         perceptual_hash: i64,
     ) -> Result<Vec<Self>, Error> {
         let images = sqlx::query_file!("queries/reddit/similar_images.sql", perceptual_hash, 3)

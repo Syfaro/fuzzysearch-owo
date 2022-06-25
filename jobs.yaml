@@ -16,7 +16,7 @@ jobs:
   - name: collect deviantart
     every: "0 4 * * *"
     job_type: deviantart_accounts
-    queue: fuzzysearch_owo_outgoing
+    queue: fuzzysearch_owo_core
     args: []
     custom:
       initiator: schedule

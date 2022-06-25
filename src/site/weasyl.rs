@@ -1,14 +1,13 @@
-use std::{collections::HashMap, sync::Arc};
-
 use async_trait::async_trait;
+use foxlib::jobs::{FaktoryForge, FaktoryJob, Job, JobExtra};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::{
-    jobs::{self, search_existing_submissions_job, JobContext, JobInitiator},
+    jobs::{self, JobContext, JobInitiator, JobInitiatorExt, Queue, SearchExistingSubmissionsJob},
     models::{self, LinkedAccount},
-    site::{CollectedSite, SiteFromConfig, SiteJob},
+    site::{CollectedSite, SiteFromConfig},
     Config, Error,
 };
 
@@ -109,13 +108,8 @@ impl CollectedSite for Weasyl {
         None
     }
 
-    fn jobs(&self) -> HashMap<&'static str, SiteJob> {
-        [(
-            jobs::job::ADD_SUBMISSION_WEASYL,
-            super::wrap_job(add_submission_weasyl),
-        )]
-        .into_iter()
-        .collect()
+    fn register_jobs(&self, forge: &mut FaktoryForge<jobs::JobContext, Error>) {
+        AddSubmissionWeasylJob::register(forge, add_submission_weasyl);
     }
 
     #[tracing::instrument(skip(self, ctx, account), fields(user_id = %account.owner_id, account_id = %account.id))]
@@ -146,12 +140,15 @@ impl CollectedSite for Weasyl {
         .await?;
 
         super::queue_new_submissions(
-            &ctx.faktory,
+            &ctx.producer,
             account.owner_id,
             account.id,
             subs,
-            |user_id, account_id, sub| {
-                jobs::add_weasyl_submission_job(user_id, account_id, sub, true)
+            |user_id, account_id, sub| AddSubmissionWeasylJob {
+                user_id,
+                account_id,
+                sub,
+                was_import: true,
             },
         )
         .await?;
@@ -160,12 +157,47 @@ impl CollectedSite for Weasyl {
     }
 }
 
-#[tracing::instrument(skip(ctx, job), fields(job_id = job.id()))]
-async fn add_submission_weasyl(ctx: Arc<JobContext>, job: faktory::Job) -> Result<(), Error> {
-    let mut args = job.args().iter();
-    let (user_id, account_id, sub, was_import) =
-        crate::extract_args!(args, Uuid, Uuid, WeasylSubmission, bool);
+#[derive(Deserialize, Serialize)]
+pub struct AddSubmissionWeasylJob {
+    pub user_id: Uuid,
+    pub account_id: Uuid,
+    pub sub: WeasylSubmission,
+    pub was_import: bool,
+}
 
+impl Job for AddSubmissionWeasylJob {
+    const NAME: &'static str = "add_submission_weasyl";
+    type Data = Self;
+    type Queue = Queue;
+
+    fn queue(&self) -> Self::Queue {
+        Queue::Outgoing
+    }
+
+    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
+        Ok(None)
+    }
+
+    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+        Ok(vec![serde_json::to_value(self)?])
+    }
+
+    fn deserialize(mut args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
+        serde_json::from_value(args.remove(0))
+    }
+}
+
+#[tracing::instrument(skip(ctx, job), fields(job_id = job.id()))]
+async fn add_submission_weasyl(
+    ctx: JobContext,
+    job: FaktoryJob,
+    AddSubmissionWeasylJob {
+        user_id,
+        account_id,
+        sub,
+        was_import,
+    }: AddSubmissionWeasylJob,
+) -> Result<(), Error> {
     let sub_id = sub.id;
 
     match process_submission(&ctx, sub, user_id, account_id).await {
@@ -232,10 +264,13 @@ async fn process_submission(
             models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im)
                 .await?;
 
-            ctx.faktory
+            ctx.producer
                 .enqueue_job(
-                    JobInitiator::User { user_id },
-                    search_existing_submissions_job(user_id, item_id)?,
+                    SearchExistingSubmissionsJob {
+                        user_id,
+                        media_id: item_id,
+                    }
+                    .initiated_by(JobInitiator::user(user_id)),
                 )
                 .await?;
         }
