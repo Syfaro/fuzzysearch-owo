@@ -348,8 +348,8 @@ pub mod types {
         pub permalink: String,
     }
 
-    impl From<roux::subreddit::responses::SubmissionsData> for RedditPost {
-        fn from(data: roux::subreddit::responses::SubmissionsData) -> Self {
+    impl From<roux::submission::SubmissionData> for RedditPost {
+        fn from(data: roux::submission::SubmissionData) -> Self {
             Self {
                 id: data.name,
                 author: data.author,

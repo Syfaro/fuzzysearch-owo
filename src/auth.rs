@@ -26,7 +26,7 @@ impl FuzzySearchSessionToken for Session {
 
     fn get_session_token(&self) -> Result<Option<SessionToken>, Error> {
         self.get::<SessionToken>(Self::TOKEN_NAME)
-            .map_err(Into::into)
+            .map_err(|_err| Error::unknown_message("could not get from session"))
     }
 
     fn set_session_token(&self, user_id: Uuid, session_id: Uuid) -> Result<(), Error> {
@@ -37,7 +37,7 @@ impl FuzzySearchSessionToken for Session {
                 session_id,
             },
         )
-        .map_err(Into::into)
+        .map_err(|_err| Error::unknown_message("could not set session data"))
     }
 }
 

@@ -1009,7 +1009,6 @@ impl Site {
             Self::Weasyl,
             Self::Twitter,
             Self::FList,
-            Self::DeviantArt,
             Self::Reddit,
         ]
         .map(|site| site.to_string())

@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.12.0 — July 28th, 2022
+
+* Fixed an issue causing F-list data to become stale.
+* Internal refactoring.
+
 ## v0.11.0 — June 21st, 2022
 
 * Added daily or weekly digest feature to reduce frequency of emailed alerts.

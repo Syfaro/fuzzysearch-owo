@@ -6,6 +6,7 @@ use foxlib::jobs::FaktoryProducer;
 use futures::TryStreamExt;
 use rand::Rng;
 use serde::Deserialize;
+use serde_with::{serde_as, NoneAsEmptyString};
 use sha2::Digest;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use uuid::Uuid;
@@ -690,11 +691,13 @@ async fn media_list(
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
+#[serde_as]
 #[derive(Debug, Deserialize)]
 struct FeedQuery {
     page: Option<u32>,
 
-    #[serde(default, with = "serde_with::rust::string_empty_as_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     site: Option<models::Site>,
     #[serde(default, deserialize_with = "deserialize_checkbox")]
     filter_allowlisted: bool,

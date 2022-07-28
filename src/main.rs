@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
-use actix_session::{storage::CookieSessionStore, SessionLength, SessionMiddleware};
+use actix_session::{
+    config::{PersistentSession, SessionLifecycle},
+    storage::CookieSessionStore,
+    SessionMiddleware,
+};
 use actix_web::{cookie::Key, web, App, HttpResponse, HttpServer};
 use askama::Template;
 use clap::Parser;
@@ -502,9 +506,10 @@ async fn main() {
                     .cookie_name("owo-session".to_string())
                     .cookie_secure(!web_config.cookie_insecure)
                     .cookie_http_only(true)
-                    .session_length(SessionLength::Predetermined {
-                        max_session_length: Some(actix_web::cookie::time::Duration::days(365)),
-                    })
+                    .session_lifecycle(SessionLifecycle::PersistentSession(
+                        PersistentSession::default()
+                            .session_ttl(actix_web::cookie::time::Duration::days(365)),
+                    ))
                     .build();
 
                 let files =
