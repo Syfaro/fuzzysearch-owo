@@ -18,5 +18,6 @@ FROM
   owned_media_item
   JOIN linked_account on owned_media_item.account_id = linked_account.id
 WHERE
-  linked_account.source_site = $1
-  AND source_id = $2;
+  owned_media_item.owner_id = $1
+  AND linked_account.source_site = $2
+  AND source_id = $3;

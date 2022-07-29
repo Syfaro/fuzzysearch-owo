@@ -158,7 +158,7 @@
     },
     "query": "SELECT\n    *\nFROM\n    user_account\nWHERE\n    id = $1;\n"
   },
-  "0328fef89f25afdb905480494e8846d5c2250b74cca5c58eb45a1ce3bd2d7f42": {
+  "031c30f4b215ad011b78c8e5ecdab45d32c40dbfd3ee1430dcca7fb27b525d48": {
     "describe": {
       "columns": [
         {
@@ -256,12 +256,13 @@
       ],
       "parameters": {
         "Left": [
+          "Uuid",
           "Text",
           "Text"
         ]
       }
     },
-    "query": "SELECT\n  owned_media_item.id,\n  owned_media_item.owner_id,\n  owned_media_item.account_id,\n  owned_media_item.source_id,\n  owned_media_item.perceptual_hash,\n  owned_media_item.sha256_hash \"sha256_hash: Sha256Hash\",\n  owned_media_item.link,\n  owned_media_item.title,\n  owned_media_item.posted_at,\n  owned_media_item.last_modified,\n  owned_media_item.content_url,\n  owned_media_item.content_size,\n  owned_media_item.thumb_url,\n  owned_media_item.event_count,\n  owned_media_item.last_event\nFROM\n  owned_media_item\n  JOIN linked_account on owned_media_item.account_id = linked_account.id\nWHERE\n  linked_account.source_site = $1\n  AND source_id = $2;\n"
+    "query": "SELECT\n  owned_media_item.id,\n  owned_media_item.owner_id,\n  owned_media_item.account_id,\n  owned_media_item.source_id,\n  owned_media_item.perceptual_hash,\n  owned_media_item.sha256_hash \"sha256_hash: Sha256Hash\",\n  owned_media_item.link,\n  owned_media_item.title,\n  owned_media_item.posted_at,\n  owned_media_item.last_modified,\n  owned_media_item.content_url,\n  owned_media_item.content_size,\n  owned_media_item.thumb_url,\n  owned_media_item.event_count,\n  owned_media_item.last_event\nFROM\n  owned_media_item\n  JOIN linked_account on owned_media_item.account_id = linked_account.id\nWHERE\n  owned_media_item.owner_id = $1\n  AND linked_account.source_site = $2\n  AND source_id = $3;\n"
   },
   "03876c0d60e8b248fdb0fa80069f3303eed779cde1c5d3398b997107955a0241": {
     "describe": {
@@ -598,6 +599,33 @@
       }
     },
     "query": "SELECT\n    *\nFROM\n    flist_file\nWHERE\n    id = $1;\n"
+  },
+  "1a8d1841ba07c50174a8227f858b331fb93df1619b61d3d05b945e42b3ef0d5e": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid",
+          "Text",
+          "Int8",
+          "Bytea",
+          "Text",
+          "Text",
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    owned_media_item (\n        owner_id,\n        account_id,\n        source_id,\n        perceptual_hash,\n        sha256_hash,\n        link,\n        title,\n        posted_at,\n        last_modified\n    )\nVALUES\n    (\n        $1,\n        $2,\n        $3,\n        $4,\n        $5,\n        $6,\n        $7,\n        $8,\n        current_timestamp\n    ) ON CONFLICT (account_id, source_id) DO\nUPDATE\nSET\n    perceptual_hash = EXCLUDED.perceptual_hash,\n    sha256_hash = EXCLUDED.sha256_hash,\n    link = EXCLUDED.link,\n    title = EXCLUDED.title,\n    posted_at = EXCLUDED.posted_at,\n    last_modified = EXCLUDED.last_modified RETURNING id;\n"
   },
   "1d694ab301a5ca3bb33ffdd5a1132691ca95410d543b70b7c31350da4f152ad6": {
     "describe": {
@@ -1060,33 +1088,6 @@
       }
     },
     "query": "DELETE FROM\n    linked_account\nWHERE\n    owner_id = $1\n    AND id = $2;\n"
-  },
-  "544eba5c80249fa942b7a0b70854ae3f15b200e1923cb954bd2f5a30a85dd329": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Uuid"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Uuid",
-          "Text",
-          "Int8",
-          "Bytea",
-          "Text",
-          "Text",
-          "Timestamptz"
-        ]
-      }
-    },
-    "query": "INSERT INTO\n    owned_media_item (\n        owner_id,\n        account_id,\n        source_id,\n        perceptual_hash,\n        sha256_hash,\n        link,\n        title,\n        posted_at,\n        last_modified\n    )\nVALUES\n    (\n        $1,\n        $2,\n        $3,\n        $4,\n        $5,\n        $6,\n        $7,\n        $8,\n        current_timestamp\n    ) ON CONFLICT (account_id, source_id) DO\nUPDATE\nSET\n    perceptual_hash = EXCLUDED.perceptual_hash,\n    sha256_hash = EXCLUDED.sha256_hash,\n    link = EXCLUDED.link,\n    title = EXCLUDED.link,\n    posted_at = EXCLUDED.posted_at,\n    last_modified = EXCLUDED.last_modified RETURNING id;\n"
   },
   "56ffbb01633cc4e31edf84afa38aca7494d2e414715fa6856f47615560f869bb": {
     "describe": {
@@ -2249,6 +2250,24 @@
     },
     "query": "SELECT\n    exists(\n        SELECT\n            1\n        FROM\n            reddit_post\n        WHERE\n            fullname = $1\n    ) \"exists!\";\n"
   },
+  "b3d64bd76da855257520083ad5c97123dabc1a96eed4f9c05fb69cd0539a49f9": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "SELECT id FROM linked_account;\n"
+  },
   "b5850dfd13305aebe88fd1f4ef69dd59cf831dfc96c228ee2bfed7139f5d9307": {
     "describe": {
       "columns": [
@@ -2428,6 +2447,24 @@
       }
     },
     "query": "SELECT\n    fullname \"fullname!\",\n    subreddit_name \"subreddit_name!\",\n    posted_at \"posted_at!\",\n    author \"author!\",\n    permalink \"permalink!\",\n    content_link \"content_link!\",\n    id \"id!\",\n    post_fullname \"post_fullname!\",\n    size \"size!\",\n    sha256 \"sha256!\",\n    perceptual_hash\nFROM\n    reddit_image\n    LEFT JOIN reddit_post ON reddit_image.post_fullname = reddit_post.fullname\nWHERE\n    perceptual_hash <@ ($1, $2)\n"
+  },
+  "cb8dc8dd0529619ea5a22e57af00b3f238e7b7429da8b405217e667c01740f86": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "SELECT id FROM user_account;\n"
   },
   "cc72ef9500144b2952f70a8dedc7db8734d8e8ef2558e6ece122117e0bdbcca3": {
     "describe": {

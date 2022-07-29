@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use actix_web::{get, post, services, web, HttpResponse, Scope};
 use askama::Template;
-use foxlib::jobs::FaktoryProducer;
+use foxlib::jobs::{FaktoryProducer, JobQueue};
 use rand::Rng;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -14,6 +16,7 @@ pub fn service() -> Scope {
     web::scope("/admin").service(services![
         admin,
         inject_post,
+        job_manual,
         subreddit_add,
         subreddit_state,
         flist_abort
@@ -176,6 +179,106 @@ async fn flist_abort(
     }
 
     models::FListImportRun::abort_run(&conn, form.import_run_id).await?;
+
+    Ok(HttpResponse::Found()
+        .insert_header(("Location", "/admin/tools"))
+        .finish())
+}
+
+#[derive(Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+enum ManualJobType {
+    Single,
+    EachAccount,
+    EachUser,
+}
+
+#[derive(Deserialize)]
+struct ManualJobForm {
+    job_type: ManualJobType,
+    name: String,
+    data: String,
+}
+
+#[post("/job/manual")]
+async fn job_manual(
+    conn: web::Data<sqlx::PgPool>,
+    faktory: web::Data<FaktoryProducer>,
+    user: models::User,
+    form: web::Form<ManualJobForm>,
+) -> Result<HttpResponse, Error> {
+    if !user.is_admin {
+        return Err(actix_web::error::ErrorUnauthorized("Unauthorized").into());
+    }
+
+    let data = if form.data.is_empty() {
+        None
+    } else {
+        Some(serde_json::from_str(&form.data)?)
+    };
+
+    let mut job_payloads: Vec<Option<serde_json::Value>> = Vec::new();
+
+    if form.job_type == ManualJobType::Single {
+        job_payloads.push(data);
+    } else {
+        let field_name = match form.job_type {
+            ManualJobType::EachAccount => "account_id",
+            ManualJobType::EachUser => "user_id",
+            ManualJobType::Single => unreachable!(),
+        };
+
+        let ids = match form.job_type {
+            ManualJobType::EachAccount => {
+                sqlx::query_file_scalar!("queries/admin/account_ids.sql")
+                    .fetch_all(&**conn)
+                    .await?
+            }
+            ManualJobType::EachUser => {
+                sqlx::query_file_scalar!("queries/admin/user_ids.sql")
+                    .fetch_all(&**conn)
+                    .await?
+            }
+            ManualJobType::Single => unreachable!(),
+        };
+
+        for id in ids {
+            let payload = data.clone().map_or_else(
+                || {
+                    let mut map = serde_json::Map::new();
+                    map.insert(field_name.to_string(), id.to_string().into());
+
+                    serde_json::Value::Object(map)
+                },
+                |mut value| {
+                    value[field_name] = id.to_string().into();
+                    value
+                },
+            );
+
+            job_payloads.push(Some(payload));
+        }
+    }
+
+    let custom: HashMap<String, serde_json::Value> = [(
+        "initiator".to_string(),
+        serde_json::to_value(JobInitiator::user(user.id))?,
+    )]
+    .into_iter()
+    .collect();
+
+    for payload in job_payloads {
+        let args = match payload {
+            Some(payload) => vec![payload],
+            None => vec![],
+        };
+
+        let mut job = foxlib::jobs::FaktoryJob::new(form.name.clone(), args);
+        job.queue = crate::jobs::Queue::Core.queue_name().to_string();
+        job.custom = custom.clone();
+
+        faktory.enqueue_existing_job(job).await?;
+    }
 
     Ok(HttpResponse::Found()
         .insert_header(("Location", "/admin/tools"))

@@ -27,6 +27,6 @@ SET
     perceptual_hash = EXCLUDED.perceptual_hash,
     sha256_hash = EXCLUDED.sha256_hash,
     link = EXCLUDED.link,
-    title = EXCLUDED.link,
+    title = EXCLUDED.title,
     posted_at = EXCLUDED.posted_at,
     last_modified = EXCLUDED.last_modified RETURNING id;

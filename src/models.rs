@@ -455,12 +455,14 @@ impl OwnedMediaItem {
 
     pub async fn lookup_by_site_id<S: ToString>(
         conn: &sqlx::PgPool,
+        user_id: Uuid,
         site: Site,
         site_id: S,
     ) -> Result<Option<Self>, Error> {
         let item = sqlx::query_file_as!(
             Self,
             "queries/owned_media/lookup_by_site_id.sql",
+            user_id,
             site.to_string(),
             site_id.to_string()
         )

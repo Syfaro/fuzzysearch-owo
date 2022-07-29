@@ -392,9 +392,14 @@ async fn update_account(ctx: JobContext, _job: FaktoryJob, account_id: Uuid) -> 
     let subs = collect_gallery_items(&client, &account.username).await?;
 
     for sub in subs {
-        if models::OwnedMediaItem::lookup_by_site_id(&ctx.conn, Site::DeviantArt, sub.deviationid)
-            .await?
-            .is_some()
+        if models::OwnedMediaItem::lookup_by_site_id(
+            &ctx.conn,
+            account.owner_id,
+            Site::DeviantArt,
+            sub.deviationid,
+        )
+        .await?
+        .is_some()
         {
             tracing::trace!("submission {} already existed", sub.deviationid);
             continue;

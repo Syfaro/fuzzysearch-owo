@@ -2,8 +2,11 @@
 
 ## v0.12.0 — July 28th, 2022
 
-* Fixed an issue causing F-list data to become stale.
-* Internal refactoring.
+* Added FurAffinity scrap importing.
+* Fixed an issue where DeviantArt submissions would only be added if no one else
+  owned them.
+* Fixed an issue that could cause F-list data to become stale.
+* Internal tooling improvements, refactoring.
 
 ## v0.11.0 — June 21st, 2022
 
