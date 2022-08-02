@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.12.1 — August 1st, 2022
+
+* Fixed an issue related to fetching F-list content.
+
 ## v0.12.0 — July 28th, 2022
 
 * Added FurAffinity scrap importing.
