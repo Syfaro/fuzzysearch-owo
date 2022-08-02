@@ -222,24 +222,27 @@ impl FListClient {
 
 async fn collect_gallery_images(ctx: JobContext, _job: FaktoryJob, _args: ()) -> Result<(), Error> {
     let previous_run = models::FListImportRun::previous_run(&ctx.conn).await?;
-    let previous_max = match previous_run {
+    let (previous_max, resume_run_id) = match previous_run {
         Some(run)
             if run.finished_at.is_none()
                 && chrono::Utc::now().signed_duration_since(run.started_at)
                     >= chrono::Duration::minutes(30) =>
         {
             tracing::warn!("previous run never finished, restarting");
-            run.starting_id
+            (run.starting_id, Some(run.id))
         }
         Some(run) if run.finished_at.is_none() => {
             tracing::info!("previous run has not yet finished, skipping");
             return Ok(());
         }
-        Some(run) => run.max_id.unwrap_or(0),
-        None => 0,
+        Some(run) => (run.max_id.unwrap_or(0), None),
+        None => (0, None),
     };
 
-    let id = models::FListImportRun::start(&ctx.conn, previous_max + 1).await?;
+    let id = match resume_run_id {
+        Some(resumed_id) => resumed_id,
+        None => models::FListImportRun::start(&ctx.conn, previous_max + 1).await?,
+    };
 
     let mut flist = FListClient::new(&ctx.config.user_agent);
     flist
