@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.13.0 — September 2nd, 2022
+
+* Added RSS feed generation for events.
+
 ## v0.12.1 — August 1st, 2022
 
 * Fixed an issue related to fetching F-list content.
