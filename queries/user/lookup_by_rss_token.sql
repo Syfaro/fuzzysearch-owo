@@ -3,4 +3,5 @@ SELECT
 FROM
     user_account
 WHERE
-    rss_token = $1;
+    id = $1
+    AND rss_token = $2;

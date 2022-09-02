@@ -977,6 +977,87 @@
     },
     "query": "UPDATE\n    linked_account\nSET\n    data = $2\nWHERE\n    id = $1;\n"
   },
+  "452269086d582cec854fd2f003097df5a9d4c59f707a9ceafcd8b5ff89115183": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "username",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "hashed_password",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "email",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "email_verifier",
+          "ordinal": 4,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "telegram_id",
+          "ordinal": 5,
+          "type_info": "Int8"
+        },
+        {
+          "name": "telegram_name",
+          "ordinal": 6,
+          "type_info": "Text"
+        },
+        {
+          "name": "is_admin",
+          "ordinal": 7,
+          "type_info": "Bool"
+        },
+        {
+          "name": "display_name",
+          "ordinal": 8,
+          "type_info": "Text"
+        },
+        {
+          "name": "unsubscribe_token",
+          "ordinal": 9,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "rss_token",
+          "ordinal": 10,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false,
+        true,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT\n    *\nFROM\n    user_account\nWHERE\n    id = $1\n    AND rss_token = $2;\n"
+  },
   "4cf58eb47ee79502a4f681d655f2c1a46fcb37d90c0df751ac13cbeb5c2a2936": {
     "describe": {
       "columns": [
@@ -2037,86 +2118,6 @@
       }
     },
     "query": "SELECT\n    *\nFROM\n    user_event\nWHERE\n    owner_id = $1\n    AND related_to_media_item_id = $2\nORDER BY\n    created_at DESC\nLIMIT\n    50;\n"
-  },
-  "968d0307fb42aa7dc75460e39f56d822823e8cdc8687f6c7cf590c767e52da7d": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "username",
-          "ordinal": 1,
-          "type_info": "Text"
-        },
-        {
-          "name": "hashed_password",
-          "ordinal": 2,
-          "type_info": "Text"
-        },
-        {
-          "name": "email",
-          "ordinal": 3,
-          "type_info": "Text"
-        },
-        {
-          "name": "email_verifier",
-          "ordinal": 4,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "telegram_id",
-          "ordinal": 5,
-          "type_info": "Int8"
-        },
-        {
-          "name": "telegram_name",
-          "ordinal": 6,
-          "type_info": "Text"
-        },
-        {
-          "name": "is_admin",
-          "ordinal": 7,
-          "type_info": "Bool"
-        },
-        {
-          "name": "display_name",
-          "ordinal": 8,
-          "type_info": "Text"
-        },
-        {
-          "name": "unsubscribe_token",
-          "ordinal": 9,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "rss_token",
-          "ordinal": 10,
-          "type_info": "Uuid"
-        }
-      ],
-      "nullable": [
-        false,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        false,
-        true,
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid"
-        ]
-      }
-    },
-    "query": "SELECT\n    *\nFROM\n    user_account\nWHERE\n    rss_token = $1;\n"
   },
   "9d27333f331ae7e2157ba4bb0654b9af300cb4b5d5db26ca2c538421e9ee612f": {
     "describe": {

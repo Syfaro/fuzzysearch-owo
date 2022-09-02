@@ -112,11 +112,17 @@ impl User {
 
     pub async fn lookup_by_rss_token(
         conn: &sqlx::PgPool,
+        user_id: Uuid,
         rss_token: Uuid,
     ) -> Result<Option<User>, Error> {
-        let user = sqlx::query_file_as!(User, "queries/user/lookup_by_rss_token.sql", rss_token)
-            .fetch_optional(conn)
-            .await?;
+        let user = sqlx::query_file_as!(
+            User,
+            "queries/user/lookup_by_rss_token.sql",
+            user_id,
+            rss_token
+        )
+        .fetch_optional(conn)
+        .await?;
 
         Ok(user)
     }

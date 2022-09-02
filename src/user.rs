@@ -1010,13 +1010,21 @@ struct FeedItem<'a> {
     at_url: &'a str,
 }
 
-#[get("/rss/{token}")]
+#[derive(Deserialize)]
+struct RssQuery {
+    #[serde(rename = "u")]
+    user_id: Uuid,
+    #[serde(rename = "t")]
+    token: Uuid,
+}
+
+#[get("/feed/rss")]
 async fn rss_feed(
     config: web::Data<crate::Config>,
     conn: web::Data<sqlx::PgPool>,
-    path: web::Path<Uuid>,
+    query: web::Query<RssQuery>,
 ) -> Result<HttpResponse, Error> {
-    let user = models::User::lookup_by_rss_token(&conn, path.into_inner())
+    let user = models::User::lookup_by_rss_token(&conn, query.user_id, query.token)
         .await?
         .ok_or(Error::Missing)?;
 
@@ -1033,7 +1041,10 @@ async fn rss_feed(
         let media_url = format!("{}/user/media/view/{}", config.host_url, media.id);
 
         let content = FeedItem {
-            posted_by: similar_image.posted_by.as_deref().unwrap_or("an unknown user"),
+            posted_by: similar_image
+                .posted_by
+                .as_deref()
+                .unwrap_or("an unknown user"),
             site: similar_image.site,
             content_url: media.content_url.as_deref(),
             media_url: &media_url,
