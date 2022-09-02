@@ -26,6 +26,7 @@ pub struct User {
     pub is_admin: bool,
     pub display_name: Option<String>,
     pub unsubscribe_token: Uuid,
+    pub rss_token: Uuid,
 
     hashed_password: Option<String>,
 }
@@ -105,6 +106,17 @@ impl User {
             sqlx::query_file_as!(User, "queries/user/lookup_by_telegram_id.sql", telegram_id)
                 .fetch_optional(conn)
                 .await?;
+
+        Ok(user)
+    }
+
+    pub async fn lookup_by_rss_token(
+        conn: &sqlx::PgPool,
+        rss_token: Uuid,
+    ) -> Result<Option<User>, Error> {
+        let user = sqlx::query_file_as!(User, "queries/user/lookup_by_rss_token.sql", rss_token)
+            .fetch_optional(conn)
+            .await?;
 
         Ok(user)
     }

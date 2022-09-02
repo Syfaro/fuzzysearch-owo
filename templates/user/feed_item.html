@@ -1,0 +1,13 @@
+<p>
+    An image similar to <a href="{{ media_url }}">this</a> was posted on {{ site }} by {{ posted_by }}.
+</p>
+
+<p>
+    You can view it here: <a href="{{ at_url }}">{{ at_url }}</a>
+</p>
+
+{% match content_url %}
+{% when Some(content_url) %}
+<img src="{{ content_url }}">
+{% else %}
+{% endmatch %}

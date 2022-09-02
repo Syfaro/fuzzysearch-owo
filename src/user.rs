@@ -1000,6 +1000,80 @@ async fn unsubscribe_post(
         .finish())
 }
 
+#[derive(Template)]
+#[template(path = "user/feed_item.html")]
+struct FeedItem<'a> {
+    posted_by: &'a str,
+    site: models::Site,
+    content_url: Option<&'a str>,
+    media_url: &'a str,
+    at_url: &'a str,
+}
+
+#[get("/rss/{token}")]
+async fn rss_feed(
+    config: web::Data<crate::Config>,
+    conn: web::Data<sqlx::PgPool>,
+    path: web::Path<Uuid>,
+) -> Result<HttpResponse, Error> {
+    let user = models::User::lookup_by_rss_token(&conn, path.into_inner())
+        .await?
+        .ok_or(Error::Missing)?;
+
+    let entries = models::UserEvent::feed(&conn, user.id, "similar_image", None, false, 0).await?;
+
+    let items = entries.into_iter().filter_map(|entry| {
+        let media = entry.media?;
+
+        let similar_image = match entry.event.data.as_ref() {
+            Some(models::UserEventData::SimilarImage(similar_image)) => similar_image,
+            _ => return None,
+        };
+
+        let media_url = format!("{}/user/media/view/{}", config.host_url, media.id);
+
+        let content = FeedItem {
+            posted_by: similar_image.posted_by.as_deref().unwrap_or("an unknown user"),
+            site: similar_image.site,
+            content_url: media.content_url.as_deref(),
+            media_url: &media_url,
+            at_url: similar_image
+                .page_url
+                .as_deref()
+                .unwrap_or(&similar_image.content_url),
+        }
+        .render()
+        .ok()?;
+
+        let item = rss::ItemBuilder::default()
+            .guid(
+                rss::GuidBuilder::default()
+                    .value(entry.event.id.to_string())
+                    .permalink(false)
+                    .build(),
+            )
+            .pub_date(entry.event.created_at.to_rfc2822())
+            .title("Image match found".to_string())
+            .description(entry.event.display())
+            .content(content)
+            .link(media_url)
+            .build();
+
+        Some(item)
+    });
+
+    let channel = rss::ChannelBuilder::default()
+        .title("FuzzySearch OwO Feed")
+        .link(config.host_url.clone())
+        .description("Image upload event feed.")
+        .items(items.collect::<Vec<_>>())
+        .build();
+
+    Ok(HttpResponse::Ok()
+        .content_type("application/rss+xml")
+        .body(channel.to_string()))
+}
+
 pub fn service() -> Scope {
     web::scope("/user")
         .service(services![
@@ -1012,6 +1086,7 @@ pub fn service() -> Scope {
             unsubscribe_get,
             unsubscribe_post,
             feed,
+            rss_feed,
         ])
         .service(web::scope("/account").service(services![
             account_link_get,

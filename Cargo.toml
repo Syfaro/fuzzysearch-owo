@@ -82,6 +82,7 @@ md-5 = "0.10"
 roux = "2"
 radix_fmt = "1"
 infer = "0.9"
+rss = "2"
 
 furaffinity-rs = { git = "https://github.com/Syfaro/furaffinity-rs.git" }
 fuzzysearch = { git = "https://github.com/Syfaro/fuzzysearch-rs.git", features = ["trace", "local_hash"] }
