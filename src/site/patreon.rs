@@ -494,7 +494,7 @@ mod types {
         pub expires_after: chrono::DateTime<chrono::Utc>,
     }
 
-    #[derive(Deserialize, Serialize, PartialEq)]
+    #[derive(Deserialize, Serialize, PartialEq, Eq)]
     pub struct Campaign {
         pub webhook_id: String,
         pub webhook_secret: String,

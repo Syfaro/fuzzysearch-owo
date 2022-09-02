@@ -1943,7 +1943,7 @@ pub mod setting {
         }
     }
 
-    #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+    #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
     #[serde(rename_all = "lowercase")]
     pub enum Frequency {
         Never,
@@ -1964,7 +1964,7 @@ pub mod setting {
         }
     }
 
-    #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+    #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
     pub struct EmailFrequency(pub Frequency);
 
     impl UserSettingItem for EmailFrequency {
