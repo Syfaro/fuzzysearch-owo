@@ -1,5 +1,13 @@
 {% import "_pagination.html" as pagination %}
 
+{% block header %}
+  <style>
+    code {
+      white-space: nowrap;
+    }
+  </style>
+{% endblock %}
+
 <section class="section">
   <div class="container">
     <div class="columns is-centered">
@@ -19,18 +27,18 @@
             <h2 class="subtitle is-4">Profile</h2>
 
             <div class="field">
-              <label class="label">Name</label>
+              <label class="label" for="profile-name">Name</label>
               <div class="control">
                 <input class="input" type="text" placeholder="Name" name="display_name"
-                  value="{{ user.display_name() }}" required>
+                  value="{{ user.display_name() }}" id="profile-name" required>
               </div>
             </div>
 
             <div class="field">
-              <label class="label">Email address</label>
+              <label class="label" for="profile-email">Email address</label>
               <div class="control">
                 <input class="input" type="email" placeholder="Email" name="email"
-                  value="{{ user.email.as_deref().unwrap_or_default() }}" autocomplete="email">
+                  value="{{ user.email.as_deref().unwrap_or_default() }}" id="profile-email" autocomplete="email">
               </div>
 
               {% if user.has_unverified_email() %}
@@ -43,11 +51,11 @@
             <h2 class="subtitle is-4">Notifications</h2>
 
             <div class="field">
-              <label class="label">Email frequency</label>
+              <label class="label" for="email-frequency">Email frequency</label>
 
               <div class="control is-expanded">
                 <div class="select is-fullwidth">
-                  <select name="email-frequency" {% if user.email_verifier.is_some() %} disabled {% endif %}>
+                  <select name="email-frequency" id="email-frequency" {% if user.email_verifier.is_some() %} disabled {% endif %}>
                     {% call pagination::option("Never", "never", email_frequency) %}
                     {% call pagination::option("Instantly", "instantly", email_frequency) %}
                     {% call pagination::option("Daily", "daily", email_frequency) %}
@@ -59,15 +67,18 @@
               {% if user.email_verifier.is_some() %}
               <p class="help">You must verify your email address before receiving notifications.</p>
               {% else %}
-              <p class="help">Select how frequently you want to receive email notifications.</p>
+              <p class="help">
+                Select how frequently you want to receive emails.
+                The daily and weekly options aggregate notifications into a single email for that time period.
+              </p>
               {% endif %}
             </div>
 
             <div class="field">
               <label class="label">Telegram notifications</label>
 
-              <label class="checkbox">
-                <input type="checkbox" name="telegram-notifications" {% if user.telegram_id.is_none() %} disabled {%
+              <label class="checkbox" for="telegram-notifications">
+                <input type="checkbox" id="telegram-notifications" name="telegram-notifications" {% if user.telegram_id.is_none() %} disabled {%
                   else if telegram_notifications.0 %} checked {% endif %}>
                 Send Telegram messages
               </label>
@@ -81,7 +92,7 @@
                   data-auth-url="{{ telegram_login.auth_url }}" data-request-access="write"></script>
               </div>
               {% else %}
-              <p class="help">Telegram notifications are sent as soon as matches are found.</p>
+              <p class="help">Telegram messages are sent as soon as matches are found.</p>
               {% endif %}
             </div>
 
@@ -103,6 +114,33 @@
             <div class="control">
               <button class="button is-primary is-fullwidth">Save Settings</button>
             </div>
+          </div>
+
+          <div class="block mt-6">
+            <h2 class="subtitle is-4">API access</h2>
+
+            <div class="field">
+              <label class="label" for="api-username">Username</label>
+              <div class="control">
+                <input type="text" class="input" value="{{ user.id }}" id="api-username" readonly>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="label" for="api-password">Password</label>
+              <div class="control">
+                <input type="text" class="input" value="{{ user.api_token }}" id="api-password" readonly>
+              </div>
+            </div>
+
+            <p class="help">
+              You may use your username and password for basic auth to upload
+              new images by sending a POST request to <code>/api/upload</code>.
+              Use a multipart form, putting images in a field named
+              <code>image</code>. You may specify the header
+              <code>x-image-title</code> on the multipart field to set the title
+              for that image.
+            </p>
           </div>
 
           <div class="field mt-6">
