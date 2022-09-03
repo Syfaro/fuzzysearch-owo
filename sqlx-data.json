@@ -141,6 +141,11 @@
           "name": "rss_token",
           "ordinal": 10,
           "type_info": "Uuid"
+        },
+        {
+          "name": "api_token",
+          "ordinal": 11,
+          "type_info": "Uuid"
         }
       ],
       "nullable": [
@@ -153,6 +158,7 @@
         true,
         false,
         true,
+        false,
         false,
         false
       ],
@@ -737,28 +743,6 @@
     },
     "query": "INSERT INTO\n    flist_file (id, ext, character_name)\nVALUES\n    ($1, $2, $3) ON CONFLICT DO NOTHING;\n"
   },
-  "32b153ec58c873eb22d8d442c2e33d59970c72ebf420cc5be7d352f86d66a18a": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Uuid"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Int8",
-          "Bytea"
-        ]
-      }
-    },
-    "query": "INSERT INTO\n    owned_media_item (\n        owner_id,\n        perceptual_hash,\n        sha256_hash,\n        posted_at,\n        last_modified\n    )\nVALUES\n    (\n        $1,\n        $2,\n        $3,\n        current_timestamp,\n        current_timestamp\n    ) RETURNING id;\n"
-  },
   "33776bde5184d2caf37cd3f739aee971cdf03fa4b569e2c2371031f1b4bad555": {
     "describe": {
       "columns": [
@@ -1034,6 +1018,11 @@
           "name": "rss_token",
           "ordinal": 10,
           "type_info": "Uuid"
+        },
+        {
+          "name": "api_token",
+          "ordinal": 11,
+          "type_info": "Uuid"
         }
       ],
       "nullable": [
@@ -1046,6 +1035,7 @@
         true,
         false,
         true,
+        false,
         false,
         false
       ],
@@ -1470,6 +1460,116 @@
       }
     },
     "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url,\n    event_count,\n    last_event\nFROM\n    owned_media_item\nWHERE\n    owner_id = $1 AND\n    $4::uuid IS NULL OR account_id = $4\nORDER BY\n    last_event DESC NULLS LAST,\n    last_modified DESC\nLIMIT\n    $2 OFFSET ($3::integer * $2::integer);\n"
+  },
+  "6bee2716b86ce5245a3e49a58a0cbcd856833a8e95e4113f094fbe6a406eed0c": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Int8",
+          "Bytea",
+          "Text"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    owned_media_item (\n        owner_id,\n        perceptual_hash,\n        sha256_hash,\n        posted_at,\n        last_modified,\n        title\n    )\nVALUES\n    (\n        $1,\n        $2,\n        $3,\n        current_timestamp,\n        current_timestamp,\n        $4\n    ) RETURNING id;\n"
+  },
+  "6c0689be25c41e688a85dbc8e1365e83eec74ce2842665faf67c2ffcb970644d": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "username",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "hashed_password",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "email",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "email_verifier",
+          "ordinal": 4,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "telegram_id",
+          "ordinal": 5,
+          "type_info": "Int8"
+        },
+        {
+          "name": "telegram_name",
+          "ordinal": 6,
+          "type_info": "Text"
+        },
+        {
+          "name": "is_admin",
+          "ordinal": 7,
+          "type_info": "Bool"
+        },
+        {
+          "name": "display_name",
+          "ordinal": 8,
+          "type_info": "Text"
+        },
+        {
+          "name": "unsubscribe_token",
+          "ordinal": 9,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "rss_token",
+          "ordinal": 10,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "api_token",
+          "ordinal": 11,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false,
+        true,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT\n    *\nFROM\n    user_account\nWHERE\n    id = $1\n    AND api_token = $2;\n"
   },
   "6d5e25f61bc8bc6eaa16e5531bad83efd7f0547f27924ab1d417523ee5dd319a": {
     "describe": {
@@ -2412,6 +2512,11 @@
           "name": "rss_token",
           "ordinal": 10,
           "type_info": "Uuid"
+        },
+        {
+          "name": "api_token",
+          "ordinal": 11,
+          "type_info": "Uuid"
         }
       ],
       "nullable": [
@@ -2424,6 +2529,7 @@
         true,
         false,
         true,
+        false,
         false,
         false
       ],
@@ -2841,6 +2947,11 @@
           "name": "rss_token",
           "ordinal": 10,
           "type_info": "Uuid"
+        },
+        {
+          "name": "api_token",
+          "ordinal": 11,
+          "type_info": "Uuid"
         }
       ],
       "nullable": [
@@ -2853,6 +2964,7 @@
         true,
         false,
         true,
+        false,
         false,
         false
       ],
