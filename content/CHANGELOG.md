@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.13.1 — September 2nd, 2022
+
+* Added API for uploading images.
+* Fixed the date associated with RSS feed items.
+
 ## v0.13.0 — September 2nd, 2022
 
 * Added RSS feed generation for events.
