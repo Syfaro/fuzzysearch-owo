@@ -1063,7 +1063,7 @@ async fn rss_feed(
                     .permalink(false)
                     .build(),
             )
-            .pub_date(entry.event.created_at.to_rfc2822())
+            .pub_date(entry.event.last_updated.to_rfc2822())
             .title("Image match found".to_string())
             .description(entry.event.display())
             .content(content)
