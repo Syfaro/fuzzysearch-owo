@@ -1,12 +1,16 @@
 use std::collections::HashMap;
 
 use askama::Template;
-use futures::{StreamExt, TryFutureExt};
+use foxlib::jobs::FaktoryProducer;
+use futures::{StreamExt, TryFutureExt, TryStreamExt};
 use lettre::AsyncTransport;
+use sha2::Digest;
+use sqlx::PgPool;
+use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use uuid::Uuid;
 
 use crate::{
-    jobs::{self, JobContext},
+    jobs::{self, JobContext, JobInitiatorExt},
     models::{self, setting, SimilarImage},
     Error,
 };
@@ -437,4 +441,112 @@ async fn download_image(ctx: &JobContext, url: &str) -> Result<image::DynamicIma
 
     let im = image::load_from_memory(&buf)?;
     Ok(im)
+}
+
+pub async fn handle_multipart_upload(
+    pool: &PgPool,
+    redis: &redis::aio::ConnectionManager,
+    s3: &rusoto_s3::S3Client,
+    faktory: &FaktoryProducer,
+    config: &crate::Config,
+    user: &models::User,
+    mut form: actix_multipart::Multipart,
+) -> Result<Vec<Uuid>, Error> {
+    let mut ids = Vec::new();
+
+    while let Ok(Some(mut field)) = form.try_next().await {
+        tracing::trace!("checking multipart field: {:?}", field);
+
+        if !matches!(field.content_disposition().get_name(), Some("image")) {
+            continue;
+        }
+
+        let title = field
+            .headers()
+            .get("x-image-title")
+            .map(|val| String::from_utf8_lossy(val.as_bytes()))
+            .map(|title| title.to_string());
+
+        let mut file = tokio::task::spawn_blocking(move || -> Result<_, String> {
+            let file = tempfile::tempfile().map_err(|err| err.to_string())?;
+            Ok(tokio::fs::File::from_std(file))
+        })
+        .await
+        .map_err(Error::from_displayable)?
+        .map_err(|err| Error::UnknownMessage(err.into()))?;
+
+        let mut hasher = sha2::Sha256::default();
+
+        let mut size = 0;
+        while let Ok(Some(chunk)) = field.try_next().await {
+            if size > 25_000_000 {
+                return Err(Error::TooLarge(size));
+            }
+
+            file.write_all(&chunk).await?;
+            hasher.update(&chunk);
+            size += chunk.len();
+        }
+
+        if size == 0 {
+            continue;
+        }
+
+        let sha256_hash: [u8; 32] = hasher
+            .finalize()
+            .try_into()
+            .expect("sha256 hash was wrong size");
+        let hash_str = hex::encode(&sha256_hash);
+
+        tracing::info!(size, hash = ?hash_str, "received complete file from client");
+
+        file.seek(std::io::SeekFrom::Start(0)).await?;
+
+        let file = file.into_std().await;
+        let (perceptual_hash, im) = tokio::task::spawn_blocking(
+            move || -> Result<([u8; 8], image::DynamicImage), image::ImageError> {
+                let reader = std::io::BufReader::new(file);
+                let reader = image::io::Reader::new(reader).with_guessed_format()?;
+                let im = reader.decode()?;
+
+                let hasher = fuzzysearch_common::get_hasher();
+                let hash = hasher.hash_image(&im);
+                let hash: [u8; 8] = hash
+                    .as_bytes()
+                    .try_into()
+                    .expect("perceptual hash returned wrong bytes");
+
+                Ok((hash, im))
+            },
+        )
+        .await
+        .map_err(|_err| Error::unknown_message("join error"))??;
+
+        let id = models::OwnedMediaItem::add_manual_item(
+            pool,
+            user.id,
+            i64::from_be_bytes(perceptual_hash),
+            sha256_hash,
+            title.as_deref(),
+        )
+        .await?;
+
+        models::OwnedMediaItem::update_media(pool, s3, config, id, im).await?;
+
+        models::UserEvent::notify(pool, redis, user.id, "Uploaded image.").await?;
+
+        ids.push(id);
+
+        faktory
+            .enqueue_job(
+                jobs::SearchExistingSubmissionsJob {
+                    user_id: user.id,
+                    media_id: id,
+                }
+                .initiated_by(jobs::JobInitiator::user(user.id)),
+            )
+            .await?;
+    }
+
+    Ok(ids)
 }

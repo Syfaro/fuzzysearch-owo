@@ -8,13 +8,16 @@ use actix_http::ws::CloseCode;
 use actix_session::Session;
 use actix_web::{get, post, services, web, HttpRequest, HttpResponse, Scope};
 use actix_web_actors::ws;
+use actix_web_httpauth::extractors::basic::BasicAuth;
 use foxlib::jobs::FaktoryProducer;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
     auth::FuzzySearchSessionToken,
+    common,
     jobs::{JobInitiator, JobInitiatorExt, NewSubmissionJob},
     models, Error,
 };
@@ -266,6 +269,37 @@ async fn events(
     }
 }
 
+#[post("/upload")]
+async fn upload(
+    pool: web::Data<PgPool>,
+    redis: web::Data<redis::aio::ConnectionManager>,
+    s3: web::Data<rusoto_s3::S3Client>,
+    faktory: web::Data<FaktoryProducer>,
+    config: web::Data<crate::Config>,
+    auth: BasicAuth,
+    form: actix_multipart::Multipart,
+) -> Result<web::Json<Vec<Uuid>>, Error> {
+    let password = match auth.password() {
+        Some(password) => password,
+        None => return Err(Error::user_error("basic auth password required")),
+    };
+
+    let (user_id, api_token): (Uuid, Uuid) = match (auth.user_id().parse(), password.parse()) {
+        (Ok(user_id), Ok(api_token)) => (user_id, api_token),
+        _ => return Err(Error::user_error("username and password should be uuids")),
+    };
+
+    let user = match models::User::lookup_by_api_token(&pool, user_id, api_token).await? {
+        Some(user) => user,
+        None => return Err(Error::Unauthorized),
+    };
+
+    let ids =
+        common::handle_multipart_upload(&pool, &redis, &s3, &faktory, &config, &user, form).await?;
+
+    Ok(web::Json(ids))
+}
+
 #[derive(Deserialize)]
 struct FuzzySearchParams {
     secret: String,
@@ -294,6 +328,6 @@ async fn fuzzysearch(
 
 pub fn service() -> Scope {
     web::scope("/api")
-        .service(services![events])
+        .service(services![events, upload])
         .service(web::scope("/service").service(services![fuzzysearch]))
 }

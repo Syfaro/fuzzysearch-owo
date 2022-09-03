@@ -27,6 +27,7 @@ pub struct User {
     pub display_name: Option<String>,
     pub unsubscribe_token: Uuid,
     pub rss_token: Uuid,
+    pub api_token: Uuid,
 
     hashed_password: Option<String>,
 }
@@ -120,6 +121,23 @@ impl User {
             "queries/user/lookup_by_rss_token.sql",
             user_id,
             rss_token
+        )
+        .fetch_optional(conn)
+        .await?;
+
+        Ok(user)
+    }
+
+    pub async fn lookup_by_api_token(
+        conn: &sqlx::PgPool,
+        user_id: Uuid,
+        api_token: Uuid,
+    ) -> Result<Option<User>, Error> {
+        let user = sqlx::query_file_as!(
+            User,
+            "queries/user/lookup_by_api_token.sql",
+            user_id,
+            api_token
         )
         .fetch_optional(conn)
         .await?;
@@ -503,6 +521,7 @@ impl OwnedMediaItem {
         user_id: Uuid,
         perceptual_hash: i64,
         sha256_hash: [u8; 32],
+        title: Option<&str>,
     ) -> Result<Uuid, Error> {
         let item_id = sqlx::query_file_scalar!(
             "queries/owned_media/add_manual_item.sql",
@@ -512,7 +531,8 @@ impl OwnedMediaItem {
             } else {
                 None
             },
-            sha256_hash.to_vec()
+            sha256_hash.to_vec(),
+            title,
         )
         .fetch_one(conn)
         .await?;

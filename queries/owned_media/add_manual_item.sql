@@ -4,7 +4,8 @@ INSERT INTO
         perceptual_hash,
         sha256_hash,
         posted_at,
-        last_modified
+        last_modified,
+        title
     )
 VALUES
     (
@@ -12,5 +13,6 @@ VALUES
         $2,
         $3,
         current_timestamp,
-        current_timestamp
+        current_timestamp,
+        $4
     ) RETURNING id;
