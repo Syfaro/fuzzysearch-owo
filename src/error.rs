@@ -44,6 +44,8 @@ pub enum Error {
     EmailTransport(#[from] lettre::transport::smtp::Error),
     #[error("telegram error: {0}")]
     Telegram(#[from] tgbotapi::Error),
+    #[error("twitter error: {0}")]
+    Twitter(#[from] egg_mode::error::Error),
 
     #[error("request too large: {0}")]
     TooLarge(usize),

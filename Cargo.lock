@@ -1389,6 +1389,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "egg-mode"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb96b3df2a1dd9fe043e58eed7ba1c835a23561e777e243e8cc08aa4178aec79"
+dependencies = [
+ "base64 0.13.0",
+ "chrono",
+ "derive_more",
+ "futures 0.3.21",
+ "hmac 0.11.0",
+ "hyper",
+ "hyper-tls",
+ "lazy_static",
+ "mime",
+ "native-tls",
+ "percent-encoding",
+ "rand 0.8.5",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha-1 0.9.8",
+ "thiserror",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "ego-tree"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1833,6 +1860,7 @@ dependencies = [
  "chrono",
  "clap 3.2.15",
  "dotenv",
+ "egg-mode",
  "faktory 0.12.0",
  "foxlib",
  "furaffinity-rs",
@@ -4288,6 +4316,19 @@ dependencies = [
  "digest 0.8.1",
  "fake-simd",
  "opaque-debug 0.2.3",
+]
+
+[[package]]
+name = "sha-1"
+version = "0.9.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99cd6713db3cf16b6c84e06321e049a9b9f699826e16096d23bbcc44d15d51a6"
+dependencies = [
+ "block-buffer 0.9.0",
+ "cfg-if 1.0.0",
+ "cpufeatures",
+ "digest 0.9.0",
+ "opaque-debug 0.3.0",
 ]
 
 [[package]]

@@ -419,6 +419,20 @@
     },
     "query": "SELECT\n    *\nFROM\n    reddit_subreddit\nWHERE\n    disabled = false\n    AND (\n        last_updated IS NULL\n        OR last_updated < now() + interval '15 minutes'\n    );\n"
   },
+  "08f447094f7b532619e63958cdec809f9459c4dd4d83f96abe9b2585f6d28627": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text",
+          "Text"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    twitter_auth (owner_id, request_key, request_secret)\nVALUES\n    ($1, $2, $3);\n"
+  },
   "0af8022e9c61ba897ed78301a4eeb1d0ac5908fa0e26837d6aa881f90304aff8": {
     "describe": {
       "columns": [],
@@ -1227,6 +1241,38 @@
       }
     },
     "query": "SELECT\n    *\nFROM\n    user_event\nWHERE\n    owner_id = $1\nORDER BY\n    created_at DESC\nLIMIT\n    50;\n"
+  },
+  "584f152792b6769a919d6c5fdf352a301a18da0fc8491827b43171a5666298ae": {
+    "describe": {
+      "columns": [
+        {
+          "name": "owner_id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "request_key",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "request_secret",
+          "ordinal": 2,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "SELECT\n    owner_id,\n    request_key,\n    request_secret\nFROM\n    twitter_auth\nWHERE\n    request_key = $1;\n"
   },
   "5a31bf2e799fe5b3f6f467576b048326ce1db4ec2392f55470b81d70c38d9d5a": {
     "describe": {
@@ -2754,6 +2800,18 @@
       }
     },
     "query": "DELETE FROM\n    auth_state\nWHERE\n    owner_id = $1\n    AND state = $2;\n"
+  },
+  "d6ecfc1cc2a5bce2425ebd3c50a88958b4e7576ef38af73522cb35484a08b6f6": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "DELETE FROM\n    twitter_auth\nWHERE\n    request_key = $1;\n"
   },
   "d9d29a607cd182b3e01e18a216655d4a336aa0507c5c792fc933b09b4a86f478": {
     "describe": {

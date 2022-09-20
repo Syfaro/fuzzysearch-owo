@@ -1082,6 +1082,7 @@ impl Site {
             Site::DeviantArt => Some(Box::new(site::DeviantArt::site_from_config(config).await?)),
             Site::Patreon => Some(Box::new(site::Patreon::site_from_config(config).await?)),
             Site::Weasyl => Some(Box::new(site::Weasyl::site_from_config(config).await?)),
+            Site::Twitter => Some(Box::new(site::Twitter::site_from_config(config).await?)),
             _ => None,
         };
 
@@ -1903,6 +1904,48 @@ impl PendingNotification {
     ) -> Result<(), Error> {
         sqlx::query_file!("queries/pending_notification/remove.sql", notification_ids)
             .execute(tx)
+            .await?;
+
+        Ok(())
+    }
+}
+
+pub struct TwitterAuth {
+    pub owner_id: Uuid,
+    pub request_key: String,
+    pub request_secret: String,
+}
+
+impl TwitterAuth {
+    pub async fn create(
+        conn: &sqlx::PgPool,
+        owner_id: Uuid,
+        request_key: &str,
+        request_secret: &str,
+    ) -> Result<(), Error> {
+        sqlx::query_file!(
+            "queries/twitter_auth/create.sql",
+            owner_id,
+            request_key,
+            request_secret
+        )
+        .execute(conn)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn find(conn: &sqlx::PgPool, request_key: &str) -> Result<Option<Self>, Error> {
+        let twitter_auth = sqlx::query_file_as!(Self, "queries/twitter_auth/find.sql", request_key)
+            .fetch_optional(conn)
+            .await?;
+
+        Ok(twitter_auth)
+    }
+
+    pub async fn remove(conn: &sqlx::PgPool, request_key: &str) -> Result<(), Error> {
+        sqlx::query_file!("queries/twitter_auth/remove.sql", request_key,)
+            .execute(conn)
             .await?;
 
         Ok(())

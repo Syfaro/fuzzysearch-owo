@@ -210,6 +210,13 @@ pub struct Config {
     #[clap(long, env("REDDIT_PASSWORD"))]
     pub reddit_password: String,
 
+    /// Twitter consumer key.
+    #[clap(long, env("TWITTER_CONSUMER_KEY"))]
+    pub twitter_consumer_key: String,
+    /// Twitter consumer secret.
+    #[clap(long, env("TWITTER_CONSUMER_SECRET"))]
+    pub twitter_consumer_secret: String,
+
     /// Skip verifications for account.
     #[clap(long)]
     pub skip_verifications: bool,

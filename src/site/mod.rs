@@ -16,6 +16,7 @@ mod flist;
 mod furaffinity;
 mod patreon;
 mod reddit;
+mod twitter;
 mod weasyl;
 
 pub use deviantart::{types::DeviantArtSubmission, DeviantArt};
@@ -23,6 +24,7 @@ pub use flist::FList;
 pub use furaffinity::FurAffinity;
 pub use patreon::Patreon;
 pub use reddit::{types::RedditPost, Reddit};
+pub use twitter::Twitter;
 pub use weasyl::{Weasyl, WeasylSubmission};
 
 /// Initialize a site from the global config.
@@ -68,6 +70,7 @@ pub fn service() -> Vec<actix_web::Scope> {
     deviantart::DeviantArt::services()
         .into_iter()
         .chain(patreon::Patreon::services().into_iter())
+        .chain(twitter::Twitter::services().into_iter())
         .collect()
 }
 
@@ -104,6 +107,7 @@ pub async fn collected_sites(config: &crate::Config) -> Result<Vec<Box<dyn Colle
         Box::new(furaffinity::FurAffinity::site_from_config(config).await?),
         Box::new(patreon::Patreon::site_from_config(config).await?),
         Box::new(weasyl::Weasyl::site_from_config(config).await?),
+        Box::new(twitter::Twitter::site_from_config(config).await?),
     ])
 }
 
