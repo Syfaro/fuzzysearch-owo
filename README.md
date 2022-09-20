@@ -59,6 +59,7 @@ It also requires credentials or app tokens for the following sites:
 * S3-like (endpoint, region, bucket, access, and secret key)
 * SMTP (host, username, and password)
 * Telegram (token and domain)
+* Twitter (API token and secret)
 
 [bktree]: https://github.com/fake-name/pg-spgist_hamming
 [faktory]: https://github.com/contribsys/faktory
