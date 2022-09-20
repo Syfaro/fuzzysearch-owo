@@ -1,0 +1,32 @@
+<section class="section">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-one-third has-text-centered">
+        <h1 class="title">Check Uploads</h1>
+
+        <form method="POST" action="/user/check" enctype="multipart/form-data">
+          <div class="field">
+            <div class="file is-boxed is-centered has-name">
+              <label class="file-label">
+                <input class="file-input" type="file" name="image" accept="image/png, image/jpeg"
+                  data-file-name-label="#check-label" data-upload-button="#single-check-button" multiple>
+                <span class="file-cta">
+                  <span class="file-label">Select Photo</span>
+                </span>
+                <span class="file-name" id="check-label">No File Selected</span>
+              </label>
+            </div>
+
+            <p class="help">
+              Upload files to see where you've already posted them.
+            </p>
+          </div>
+
+          <div class="control">
+            <button id="single-check-button" class="button is-link is-fullwidth is-outlined" disabled>Check</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>

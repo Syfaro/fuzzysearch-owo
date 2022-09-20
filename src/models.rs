@@ -650,6 +650,24 @@ impl OwnedMediaItem {
         Ok(items)
     }
 
+    pub async fn find_similar_with_owner(
+        conn: &sqlx::PgPool,
+        owner_id: Uuid,
+        perceptual_hash: i64,
+    ) -> Result<Vec<Self>, Error> {
+        let items = sqlx::query_file_as!(
+            Self,
+            "queries/owned_media/find_similar_with_owner.sql",
+            owner_id,
+            perceptual_hash,
+            3
+        )
+        .fetch_all(conn)
+        .await?;
+
+        Ok(items)
+    }
+
     pub async fn remove(conn: &sqlx::PgPool, user_id: Uuid, media_id: Uuid) -> Result<(), Error> {
         sqlx::query_file!("queries/owned_media/remove.sql", user_id, media_id)
             .execute(conn)

@@ -166,12 +166,12 @@ function updateRelativeTimes() {
 
 updateRelativeTimes();
 
-const singleUploadButton = document.getElementById('single-upload-button');
-
 [...document.querySelectorAll('input[type=file]')].forEach((input) => {
   input.addEventListener('change', () => {
+    const uploadButton = document.querySelector(input.dataset.uploadButton);
+
     if (input.files.length === 0) {
-      singleUploadButton?.setAttribute('disabled', 'disabled');
+      uploadButton?.setAttribute('disabled', 'disabled');
       return;
     }
 
@@ -182,7 +182,7 @@ const singleUploadButton = document.getElementById('single-upload-button');
       fileName.textContent = displayedName;
     }
 
-    singleUploadButton?.removeAttribute('disabled');
+    uploadButton?.removeAttribute('disabled');
   });
 });
 

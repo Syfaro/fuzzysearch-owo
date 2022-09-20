@@ -1,0 +1,31 @@
+<section class="section">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-two-thirds">
+        <h1 class="title has-text-centered">Check Results</h1>
+
+        {% for result in results %}
+        <div class="columns">
+          <div class="column is-one-third">
+            <figure class="image is-128x128">
+              <img src="data:image/png;base64,{{ result.photo_preview }}">
+            </figure>
+          </div>
+
+          <div class="column is-two-thirds content">
+            {% if result.links.is_empty() %}
+            <p class="has-text-grey">No matches found.</p>
+            {% else %}
+            <ul>
+              {% for link in result.links %}
+              <li><a href="{{ link }}">{{ link }}</a></li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</section>

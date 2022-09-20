@@ -3,9 +3,11 @@ use std::collections::HashMap;
 use actix_web::{get, post, services, web, HttpResponse, Scope};
 use askama::Template;
 use foxlib::jobs::FaktoryProducer;
+use futures::TryStreamExt;
 use rand::Rng;
 use serde::Deserialize;
 use serde_with::{serde_as, NoneAsEmptyString};
+use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use uuid::Uuid;
 
 use crate::{
@@ -235,6 +237,123 @@ async fn single(
     Ok(HttpResponse::Found()
         .insert_header(("Location", USER_HOME))
         .finish())
+}
+
+#[derive(Template)]
+#[template(path = "user/check_form.html")]
+struct CheckForm;
+
+#[get("/check")]
+async fn check_get(
+    request: actix_web::HttpRequest,
+    user: models::User,
+) -> Result<HttpResponse, Error> {
+    let body = CheckForm.wrap(&request, Some(&user)).render()?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+struct CheckResult {
+    /// Base-64 encoded image preview
+    photo_preview: String,
+    links: Vec<String>,
+}
+
+#[derive(Template)]
+#[template(path = "user/check_results.html")]
+struct CheckResults {
+    results: Vec<CheckResult>,
+}
+
+#[post("/check")]
+async fn check_post(
+    conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
+    user: models::User,
+    mut form: actix_multipart::Multipart,
+) -> Result<HttpResponse, Error> {
+    let mut results = Vec::new();
+
+    while let Ok(Some(mut field)) = form.try_next().await {
+        tracing::trace!("checking multipart field: {:?}", field);
+
+        if !matches!(field.content_disposition().get_name(), Some("image")) {
+            continue;
+        }
+
+        let mut file = tokio::task::spawn_blocking(move || -> Result<_, String> {
+            let file = tempfile::tempfile().map_err(|err| err.to_string())?;
+            Ok(tokio::fs::File::from_std(file))
+        })
+        .await
+        .map_err(Error::from_displayable)?
+        .map_err(|err| Error::UnknownMessage(err.into()))?;
+
+        let mut size = 0;
+        while let Ok(Some(chunk)) = field.try_next().await {
+            if size > 25_000_000 {
+                return Err(Error::TooLarge(size));
+            }
+
+            file.write_all(&chunk).await?;
+            size += chunk.len();
+        }
+
+        if size == 0 {
+            continue;
+        }
+
+        tracing::info!(size, "received complete file from client");
+
+        file.seek(std::io::SeekFrom::Start(0)).await?;
+
+        let file = file.into_std().await;
+        let (perceptual_hash, thumbnail) = tokio::task::spawn_blocking(
+            move || -> Result<([u8; 8], Vec<u8>), image::ImageError> {
+                let reader = std::io::BufReader::new(file);
+                let reader = image::io::Reader::new(reader).with_guessed_format()?;
+                let im = reader.decode()?;
+
+                let hasher = fuzzysearch_common::get_hasher();
+                let hash = hasher.hash_image(&im);
+                let hash: [u8; 8] = hash
+                    .as_bytes()
+                    .try_into()
+                    .expect("perceptual hash returned wrong bytes");
+
+                let thumbnail = im.thumbnail(128, 128);
+                let mut buf = Vec::new();
+                thumbnail.write_to(&mut buf, image::ImageOutputFormat::Png)?;
+
+                Ok((hash, buf))
+            },
+        )
+        .await
+        .map_err(|_err| Error::unknown_message("join error"))??;
+
+        let links = models::OwnedMediaItem::find_similar_with_owner(
+            &conn,
+            user.id,
+            i64::from_be_bytes(perceptual_hash),
+        )
+        .await?
+        .into_iter()
+        .flat_map(|item| item.link)
+        .collect();
+
+        results.push(CheckResult {
+            photo_preview: base64::encode(thumbnail),
+            links,
+        });
+
+        if results.len() >= 10 {
+            break;
+        }
+    }
+
+    let body = CheckResults { results }
+        .wrap(&request, Some(&user))
+        .render()?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
 #[derive(Template)]
@@ -1014,6 +1133,8 @@ pub fn service() -> Scope {
             unsubscribe_post,
             feed,
             rss_feed,
+            check_get,
+            check_post,
         ])
         .service(web::scope("/account").service(services![
             account_link_get,
