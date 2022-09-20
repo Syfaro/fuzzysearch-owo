@@ -252,10 +252,17 @@ async fn check_get(
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
+struct CheckLink {
+    url: String,
+    site: models::Site,
+    username: String,
+    posted_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
 struct CheckResult {
     /// Base-64 encoded image preview
     photo_preview: String,
-    links: Vec<String>,
+    links: Vec<CheckLink>,
 }
 
 #[derive(Template)]
@@ -330,6 +337,13 @@ async fn check_post(
         .await
         .map_err(|_err| Error::unknown_message("join error"))??;
 
+        let accounts: HashMap<Uuid, models::LinkedAccount> =
+            models::LinkedAccount::owned_by_user(&conn, user.id)
+                .await?
+                .into_iter()
+                .map(|account| (account.id, account))
+                .collect();
+
         let links = models::OwnedMediaItem::find_similar_with_owner(
             &conn,
             user.id,
@@ -337,7 +351,16 @@ async fn check_post(
         )
         .await?
         .into_iter()
-        .flat_map(|item| item.link)
+        .filter_map(|media| {
+            let account = accounts.get(&media.account_id?)?;
+
+            Some(CheckLink {
+                url: media.link?,
+                site: account.source_site,
+                username: account.username.clone(),
+                posted_at: media.posted_at,
+            })
+        })
         .collect();
 
         results.push(CheckResult {

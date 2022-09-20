@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.14.0 — September 20th, 2022
+
+* Added support for collecting images from Twitter.
+* Added check tool to identify where you have already posted an image.
+
 ## v0.13.1 — September 2nd, 2022
 
 * Added API for uploading images.
