@@ -786,6 +786,8 @@ async fn load_archive(
         ..
     }: LoadTwitterArchiveJob,
 ) -> Result<(), Error> {
+    let account = models::LinkedAccount::lookup_by_id(&ctx.conn, account_id).await?.ok_or(Error::Missing)?;
+
     let chunks = models::FileUploadChunk::chunks(&ctx.conn, user_id, collection_id).await?;
     tracing::info!("attempting to load archive from {} chunks", chunks.len());
 
@@ -831,8 +833,6 @@ async fn load_archive(
 
         let mut archive = zip::ZipArchive::new(std::io::BufReader::new(file)).unwrap();
 
-        let screen_name = get_archive_username(&mut archive).ok_or(TweetError::Missing)?;
-
         let matcher = regex::Regex::new(r#"/tweet(?:-part\d+)?\.js$"#).unwrap();
         let tweet_files = archive
             .file_names()
@@ -843,7 +843,7 @@ async fn load_archive(
         for tweet_file in tweet_files {
             tracing::info!("finding tweets in {}", tweet_file);
             let file = archive.by_name(&tweet_file).unwrap();
-            let tweets = read_tweets_from_file(file, &screen_name)?;
+            let tweets = read_tweets_from_file(file, &account.username)?;
             tracing::debug!("found {} tweets", tweets.len());
 
             for tweet in tweets {
@@ -952,21 +952,6 @@ async fn add_tweet(
     }
 
     Ok(item_id)
-}
-
-fn get_archive_username<R: std::io::Read + std::io::Seek>(
-    archive: &mut zip::ZipArchive<R>,
-) -> Option<String> {
-    let mut account = String::new();
-    archive
-        .by_name("data/account.js")
-        .unwrap()
-        .read_to_string(&mut account)
-        .ok()?;
-    let matcher = regex::Regex::new(r#""username"\s+?:\s+?"(?P<username>\S+)""#).ok()?;
-    let username = matcher.captures(&account)?["username"].to_string();
-
-    Some(username)
 }
 
 fn read_tweets_from_file(

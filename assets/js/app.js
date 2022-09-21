@@ -203,15 +203,14 @@ updateRelativeTimes();
     const fileInput = chunkUploader.querySelector('input[type="file"]');
     const file = fileInput.files[0];
 
-   chunkUploader.querySelector('.upload-button').classList.add('is-loading');
+    chunkUploader.querySelector('.upload-button').classList.add('is-loading');
 
     const progressBar = chunkUploader.querySelector('progress');
     progressBar.classList.remove('is-hidden');
 
     performChunkedUpload(file, progressBar).then((collectionId) => {
-      console.log(`Completed uploading chunks to ${collectionId}`);
-
       window.onbeforeunload = null;
+      console.log(`Completed uploading chunks to ${collectionId}`);
 
       chunkUploader.querySelector('input[name="collection_id"]').value = collectionId;
       fileInput.value = null;
@@ -219,6 +218,7 @@ updateRelativeTimes();
       chunkUploader.submit();
     }).catch((err) => {
       window.onbeforeunload = null;
+      console.error(err);
 
       alert(`Upload failed: ${err}`);
       window.location.reload();
@@ -232,8 +232,8 @@ async function performChunkedUpload(file, progressBar) {
   const collectionId = window.crypto.randomUUID();
   const fileSize = file.size;
 
+  const totalChunks = Math.ceil(fileSize / CHUNK_SIZE, CHUNK_SIZE);
   let currentChunk = 1;
-  const totalChunks = Math.ceil((fileSize / CHUNK_SIZE), CHUNK_SIZE);
 
   while (currentChunk <= totalChunks) {
     console.debug(`Uploading chunk ${currentChunk}`);

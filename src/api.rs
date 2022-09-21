@@ -348,6 +348,8 @@ async fn chunk_add(
             .await
             .map_err(|err| Error::S3(err.to_string()))?;
 
+        tracing::info!(path, "added chunk");
+
         break;
     }
 
