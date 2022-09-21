@@ -67,5 +67,23 @@
   </div>
 </nav>
 
+{% match self.flashes %}
+{% when Some(flashes) %}
+<section class="section">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-half">
+        {% for flash in flashes %}
+        <div class="notification {{ flash.classes }}">
+          {{ flash.message }}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</section>
+{% else %}
+{% endmatch %}
+
 {{ content|safe }}
 {% endblock %}

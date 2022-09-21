@@ -1,9 +1,13 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    io::{Read, Seek},
+};
 
-use actix_web::{get, services, web, HttpResponse};
+use actix_web::{get, post, services, web, HttpResponse};
 use async_trait::async_trait;
 use egg_mode::entities::MediaType;
-use foxlib::jobs::{FaktoryForge, FaktoryJob, FaktoryProducer, Job, JobExtra};
+use foxlib::jobs::{FaktoryForge, FaktoryJob, FaktoryProducer, Job, JobExtra, JobQueue};
+use rusoto_s3::S3;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
 use uuid::Uuid;
@@ -11,7 +15,7 @@ use uuid::Uuid;
 use crate::{
     jobs::{self, JobContext, JobInitiator, JobInitiatorExt, Queue, SearchExistingSubmissionsJob},
     models::{self, LinkedAccount},
-    Config, Error,
+    AddFlash, Config, Error,
 };
 
 use super::{CollectedSite, SiteFromConfig, SiteServices};
@@ -44,6 +48,7 @@ impl CollectedSite for Twitter {
         AddSubmissionTwitterJob::register(forge, add_submission_twitter);
         CollectAccountsJob::register(forge, collect_accounts);
         UpdateAccountJob::register(forge, update_account);
+        LoadTwitterArchiveJob::register(forge, load_archive);
     }
 
     async fn add_account(
@@ -173,7 +178,7 @@ impl CollectedSite for Twitter {
 
 impl SiteServices for Twitter {
     fn services() -> Vec<actix_web::Scope> {
-        vec![web::scope("/twitter").service(services![auth, callback])]
+        vec![web::scope("/twitter").service(services![auth, callback, archive_post])]
     }
 }
 
@@ -328,12 +333,69 @@ async fn callback(
         .finish())
 }
 
+#[derive(Deserialize)]
+struct TwitterArchiveForm {
+    collection_id: Uuid,
+    account_id: Uuid,
+}
+
+#[post("/archive")]
+async fn archive_post(
+    conn: web::Data<sqlx::PgPool>,
+    faktory: web::Data<FaktoryProducer>,
+    session: actix_session::Session,
+    user: models::User,
+    form: web::Form<TwitterArchiveForm>,
+) -> Result<HttpResponse, Error> {
+    let account = models::LinkedAccount::lookup_by_id(&conn, form.account_id)
+        .await?
+        .ok_or(Error::Missing)?;
+
+    if account.owner_id != user.id {
+        return Err(Error::Unauthorized);
+    }
+
+    if account.source_site != models::Site::Twitter {
+        return Err(Error::unknown_message(
+            "Attempted to load Twitter archive on non-Twitter site",
+        ));
+    }
+
+    let data: TwitterData = serde_json::from_value(account.data.ok_or(Error::Missing)?)?;
+
+    faktory
+        .enqueue_job(
+            LoadTwitterArchiveJob {
+                user_id: user.id,
+                account_id: account.id,
+                twitter_user_id: data.site_id.clone(),
+                collection_id: form.collection_id,
+            }
+            .initiated_by(jobs::JobInitiator::user(user.id)),
+        )
+        .await?;
+
+    let data = serde_json::to_value(TwitterData {
+        has_imported_archive: Some(true),
+        ..data
+    })?;
+
+    models::LinkedAccount::update_data(&conn, account.id, Some(data)).await?;
+
+    session.add_flash(crate::FlashStyle::Success, "Successfully uploaded Twitter archive! It may take up to an hour for all of your photos to be imported.".to_string());
+
+    Ok(HttpResponse::Found()
+        .insert_header(("Location", format!("/user/account/{}", account.id)))
+        .finish())
+}
+
 #[derive(Default, Serialize, Deserialize)]
 struct TwitterData {
     site_id: String,
     access_token: String,
     secret_token: String,
     newest_id: Option<u64>,
+    has_imported_archive: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -606,4 +668,390 @@ async fn update_account(ctx: JobContext, _job: FaktoryJob, account_id: Uuid) -> 
     models::LinkedAccount::update_data(&ctx.conn, account.id, Some(data)).await?;
 
     Ok(())
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct LoadTwitterArchiveJob {
+    user_id: Uuid,
+    account_id: Uuid,
+    twitter_user_id: String,
+    collection_id: Uuid,
+}
+
+impl Job for LoadTwitterArchiveJob {
+    const NAME: &'static str = "twitter_load_archive";
+    type Data = Self;
+    type Queue = Queue;
+
+    fn queue(&self) -> Self::Queue {
+        Queue::Core
+    }
+
+    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
+        Ok(None)
+    }
+
+    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+        Ok(vec![serde_json::to_value(self)?])
+    }
+
+    fn deserialize(mut args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
+        serde_json::from_value(args.remove(0))
+    }
+
+    fn job(self) -> Result<FaktoryJob, serde_json::Error> {
+        let queue = self.queue().queue_name();
+        let custom = foxlib::jobs::job_custom(self.extra()?.unwrap_or_default());
+        let args = self.args()?;
+
+        let mut job = FaktoryJob::new(Self::NAME, args).on_queue(queue.as_ref());
+        job.custom = custom;
+        job.reserve_for = Some(60 * 60);
+
+        Ok(job)
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct ArchiveEntry {
+    tweet: ArchiveTweet,
+}
+
+#[derive(Debug, Deserialize)]
+struct ArchiveTweet {
+    id: String,
+    created_at: String,
+    full_text: String,
+    entities: Option<ArchiveTweetEntities>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct ArchiveTweetEntities {
+    media: Option<Vec<TwitterArchiveMedia>>,
+}
+
+#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum TwitterArchiveMediaType {
+    Photo,
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Debug, Deserialize)]
+struct TwitterArchiveMedia {
+    #[serde(rename = "type")]
+    media_type: TwitterArchiveMediaType,
+    id: String,
+    media_url_https: String,
+}
+
+#[derive(Debug)]
+struct TweetToSave {
+    tweet_id: u64,
+    photo_id: u64,
+    posted_at: chrono::DateTime<chrono::Utc>,
+    screen_name: String,
+    sha256: [u8; 32],
+    perceptual_hash: Option<i64>,
+    im: Option<image::DynamicImage>,
+}
+
+#[derive(Debug, thiserror::Error)]
+enum TweetError {
+    #[error("missing")]
+    Missing,
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("invalid data: {0}")]
+    InvalidData(&'static str),
+}
+
+async fn load_archive(
+    ctx: JobContext,
+    _job: FaktoryJob,
+    LoadTwitterArchiveJob {
+        user_id,
+        account_id,
+        collection_id,
+        ..
+    }: LoadTwitterArchiveJob,
+) -> Result<(), Error> {
+    let chunks = models::FileUploadChunk::chunks(&ctx.conn, user_id, collection_id).await?;
+    tracing::info!("attempting to load archive from {} chunks", chunks.len());
+
+    let mut file = tokio::fs::File::from_std(web::block(tempfile::tempfile).await.unwrap()?);
+
+    for chunk in chunks.iter() {
+        tracing::trace!("downloading chunk {chunk}");
+
+        let path = format!("tmp/{}/{}-{}", user_id, collection_id, chunk);
+
+        let get = rusoto_s3::GetObjectRequest {
+            bucket: ctx.config.s3_bucket.clone(),
+            key: path.clone(),
+            ..Default::default()
+        };
+
+        let obj = ctx
+            .s3
+            .get_object(get)
+            .await
+            .map_err(|err| Error::S3(err.to_string()))?;
+
+        let mut body = obj.body.ok_or(Error::Missing)?.into_async_read();
+
+        tokio::io::copy(&mut body, &mut file).await?;
+    }
+
+    let mut file = file.into_std().await;
+
+    let (tx, mut rx) = tokio::sync::mpsc::channel(4);
+
+    let ctx_clone = ctx.clone();
+    tokio::task::spawn(async move {
+        while let Some(tweet) = rx.recv().await {
+            if let Err(err) = add_tweet(&ctx_clone, user_id, account_id, tweet).await {
+                tracing::error!("could not add tweet: {err}");
+            }
+        }
+    });
+
+    web::block(move || -> Result<(), TweetError> {
+        file.seek(std::io::SeekFrom::Start(0)).unwrap();
+
+        let mut archive = zip::ZipArchive::new(std::io::BufReader::new(file)).unwrap();
+
+        let screen_name = get_archive_username(&mut archive).ok_or(TweetError::Missing)?;
+
+        let matcher = regex::Regex::new(r#"/tweet(?:-part\d+)?\.js$"#).unwrap();
+        let tweet_files = archive
+            .file_names()
+            .filter(|file_name| matcher.is_match(file_name))
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+
+        for tweet_file in tweet_files {
+            tracing::info!("finding tweets in {}", tweet_file);
+            let file = archive.by_name(&tweet_file).unwrap();
+            let tweets = read_tweets_from_file(file, &screen_name)?;
+            tracing::debug!("found {} tweets", tweets.len());
+
+            for tweet in tweets {
+                for (photo_id, photo_url) in &tweet.photos {
+                    match process_tweet(&mut archive, &tweet, *photo_id, photo_url) {
+                        Ok(tweet) => tx
+                            .blocking_send(tweet)
+                            .expect("could not send processed tweet"),
+                        Err(err) => {
+                            tracing::error!("could not process tweet: {err}");
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    })
+    .await
+    .map_err(|_err| Error::unknown_message("Could not join blocking task"))?
+    .map_err(|_err| Error::unknown_message("Error parsing archive"))?;
+
+    let objects: Vec<_> = chunks
+        .into_iter()
+        .map(|chunk| format!("tmp/{}/{}-{}", user_id, collection_id, chunk))
+        .map(|path| rusoto_s3::ObjectIdentifier {
+            key: path,
+            version_id: None,
+        })
+        .collect();
+
+    let delete = rusoto_s3::DeleteObjectsRequest {
+        bucket: ctx.config.s3_bucket.clone(),
+        delete: rusoto_s3::Delete {
+            objects,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    if let Err(err) = ctx.s3.delete_objects(delete).await {
+        tracing::error!("could not delete chunks from s3: {err}");
+    }
+
+    Ok(())
+}
+
+async fn add_tweet(
+    ctx: &jobs::JobContext,
+    user_id: Uuid,
+    account_id: Uuid,
+    tweet: TweetToSave,
+) -> Result<Uuid, Error> {
+    let source_id = format!("{}-{}", tweet.tweet_id, tweet.photo_id);
+
+    if let Ok(Some(media)) = models::OwnedMediaItem::lookup_by_site_id(
+        &ctx.conn,
+        user_id,
+        models::Site::Twitter,
+        &source_id,
+    )
+    .await
+    {
+        return Ok(media.id);
+    }
+
+    let item_id = models::OwnedMediaItem::add_item(
+        &ctx.conn,
+        user_id,
+        account_id,
+        source_id,
+        tweet.perceptual_hash,
+        tweet.sha256,
+        Some(format!(
+            "https://twitter.com/{}/status/{}",
+            tweet.screen_name, tweet.tweet_id,
+        )),
+        None,
+        Some(tweet.posted_at),
+    )
+    .await?;
+
+    if let Some(im) = tweet.im {
+        models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im)
+            .await
+            .unwrap();
+
+        ctx.producer
+            .enqueue_job(
+                SearchExistingSubmissionsJob {
+                    user_id,
+                    media_id: item_id,
+                }
+                .initiated_by(JobInitiator::user(user_id)),
+            )
+            .await?;
+    }
+
+    Ok(item_id)
+}
+
+fn get_archive_username<R: std::io::Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+) -> Option<String> {
+    let mut account = String::new();
+    archive
+        .by_name("data/account.js")
+        .unwrap()
+        .read_to_string(&mut account)
+        .ok()?;
+    let matcher = regex::Regex::new(r#""username"\s+?:\s+?"(?P<username>\S+)""#).ok()?;
+    let username = matcher.captures(&account)?["username"].to_string();
+
+    Some(username)
+}
+
+fn read_tweets_from_file(
+    mut file: zip::read::ZipFile,
+    screen_name: &str,
+) -> Result<Vec<SavedTweet>, TweetError> {
+    let mut comma_buf = [0u8; 1];
+    let mut extra_data_buf = [0u8; 26];
+    file.read_exact(&mut extra_data_buf)?;
+
+    let mut tweets = Vec::new();
+
+    loop {
+        let mut decoder =
+            serde_json::Deserializer::from_reader(&mut file).into_iter::<ArchiveEntry>();
+        match decoder.next() {
+            Some(Ok(entry)) => {
+                file.read_exact(&mut comma_buf).unwrap();
+
+                if entry.tweet.full_text.starts_with("RT @") {
+                    continue;
+                }
+
+                let posted_at =
+                    chrono::DateTime::parse_from_str(&entry.tweet.created_at, "%a %b %d %T %z %Y")
+                        .unwrap();
+
+                let photos = entry
+                    .tweet
+                    .entities
+                    .unwrap_or_default()
+                    .media
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|media| media.media_type == TwitterArchiveMediaType::Photo)
+                    .filter_map(|photo| Some((photo.id.parse().ok()?, photo.media_url_https)))
+                    .collect();
+
+                tweets.push(SavedTweet {
+                    id: entry.tweet.id,
+                    posted_at: posted_at.into(),
+                    screen_name: screen_name.to_string(),
+                    photos,
+                });
+            }
+            Some(Err(err)) => {
+                tracing::warn!("could not decode entry: {}", err);
+                break;
+            }
+            None => break,
+        }
+    }
+
+    Ok(tweets)
+}
+
+fn process_tweet<R: std::io::Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    tweet: &SavedTweet,
+    photo_id: u64,
+    photo_url: &str,
+) -> Result<TweetToSave, TweetError> {
+    let (_prefix, name) = photo_url.rsplit_once('/').expect("media url was not url");
+    let path = format!("data/tweet_media/{}-{}", tweet.id, name);
+    tracing::trace!("looking for photo {path}");
+
+    let mut photo_file = archive.by_name(&path).map_err(|_err| TweetError::Missing)?;
+    let mut image_data = Vec::new();
+    let _read_bytes = photo_file.read_to_end(&mut image_data)?;
+
+    let mut sha256 = sha2::Sha256::new();
+    sha256.update(&image_data);
+    let sha256: [u8; 32] = sha256
+        .finalize()
+        .try_into()
+        .expect("sha256 was wrong length");
+
+    let (im, perceptual_hash) = if let Ok(im) = image::load_from_memory(&image_data) {
+        let hasher = fuzzysearch_common::get_hasher();
+        let hash: [u8; 8] = hasher
+            .hash_image(&im)
+            .as_bytes()
+            .try_into()
+            .expect("perceptual hash was wrong length");
+        let perceptual_hash = i64::from_be_bytes(hash);
+
+        (Some(im), Some(perceptual_hash))
+    } else {
+        (None, None)
+    };
+
+    let saved = TweetToSave {
+        tweet_id: tweet
+            .id
+            .parse()
+            .map_err(|_err| TweetError::InvalidData("tweet_id"))?,
+        photo_id,
+        posted_at: tweet.posted_at,
+        screen_name: tweet.screen_name.clone(),
+        sha256,
+        perceptual_hash,
+        im,
+    };
+
+    Ok(saved)
 }

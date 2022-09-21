@@ -50,6 +50,7 @@ async fn admin(
         recent_flist_runs,
     }
     .wrap(&request, Some(&user))
+    .await
     .render()?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))

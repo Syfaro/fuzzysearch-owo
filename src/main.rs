@@ -5,8 +5,9 @@ use actix_session::{
     storage::CookieSessionStore,
     SessionMiddleware,
 };
-use actix_web::{cookie::Key, web, App, HttpResponse, HttpServer};
+use actix_web::{cookie::Key, web, App, FromRequest, HttpResponse, HttpServer};
 use askama::Template;
+use async_trait::async_trait;
 use clap::Parser;
 
 mod admin;
@@ -242,27 +243,81 @@ fn load_config() -> Config {
 pub struct BaseTemplate<'a, T: std::fmt::Display + askama::Template> {
     pub user: Option<&'a models::User>,
     pub uri: &'a actix_web::http::Uri,
+    pub flashes: Option<Vec<FlashMessage>>,
 
     pub content: &'a T,
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct FlashMessage {
+    pub classes: String,
+    pub message: String,
+}
+
+pub enum FlashStyle {
+    Info,
+    Success,
+    Error,
+}
+
+impl FlashStyle {
+    fn classes(&self) -> &'static str {
+        match self {
+            Self::Info => "",
+            Self::Success => "is-success",
+            Self::Error => "is-danger",
+        }
+    }
+}
+
+pub trait AddFlash {
+    fn add_flash(&self, style: FlashStyle, message: String);
+}
+
+impl AddFlash for actix_session::Session {
+    fn add_flash(&self, style: FlashStyle, message: String) {
+        let flash_message = FlashMessage {
+            classes: style.classes().to_string(),
+            message,
+        };
+        self.insert("flashes", vec![flash_message])
+            .expect("could not insert to session");
+    }
+}
+
+#[async_trait(?Send)]
 pub trait WrappedTemplate: Sized + std::fmt::Display + askama::Template {
-    fn wrap<'a>(
+    async fn wrap<'a>(
         &'a self,
         request: &'a actix_web::HttpRequest,
         user: Option<&'a models::User>,
     ) -> BaseTemplate<'a, Self>;
 }
 
+#[async_trait(?Send)]
 impl<T: Sized + std::fmt::Display + askama::Template> WrappedTemplate for T {
-    fn wrap<'a>(
+    async fn wrap<'a>(
         &'a self,
         request: &'a actix_web::HttpRequest,
         user: Option<&'a models::User>,
     ) -> BaseTemplate<'a, Self> {
+        let session = actix_session::Session::extract(request).await.ok().unwrap();
+        let flashes = match session.get::<Vec<FlashMessage>>("flashes") {
+            Ok(flashes @ Some(_)) => {
+                session.remove("flashes");
+                flashes
+            }
+            Ok(None) => None,
+            Err(err) => {
+                tracing::error!("could not get flashes: {err}");
+                None
+            }
+        };
+
         BaseTemplate {
             user,
             uri: request.uri(),
+            flashes,
             content: self,
         }
     }
@@ -283,7 +338,7 @@ async fn index(
             .finish());
     }
 
-    let body = Home.wrap(&request, user.as_ref()).render()?;
+    let body = Home.wrap(&request, user.as_ref()).await.render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
@@ -302,6 +357,7 @@ async fn changelog(
         content: include_str!("../content/CHANGELOG.md"),
     }
     .wrap(&request, user.as_ref())
+    .await
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -315,6 +371,7 @@ async fn faq(
         content: include_str!("../content/FAQ.md"),
     }
     .wrap(&request, user.as_ref())
+    .await
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -328,6 +385,7 @@ async fn takedown(
         content: include_str!("../content/takedowns.md"),
     }
     .wrap(&request, user.as_ref())
+    .await
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }

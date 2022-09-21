@@ -193,3 +193,69 @@ updateRelativeTimes();
     [burger, target].forEach((el) => el.classList.toggle('is-active'));
   });
 });
+
+[...document.querySelectorAll('.chunk-uploader')].forEach((chunkUploader) => {
+  chunkUploader.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+
+    window.onbeforeunload = () => { return "Archive is uploading"; };
+
+    const fileInput = chunkUploader.querySelector('input[type="file"]');
+    const file = fileInput.files[0];
+
+   chunkUploader.querySelector('.upload-button').classList.add('is-loading');
+
+    const progressBar = chunkUploader.querySelector('progress');
+    progressBar.classList.remove('is-hidden');
+
+    performChunkedUpload(file, progressBar).then((collectionId) => {
+      console.log(`Completed uploading chunks to ${collectionId}`);
+
+      chunkUploader.querySelector('input[name="collection_id"]').value = collectionId;
+      fileInput.value = null;
+
+      chunkUploader.submit();
+    }).catch((err) => {
+      window.onbeforeunload = null;
+
+      alert(`Upload failed: ${err}`);
+      window.location.reload();
+    });
+  });
+});
+
+async function performChunkedUpload(file, progressBar) {
+  const CHUNK_SIZE = 1024 * 1024 * 10;
+
+  const collectionId = window.crypto.randomUUID();
+  const fileSize = file.size;
+
+  let currentChunk = 1;
+  const totalChunks = Math.ceil((fileSize / CHUNK_SIZE), CHUNK_SIZE);
+
+  while (currentChunk <= totalChunks) {
+    console.debug(`Uploading chunk ${currentChunk}`);
+    progressBar.value = currentChunk;
+    progressBar.max = totalChunks;
+
+    const offset = (currentChunk - 1) * CHUNK_SIZE;
+    const filePart = file.slice(offset, offset + CHUNK_SIZE);
+
+    const formData = new FormData();
+    formData.set('chunk', filePart);
+
+    const resp = await fetch(`/api/chunk/${collectionId}/add`, {
+      method: 'POST',
+      body: formData,
+      credentials: 'same-origin',
+    });
+
+    if (resp.status !== 200) {
+      throw new Error('bad status code');
+    }
+
+    currentChunk++;
+  }
+
+  return collectionId;
+}

@@ -109,6 +109,38 @@
         <hr>
         {% endif %}
 
+        {% if account.show_twitter_archive_import() %}
+        <div class="block">
+          <form action="/twitter/archive" method="POST" class="chunk-uploader">
+            <input type="hidden" name="account_id" value="{{ account.id }}">
+            <input type="hidden" name="collection_id">
+
+            <div class="field">
+              <div class="file is-boxed is-centered has-name">
+                <label class="file-label">
+                  <input class="file-input" type="file" accept="application/zip" data-file-name-label="#archive-label"
+                    data-upload-button="#archive-upload-button">
+                  <span class="file-cta">
+                    <span class="file-label">Select Archive</span>
+                  </span>
+                  <span class="file-name" id="archive-label">No File Selected</span>
+                </label>
+              </div>
+
+              <p class="help">
+                Upload your Twitter archive to import more than your 3,200 most recent Tweets.
+              </p>
+            </div>
+
+            <div class="control">
+              <progress class="progress is-link is-hidden"></progress>
+              <button id="archive-upload-button" class="button is-link is-fullwidth is-outlined upload-button"
+                disabled>Upload</button>
+            </div>
+          </form>
+        </div>
+        {% endif %}
+
         <div class="block">
           <form method="POST" action="/user/account/remove">
             <input type="hidden" name="account_id" value="{{ account.id }}">
@@ -158,7 +190,7 @@
           'content-type': 'application/x-www-form-urlencoded',
         },
       })
-      .then((resp) => console.debug(resp));
+        .then((resp) => console.debug(resp));
     });
   }
 

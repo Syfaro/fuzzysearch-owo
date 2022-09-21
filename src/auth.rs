@@ -65,6 +65,7 @@ async fn register_get(
         error_messages: None,
     }
     .wrap(&request, None)
+    .await
     .render()?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
@@ -162,6 +163,7 @@ async fn login_get(
         error_message: None,
     }
     .wrap(&request, None)
+    .await
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -341,6 +343,7 @@ async fn sessions(
         sessions,
     }
     .wrap(&request, Some(&user))
+    .await
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }

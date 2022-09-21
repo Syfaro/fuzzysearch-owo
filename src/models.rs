@@ -1044,6 +1044,20 @@ impl LinkedAccount {
             .and_then(|obj| obj.get("verification_key"))
             .and_then(|key| key.as_str())
     }
+
+    pub fn show_twitter_archive_import(&self) -> bool {
+        if self.source_site != Site::Twitter {
+            return false;
+        }
+
+        !self
+            .data
+            .as_ref()
+            .and_then(|data| data.as_object())
+            .and_then(|obj| obj.get("has_imported_archive"))
+            .and_then(|has| has.as_bool())
+            .unwrap_or(false)
+    }
 }
 
 #[derive(Debug, Clone, Copy, DeserializeFromStr, SerializeDisplay, PartialEq, Eq, Hash)]
@@ -1949,6 +1963,51 @@ impl TwitterAuth {
             .await?;
 
         Ok(())
+    }
+}
+
+pub struct FileUploadChunk;
+
+impl FileUploadChunk {
+    pub async fn add(
+        conn: &sqlx::PgPool,
+        user_id: Uuid,
+        collection_id: Uuid,
+        size: i32,
+    ) -> Result<i64, Error> {
+        let sequence_number = sqlx::query_file_scalar!(
+            "queries/file_upload_chunk/upload.sql",
+            user_id,
+            collection_id,
+            size
+        )
+        .fetch_one(conn)
+        .await?;
+
+        Ok(sequence_number)
+    }
+
+    pub async fn size(conn: &sqlx::PgPool, user_id: Uuid) -> Result<i64, Error> {
+        let size = sqlx::query_file_scalar!("queries/file_upload_chunk/size.sql", user_id)
+            .fetch_optional(conn)
+            .await?
+            .unwrap_or_default()
+            .unwrap_or(0);
+
+        Ok(size)
+    }
+
+    pub async fn chunks(
+        conn: &sqlx::PgPool,
+        user_id: Uuid,
+        collection_id: Uuid,
+    ) -> Result<Vec<i64>, Error> {
+        let sequence_nums =
+            sqlx::query_file_scalar!("queries/file_upload_chunk/get.sql", user_id, collection_id)
+                .fetch_all(conn)
+                .await?;
+
+        Ok(sequence_nums)
     }
 }
 

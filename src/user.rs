@@ -52,6 +52,7 @@ async fn home(
         monitored_accounts,
     }
     .wrap(&request, Some(&user))
+    .await
     .render()?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
@@ -94,6 +95,7 @@ async fn settings_get(
         telegram_notifications,
     }
     .wrap(&request, Some(&user))
+    .await
     .render()?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
@@ -192,6 +194,7 @@ async fn settings_post(
         telegram_notifications,
     }
     .wrap(&request, Some(&user))
+    .await
     .render()?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
@@ -248,7 +251,7 @@ async fn check_get(
     request: actix_web::HttpRequest,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
-    let body = CheckForm.wrap(&request, Some(&user)).render()?;
+    let body = CheckForm.wrap(&request, Some(&user)).await.render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
@@ -375,6 +378,7 @@ async fn check_post(
 
     let body = CheckResults { results }
         .wrap(&request, Some(&user))
+        .await
         .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -394,7 +398,7 @@ async fn account_link_get(
         ));
     }
 
-    let body = AccountLink.wrap(&request, Some(&user)).render()?;
+    let body = AccountLink.wrap(&request, Some(&user)).await.render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
@@ -505,6 +509,7 @@ async fn account_view(
         recent_media,
     }
     .wrap(&request, Some(&user))
+    .await
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -593,6 +598,7 @@ async fn media_view(
         allowlisted_users,
     }
     .wrap(&request, Some(&user))
+    .await
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -745,6 +751,7 @@ async fn media_list(
         account,
     }
     .wrap(&request, Some(&user))
+    .await
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -824,6 +831,7 @@ async fn feed(
         filtering_allowlisted: query.filter_allowlisted,
     }
     .wrap(&request, Some(&user))
+    .await
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -843,6 +851,7 @@ async fn email_add(
         error_message: None,
     }
     .wrap(&request, Some(&user))
+    .await
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -921,6 +930,7 @@ async fn verify_email_get(
         verifier: query.verifier,
     }
     .wrap(&request, Some(&user))
+    .await
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -1029,6 +1039,7 @@ async fn unsubscribe_get(
         verifier: query.verifier,
     }
     .wrap(&request, Some(&user))
+    .await
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }

@@ -11,6 +11,8 @@ use actix_web_actors::ws;
 use actix_web_httpauth::extractors::basic::BasicAuth;
 use foxlib::jobs::FaktoryProducer;
 use futures::StreamExt;
+use futures::TryStreamExt;
+use rusoto_s3::S3;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -300,6 +302,58 @@ async fn upload(
     Ok(web::Json(ids))
 }
 
+#[post("/{collection}/add")]
+async fn chunk_add(
+    pool: web::Data<PgPool>,
+    s3: web::Data<rusoto_s3::S3Client>,
+    config: web::Data<crate::Config>,
+    user: models::User,
+    path: web::Path<Uuid>,
+    mut form: actix_multipart::Multipart,
+) -> Result<web::Json<Option<String>>, Error> {
+    let mut sequence_number = None;
+
+    while let Ok(Some(mut field)) = form.try_next().await {
+        if !matches!(field.content_disposition().get_name(), Some("chunk")) {
+            continue;
+        }
+
+        let mut buf = Vec::new();
+        while let Ok(Some(chunk)) = field.try_next().await {
+            if buf.len() + chunk.len() > 15_000_000 {
+                return Err(Error::user_error("chunk is too large"));
+            }
+
+            buf.extend(chunk);
+        }
+
+        let total_size = models::FileUploadChunk::size(&pool, user.id).await? as usize;
+        if total_size + buf.len() > 1024 * 1024 * 1024 * 5 {
+            return Err(Error::user_error("pending chunks are too large"));
+        }
+
+        let num = models::FileUploadChunk::add(&pool, user.id, *path, buf.len() as i32).await?;
+        sequence_number = Some(num);
+
+        let path = format!("tmp/{}/{}-{}", user.id, path, num);
+        let put = rusoto_s3::PutObjectRequest {
+            bucket: config.s3_bucket.clone(),
+            key: path.clone(),
+            content_length: Some(buf.len() as i64),
+            body: Some(rusoto_core::ByteStream::from(buf)),
+            ..Default::default()
+        };
+
+        s3.put_object(put)
+            .await
+            .map_err(|err| Error::S3(err.to_string()))?;
+
+        break;
+    }
+
+    Ok(web::Json(sequence_number.map(|num| num.to_string())))
+}
+
 #[derive(Deserialize)]
 struct FuzzySearchParams {
     secret: String,
@@ -330,4 +384,5 @@ pub fn service() -> Scope {
     web::scope("/api")
         .service(services![events, upload])
         .service(web::scope("/service").service(services![fuzzysearch]))
+        .service(web::scope("/chunk").service(services![chunk_add]))
 }
