@@ -257,6 +257,7 @@ pub struct FlashMessage {
 pub enum FlashStyle {
     Info,
     Success,
+    Warning,
     Error,
 }
 
@@ -265,20 +266,21 @@ impl FlashStyle {
         match self {
             Self::Info => "",
             Self::Success => "is-success",
+            Self::Warning => "is-warning",
             Self::Error => "is-danger",
         }
     }
 }
 
 pub trait AddFlash {
-    fn add_flash(&self, style: FlashStyle, message: String);
+    fn add_flash<M: ToString>(&self, style: FlashStyle, message: M);
 }
 
 impl AddFlash for actix_session::Session {
-    fn add_flash(&self, style: FlashStyle, message: String) {
+    fn add_flash<M: ToString>(&self, style: FlashStyle, message: M) {
         let flash_message = FlashMessage {
             classes: style.classes().to_string(),
-            message,
+            message: message.to_string(),
         };
         self.insert("flashes", vec![flash_message])
             .expect("could not insert to session");

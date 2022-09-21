@@ -16,7 +16,7 @@ use crate::{
     jobs::{self, JobInitiatorExt},
     models::{self, setting, Site, UserSettingItem},
     routes::*,
-    ClientIpAddr, Error, WrappedTemplate,
+    AddFlash, ClientIpAddr, Error, FlashStyle, WrappedTemplate,
 };
 
 #[derive(Template)]
@@ -231,11 +231,14 @@ async fn single(
     s3: web::Data<rusoto_s3::S3Client>,
     faktory: web::Data<FaktoryProducer>,
     config: web::Data<crate::Config>,
+    session: actix_session::Session,
     user: models::User,
     form: actix_multipart::Multipart,
 ) -> Result<HttpResponse, Error> {
     let _ids =
         common::handle_multipart_upload(&conn, &redis, &s3, &faktory, &config, &user, form).await?;
+
+    session.add_flash(FlashStyle::Success, "Uploaded image.");
 
     Ok(HttpResponse::Found()
         .insert_header(("Location", USER_HOME))
@@ -389,8 +392,8 @@ async fn account_link_get(
     user: models::User,
 ) -> Result<HttpResponse, Error> {
     if !user.has_verified_account() {
-        return Err(Error::UserError(
-            "You must verify your email address first.".into(),
+        return Err(Error::user_error(
+            "You must verify your email address first.",
         ));
     }
 
@@ -408,12 +411,13 @@ struct AccountLinkForm {
 async fn account_link_post(
     config: web::Data<crate::Config>,
     conn: web::Data<sqlx::PgPool>,
+    session: actix_session::Session,
     user: models::User,
     form: web::Form<AccountLinkForm>,
 ) -> Result<HttpResponse, Error> {
     if !user.has_verified_account() {
-        return Err(Error::UserError(
-            "You must verify your email address first.".into(),
+        return Err(Error::user_error(
+            "You must verify your email address first.",
         ));
     }
 
@@ -441,6 +445,14 @@ async fn account_link_post(
 
     let account = models::LinkedAccount::create(&conn, user.id, form.site, username, data).await?;
 
+    let (style, message) = if account.verification_key().is_some() {
+        (FlashStyle::Warning, "Added account, please verify it to import submissions.")
+    } else {
+        (FlashStyle::Success, "Added account, now importing submissions.")
+    };
+
+    session.add_flash(style, message);
+
     Ok(HttpResponse::Found()
         .insert_header(("Location", format!("/user/account/{}", account.id)))
         .finish())
@@ -454,10 +466,13 @@ struct AccountIdForm {
 #[post("/remove")]
 async fn account_remove(
     conn: web::Data<sqlx::PgPool>,
+    session: actix_session::Session,
     user: models::User,
     form: web::Form<AccountIdForm>,
 ) -> Result<HttpResponse, Error> {
     models::LinkedAccount::remove(&conn, user.id, form.account_id).await?;
+
+    session.add_flash(FlashStyle::Success, "Removed account and associated submissions.");
 
     Ok(HttpResponse::Found()
         .insert_header(("Location", USER_HOME))
@@ -607,10 +622,13 @@ struct MediaRemoveForm {
 #[post("/remove")]
 async fn media_remove(
     conn: web::Data<sqlx::PgPool>,
+    session: actix_session::Session,
     user: models::User,
     form: web::Form<MediaRemoveForm>,
 ) -> Result<HttpResponse, Error> {
     models::OwnedMediaItem::remove(&conn, user.id, form.media_id).await?;
+
+    session.add_flash(FlashStyle::Success, "Removed media.");
 
     Ok(HttpResponse::Found()
         .insert_header(("Location", USER_HOME))
@@ -963,6 +981,8 @@ async fn verify_email_post(
         session.set_session_token(form.user_id, session_id)?;
     }
 
+    session.add_flash(FlashStyle::Success, "Email address verified.");
+
     Ok(HttpResponse::Found()
         .insert_header(("Location", USER_HOME))
         .finish())
@@ -979,9 +999,12 @@ struct AllowlistForm {
 async fn allowlist_add(
     conn: web::Data<sqlx::PgPool>,
     form: web::Form<AllowlistForm>,
+    session: actix_session::Session,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
     models::UserAllowlist::add(&conn, user.id, form.site, &form.site_username).await?;
+
+    session.add_flash(FlashStyle::Success, "Account added to allowlist.");
 
     Ok(HttpResponse::Found()
         .insert_header(("Location", form.redirect_url.to_owned()))
@@ -992,9 +1015,12 @@ async fn allowlist_add(
 async fn allowlist_remove(
     conn: web::Data<sqlx::PgPool>,
     form: web::Form<AllowlistForm>,
+    session: actix_session::Session,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
     models::UserAllowlist::remove(&conn, user.id, form.site, &form.site_username).await?;
+
+    session.add_flash(FlashStyle::Success, "Account removed from allowlist.");
 
     Ok(HttpResponse::Found()
         .insert_header(("Location", form.redirect_url.to_owned()))
