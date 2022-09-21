@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.14.1 — September 21st, 2022
+
+* Added Twitter archive import to load all photos from account.
+* Added more feedback when an action was performed.
+
 ## v0.14.0 — September 20th, 2022
 
 * Added support for collecting images from Twitter.
