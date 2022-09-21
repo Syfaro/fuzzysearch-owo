@@ -807,6 +807,7 @@ pub enum LoadingState {
     Unknown,
     DiscoveringItems,
     LoadingItems { known: i32 },
+    Custom { message: String },
     Complete,
 }
 
@@ -816,6 +817,7 @@ impl LoadingState {
             LoadingState::Unknown => "Starting Loading".to_string(),
             LoadingState::DiscoveringItems => "Discovering Items".to_string(),
             LoadingState::LoadingItems { known } => format!("Processing {} Items", known),
+            LoadingState::Custom { message } => message.clone(),
             LoadingState::Complete => "Loading Complete".to_string(),
         }
     }

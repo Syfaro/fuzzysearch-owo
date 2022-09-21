@@ -178,7 +178,7 @@ updateRelativeTimes();
     const fileName = document.querySelector(input.dataset.fileNameLabel);
 
     if (fileName) {
-      const displayedName = input.files.length === 1 ? input.files[0].name : 'Multiple Selected';
+      const displayedName = input.files.length === 1 ? input.files[0].name : `${input.files.length} Files Selected`;
       fileName.textContent = displayedName;
     }
 
@@ -210,6 +210,8 @@ updateRelativeTimes();
 
     performChunkedUpload(file, progressBar).then((collectionId) => {
       console.log(`Completed uploading chunks to ${collectionId}`);
+
+      window.onbeforeunload = null;
 
       chunkUploader.querySelector('input[name="collection_id"]').value = collectionId;
       fileInput.value = null;

@@ -447,6 +447,27 @@
     },
     "query": "INSERT INTO\n    user_setting (owner_id, setting, value)\nVALUES\n    ($1, $2, $3) ON CONFLICT (owner_id, setting) DO\nUPDATE\nSET\n    value = EXCLUDED.value;\n"
   },
+  "0e82f6fc02a241dba7bb4503cda19b02cdc7f9ca0fcd34fd3fb8628579cf3c90": {
+    "describe": {
+      "columns": [
+        {
+          "name": "sequence_number",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT\n    sequence_number\nFROM\n    file_upload_chunk\nWHERE\n    owner_id = $1\n    AND collection_id = $2\nORDER BY\n    sequence_number ASC;\n"
+  },
   "0ecc1b410ddc5352e1a406cd7ee42367eb5f30e4cbb1f82157415408352cb421": {
     "describe": {
       "columns": [],
@@ -1915,6 +1936,28 @@
     },
     "query": "UPDATE\n    user_account\nSET\n    email = $2,\n    email_verifier = gen_random_uuid()\nWHERE\n    id = $1;\n"
   },
+  "7e4e47b0678b01c654bc33f29da4f7fbc58a394d9bd44100e138b106b7580c38": {
+    "describe": {
+      "columns": [
+        {
+          "name": "sequence_number",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid",
+          "Int4"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    file_upload_chunk (owner_id, collection_id, size)\nVALUES\n    ($1, $2, $3) RETURNING sequence_number;\n"
+  },
   "7eaaa4fe7e0c1d59c617e787ecd56096bc6de2701b536dfa37bfa54c65a7a7b3": {
     "describe": {
       "columns": [
@@ -2800,6 +2843,26 @@
       }
     },
     "query": "DELETE FROM\n    auth_state\nWHERE\n    owner_id = $1\n    AND state = $2;\n"
+  },
+  "d63de1dffd8c9e799b12df4be5d1dbb197594e4d288281d707de04296009977a": {
+    "describe": {
+      "columns": [
+        {
+          "name": "total_size",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT\n    sum(size) total_size\nFROM\n    file_upload_chunk\nWHERE\n    owner_id = $1;\n"
   },
   "d6ecfc1cc2a5bce2425ebd3c50a88958b4e7576ef38af73522cb35484a08b6f6": {
     "describe": {

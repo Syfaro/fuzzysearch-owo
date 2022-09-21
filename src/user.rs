@@ -370,10 +370,6 @@ async fn check_post(
             photo_preview: base64::encode(thumbnail),
             links,
         });
-
-        if results.len() >= 10 {
-            break;
-        }
     }
 
     let body = CheckResults { results }

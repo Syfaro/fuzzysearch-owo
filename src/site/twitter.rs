@@ -193,8 +193,6 @@ impl Twitter {
             return Default::default();
         }
 
-        tracing::info!("{:#?}", tweet);
-
         let extended_entities = tweet
             .extended_entities
             .as_ref()
@@ -342,6 +340,7 @@ struct TwitterArchiveForm {
 #[post("/archive")]
 async fn archive_post(
     conn: web::Data<sqlx::PgPool>,
+    redis: web::Data<redis::aio::ConnectionManager>,
     faktory: web::Data<FaktoryProducer>,
     session: actix_session::Session,
     user: models::User,
@@ -381,6 +380,16 @@ async fn archive_post(
     })?;
 
     models::LinkedAccount::update_data(&conn, account.id, Some(data)).await?;
+    models::LinkedAccount::update_loading_state(
+        &conn,
+        &redis,
+        user.id,
+        account.id,
+        models::LoadingState::Custom {
+            message: "Importing Archive".to_string(),
+        },
+    )
+    .await?;
 
     session.add_flash(crate::FlashStyle::Success, "Successfully uploaded Twitter archive! It may take up to an hour for all of your photos to be imported.".to_string());
 
@@ -878,6 +887,15 @@ async fn load_archive(
     if let Err(err) = ctx.s3.delete_objects(delete).await {
         tracing::error!("could not delete chunks from s3: {err}");
     }
+
+    models::LinkedAccount::update_loading_state(
+        &ctx.conn,
+        &ctx.redis,
+        user_id,
+        account_id,
+        models::LoadingState::Complete,
+    )
+    .await?;
 
     Ok(())
 }
