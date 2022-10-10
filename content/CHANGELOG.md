@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.14.2 — October 10th, 2022
+
+* Added password reset for users with linked email addresses.
+
 ## v0.14.1 — September 21st, 2022
 
 * Added Twitter archive import to load all photos from account.
