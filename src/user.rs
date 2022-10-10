@@ -446,9 +446,15 @@ async fn account_link_post(
     let account = models::LinkedAccount::create(&conn, user.id, form.site, username, data).await?;
 
     let (style, message) = if account.verification_key().is_some() {
-        (FlashStyle::Warning, "Added account, please verify it to import submissions.")
+        (
+            FlashStyle::Warning,
+            "Added account, please verify it to import submissions.",
+        )
     } else {
-        (FlashStyle::Success, "Added account, now importing submissions.")
+        (
+            FlashStyle::Success,
+            "Added account, now importing submissions.",
+        )
     };
 
     session.add_flash(style, message);
@@ -472,7 +478,10 @@ async fn account_remove(
 ) -> Result<HttpResponse, Error> {
     models::LinkedAccount::remove(&conn, user.id, form.account_id).await?;
 
-    session.add_flash(FlashStyle::Success, "Removed account and associated submissions.");
+    session.add_flash(
+        FlashStyle::Success,
+        "Removed account and associated submissions.",
+    );
 
     Ok(HttpResponse::Found()
         .insert_header(("Location", USER_HOME))

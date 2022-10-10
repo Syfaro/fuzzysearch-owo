@@ -5,14 +5,17 @@ use actix_session::Session;
 use actix_web::{get, post, services, web, FromRequest, HttpResponse, Scope};
 use askama::Template;
 use chrono::TimeZone;
+use foxlib::jobs::FaktoryProducer;
 use hmac::Hmac;
 use hmac::Mac;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 use zxcvbn::zxcvbn;
 
-use crate::{models, routes::*, ClientIpAddr, Error, WrappedTemplate};
+use crate::jobs::JobInitiatorExt;
+use crate::{jobs, models, routes::*, AddFlash, ClientIpAddr, Error, WrappedTemplate};
 
 pub trait FuzzySearchSessionToken {
     const TOKEN_NAME: &'static str;
@@ -376,6 +379,172 @@ async fn sessions_remove(
         .finish())
 }
 
+#[derive(Template)]
+#[template(path = "auth/forgot.html")]
+struct ForgotTemplate;
+
+#[get("/forgot")]
+async fn forgot_form(request: actix_web::HttpRequest) -> Result<HttpResponse, Error> {
+    let body = ForgotTemplate.wrap(&request, None).await.render()?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[derive(Deserialize)]
+struct ForgotForm {
+    email: String,
+}
+
+#[post("/forgot")]
+async fn forgot_post(
+    request: actix_web::HttpRequest,
+    session: Session,
+    conn: web::Data<sqlx::PgPool>,
+    faktory: web::Data<FaktoryProducer>,
+    form: web::Form<ForgotForm>,
+) -> Result<HttpResponse, Error> {
+    let user = models::User::lookup_by_email(&conn, &form.email).await?;
+
+    if let Some(user) = user {
+        let token: String = rand::thread_rng()
+            .sample_iter(&rand::distributions::Alphanumeric)
+            .take(12)
+            .map(char::from)
+            .collect();
+
+        models::User::set_reset_token(&conn, user.id, &token).await?;
+
+        faktory
+            .enqueue_job(
+                jobs::SendPasswordResetEmailJob { user_id: user.id }
+                    .initiated_by(jobs::JobInitiator::User { user_id: user.id }),
+            )
+            .await?;
+    }
+
+    session.add_flash(
+        crate::FlashStyle::Success,
+        "Please check your email to continue password reset.",
+    );
+
+    let body = ForgotTemplate.wrap(&request, None).await.render()?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[derive(Deserialize)]
+struct ForgotEmailQuery {
+    #[serde(rename = "u")]
+    user_id: Uuid,
+    #[serde(rename = "t")]
+    token: String,
+}
+
+#[derive(Template)]
+#[template(path = "auth/forgot_email.html")]
+struct ForgotEmailTemplate<'a> {
+    user_id: Uuid,
+    token: &'a str,
+}
+
+#[get("/forgot/email")]
+async fn forgot_email_form(
+    request: actix_web::HttpRequest,
+    conn: web::Data<sqlx::PgPool>,
+    query: web::Query<ForgotEmailQuery>,
+) -> Result<HttpResponse, Error> {
+    let user = models::User::lookup_by_id(&conn, query.user_id)
+        .await?
+        .ok_or(Error::Missing)?;
+
+    if !matches!(user.reset_token, Some(token) if token == query.token) {
+        return Err(Error::Missing);
+    }
+
+    let body = ForgotEmailTemplate {
+        user_id: query.user_id,
+        token: &query.token,
+    }
+    .wrap(&request, None)
+    .await
+    .render()?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[derive(Deserialize)]
+struct ForgotEmailForm {
+    user_id: Uuid,
+    token: String,
+
+    password: String,
+    password_confirm: String,
+}
+
+#[post("/forgot/email")]
+async fn forgot_email_post(
+    request: actix_web::HttpRequest,
+    client_ip: ClientIpAddr,
+    conn: web::Data<sqlx::PgPool>,
+    session: Session,
+    form: web::Form<ForgotEmailForm>,
+) -> Result<HttpResponse, Error> {
+    let user = models::User::lookup_by_id(&conn, form.user_id)
+        .await?
+        .ok_or(Error::Missing)?;
+
+    if !matches!(user.reset_token, Some(token) if token == form.token) {
+        return Err(Error::Missing);
+    }
+
+    let mut error_messages = Vec::with_capacity(1);
+
+    if form.password != form.password_confirm {
+        error_messages.push("Passwords do not match.");
+    }
+
+    let user_inputs: Vec<&str> = [
+        user.username.as_deref(),
+        user.display_name.as_deref(),
+        user.telegram_name.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+
+    let estimate = zxcvbn(&form.password, &user_inputs).map_err(Error::from_displayable)?;
+    if estimate.score() < 3 {
+        error_messages.push("Password must be longer or contain more symbols.");
+    }
+
+    if !error_messages.is_empty() {
+        session.add_flash(crate::FlashStyle::Error, error_messages.join(" "));
+
+        let body = ForgotEmailTemplate {
+            user_id: form.user_id,
+            token: &form.token,
+        }
+        .wrap(&request, None)
+        .await
+        .render()?;
+        return Ok(HttpResponse::Ok().content_type("text/html").body(body));
+    }
+
+    models::User::update_password(&conn, user.id, &form.password).await?;
+
+    let session_id = models::UserSession::create(
+        &conn,
+        user.id,
+        models::UserSessionSource::Login,
+        client_ip.ip_addr.as_deref(),
+    )
+    .await?;
+    session.set_session_token(user.id, session_id)?;
+
+    session.add_flash(crate::FlashStyle::Success, "Password was reset.");
+
+    Ok(HttpResponse::Found()
+        .insert_header(("Location", USER_HOME))
+        .finish())
+}
+
 pub fn service() -> Scope {
     web::scope("/auth").service(services![
         register_get,
@@ -386,6 +555,10 @@ pub fn service() -> Scope {
         logout,
         sessions,
         sessions_remove,
+        forgot_form,
+        forgot_post,
+        forgot_email_form,
+        forgot_email_post,
     ])
 }
 

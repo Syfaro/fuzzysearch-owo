@@ -21,6 +21,19 @@
     },
     "query": "INSERT INTO\n    user_account (username, hashed_password)\nVALUES\n    ($1, $2) RETURNING id;\n"
   },
+  "00929c2784702d04f9dbf8e1be7c7236e9c748d76c3546e31c41b7b820f6b4be": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text"
+        ]
+      }
+    },
+    "query": "UPDATE\n    user_account\nSET\n    reset_token = $2\nWHERE\n    id = $1;\n"
+  },
   "0122e45e4ee1370147704d1367e18caf126428fcca031b534d9d12f54dd6129c": {
     "describe": {
       "columns": [
@@ -146,6 +159,11 @@
           "name": "api_token",
           "ordinal": 11,
           "type_info": "Uuid"
+        },
+        {
+          "name": "reset_token",
+          "ordinal": 12,
+          "type_info": "Text"
         }
       ],
       "nullable": [
@@ -160,7 +178,8 @@
         true,
         false,
         false,
-        false
+        false,
+        true
       ],
       "parameters": {
         "Left": [
@@ -883,6 +902,19 @@
     },
     "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url,\n    event_count,\n    last_event\nFROM\n    owned_media_item\nWHERE\n    id = $1\n    AND owner_id = $2;\n"
   },
+  "36b0904705803176ec4d6ce31ae9a1200aa00a866d61c8e768e9a834830ad25d": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text"
+        ]
+      }
+    },
+    "query": "UPDATE\n    user_account\nSET\n    hashed_password = $2\nWHERE\n    id = $1;\n"
+  },
   "3950c47de61f6ba464700f0ed9092333a3c0a4de4f45afd6949efd6a75276490": {
     "describe": {
       "columns": [
@@ -1058,6 +1090,11 @@
           "name": "api_token",
           "ordinal": 11,
           "type_info": "Uuid"
+        },
+        {
+          "name": "reset_token",
+          "ordinal": 12,
+          "type_info": "Text"
         }
       ],
       "nullable": [
@@ -1072,7 +1109,8 @@
         true,
         false,
         false,
-        false
+        false,
+        true
       ],
       "parameters": {
         "Left": [
@@ -1613,6 +1651,11 @@
           "name": "api_token",
           "ordinal": 11,
           "type_info": "Uuid"
+        },
+        {
+          "name": "reset_token",
+          "ordinal": 12,
+          "type_info": "Text"
         }
       ],
       "nullable": [
@@ -1627,7 +1670,8 @@
         true,
         false,
         false,
-        false
+        false,
+        true
       ],
       "parameters": {
         "Left": [
@@ -2606,6 +2650,11 @@
           "name": "api_token",
           "ordinal": 11,
           "type_info": "Uuid"
+        },
+        {
+          "name": "reset_token",
+          "ordinal": 12,
+          "type_info": "Text"
         }
       ],
       "nullable": [
@@ -2620,7 +2669,8 @@
         true,
         false,
         false,
-        false
+        false,
+        true
       ],
       "parameters": {
         "Left": [
@@ -2954,6 +3004,98 @@
     },
     "query": "SELECT\n    pending_notification.id,\n    pending_notification.owner_id,\n    pending_notification.created_at,\n    pending_notification.user_event_id\nFROM\n    pending_notification\n    JOIN user_setting ON (\n        user_setting.owner_id = pending_notification.owner_id\n        AND user_setting.setting = 'email-frequency'\n    )\nWHERE\n    user_setting.value = $1;\n"
   },
+  "e4ba6660324c40698210560458108197c41d93558a1abd85453479a26ca347e4": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "username",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "hashed_password",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "email",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "email_verifier",
+          "ordinal": 4,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "telegram_id",
+          "ordinal": 5,
+          "type_info": "Int8"
+        },
+        {
+          "name": "telegram_name",
+          "ordinal": 6,
+          "type_info": "Text"
+        },
+        {
+          "name": "is_admin",
+          "ordinal": 7,
+          "type_info": "Bool"
+        },
+        {
+          "name": "display_name",
+          "ordinal": 8,
+          "type_info": "Text"
+        },
+        {
+          "name": "unsubscribe_token",
+          "ordinal": 9,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "rss_token",
+          "ordinal": 10,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "api_token",
+          "ordinal": 11,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "reset_token",
+          "ordinal": 12,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false,
+        true,
+        false,
+        false,
+        false,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "SELECT\n    *\nFROM\n    user_account\nWHERE\n    lower($1) = lower(email);\n"
+  },
   "e5b7ff20e2dd2d295fb7dacf7447bbaba856e9a61df1d6c161f2a6acce04105d": {
     "describe": {
       "columns": [],
@@ -3073,6 +3215,11 @@
           "name": "api_token",
           "ordinal": 11,
           "type_info": "Uuid"
+        },
+        {
+          "name": "reset_token",
+          "ordinal": 12,
+          "type_info": "Text"
         }
       ],
       "nullable": [
@@ -3087,7 +3234,8 @@
         true,
         false,
         false,
-        false
+        false,
+        true
       ],
       "parameters": {
         "Left": [

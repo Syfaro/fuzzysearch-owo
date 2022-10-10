@@ -313,6 +313,32 @@ impl Job for SendEmailDigestJob {
     }
 }
 
+pub struct SendPasswordResetEmailJob {
+    pub user_id: Uuid,
+}
+
+impl Job for SendPasswordResetEmailJob {
+    const NAME: &'static str = "send_email_password_reset";
+    type Data = Uuid;
+    type Queue = Queue;
+
+    fn queue(&self) -> Self::Queue {
+        Queue::Outgoing
+    }
+
+    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
+        Ok(None)
+    }
+
+    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+        Ok(vec![serde_json::to_value(self.user_id)?])
+    }
+
+    fn deserialize(mut args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
+        serde_json::from_value(args.remove(0))
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum JobInitiator {
@@ -384,6 +410,13 @@ struct SimilarDigestEmail<'a> {
     username: &'a str,
     items: &'a [SimilarItem],
     unsubscribe_link: String,
+}
+
+#[derive(Template)]
+#[template(path = "email/password_reset.txt")]
+struct PasswordResetEmail<'a> {
+    username: &'a str,
+    link: String,
 }
 
 struct LogInitiatorMiddleware;
@@ -729,9 +762,9 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                 .await?
                 .ok_or(Error::Missing)?;
 
-            let display_name = user.display_name().to_owned();
+            let display_name = user.display_name();
 
-            let email = match user.email {
+            let email = match user.email.as_deref() {
                 Some(email) if user.email_verifier.is_none() => email,
                 _ => return Err(Error::Missing),
             };
@@ -772,7 +805,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                 .collect();
 
             let body = SimilarDigestEmail {
-                username: &display_name,
+                username: display_name,
                 items: &items,
                 unsubscribe_link: format!(
                     "{}/user/unsubscribe?u={}&t={}",
@@ -786,7 +819,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                 .from(ctx.config.smtp_from.clone())
                 .reply_to(ctx.config.smtp_reply_to.clone())
                 .to(lettre::message::Mailbox::new(
-                    Some(display_name),
+                    Some(display_name.to_string()),
                     email.parse().map_err(Error::from_displayable)?,
                 ))
                 .subject("FuzzySearch OwO match digest")
@@ -801,6 +834,45 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
     NewSubmissionJob::register(&mut forge, |ctx, _job, data| async move {
         common::notify_for_incoming(&ctx, &data).await?;
         common::import_from_incoming(&ctx, &data).await?;
+
+        Ok(())
+    });
+
+    SendPasswordResetEmailJob::register(&mut forge, |ctx, _job, user_id| async move {
+        let user = models::User::lookup_by_id(&ctx.conn, user_id)
+            .await?
+            .ok_or(Error::Missing)?;
+
+        let email = match user.email.as_deref() {
+            Some(email) => email,
+            _ => return Err(Error::Missing),
+        };
+
+        let token = user.reset_token.as_deref().ok_or(Error::Missing)?;
+
+        let display_name = user.display_name();
+
+        let body = PasswordResetEmail {
+            username: display_name,
+            link: format!(
+                "{}/auth/forgot/email?u={}&t={}",
+                ctx.config.host_url, user.id, token
+            ),
+        }
+        .render()?;
+
+        let email = lettre::Message::builder()
+            .header(lettre::message::header::ContentType::TEXT_PLAIN)
+            .from(ctx.config.smtp_from.clone())
+            .reply_to(ctx.config.smtp_reply_to.clone())
+            .to(lettre::message::Mailbox::new(
+                Some(display_name.to_owned()),
+                email.parse().map_err(Error::from_displayable)?,
+            ))
+            .subject("FuzzySearch OwO password reset")
+            .body(body)?;
+
+        ctx.mailer.send(email).await?;
 
         Ok(())
     });

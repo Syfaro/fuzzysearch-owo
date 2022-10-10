@@ -786,7 +786,9 @@ async fn load_archive(
         ..
     }: LoadTwitterArchiveJob,
 ) -> Result<(), Error> {
-    let account = models::LinkedAccount::lookup_by_id(&ctx.conn, account_id).await?.ok_or(Error::Missing)?;
+    let account = models::LinkedAccount::lookup_by_id(&ctx.conn, account_id)
+        .await?
+        .ok_or(Error::Missing)?;
 
     let chunks = models::FileUploadChunk::chunks(&ctx.conn, user_id, collection_id).await?;
     tracing::info!("attempting to load archive from {} chunks", chunks.len());

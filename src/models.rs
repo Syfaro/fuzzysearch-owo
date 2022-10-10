@@ -28,6 +28,7 @@ pub struct User {
     pub unsubscribe_token: Uuid,
     pub rss_token: Uuid,
     pub api_token: Uuid,
+    pub reset_token: Option<String>,
 
     hashed_password: Option<String>,
 }
@@ -97,6 +98,14 @@ impl User {
         }
 
         Ok(Some(user))
+    }
+
+    pub async fn lookup_by_email(conn: &sqlx::PgPool, email: &str) -> Result<Option<User>, Error> {
+        let user = sqlx::query_file_as!(User, "queries/user/lookup_email.sql", email)
+            .fetch_optional(conn)
+            .await?;
+
+        Ok(user)
     }
 
     pub async fn lookup_by_telegram_id(
@@ -173,6 +182,20 @@ impl User {
         .await?;
 
         Ok(id)
+    }
+
+    pub async fn update_password(
+        conn: &sqlx::PgPool,
+        user_id: Uuid,
+        password: &str,
+    ) -> Result<(), Error> {
+        let password = Self::hash_password(password)?;
+
+        sqlx::query_file!("queries/user/update_password.sql", user_id, password)
+            .execute(conn)
+            .await?;
+
+        Ok(())
     }
 
     pub async fn username_exists(conn: &sqlx::PgPool, username: &str) -> Result<bool, Error> {
@@ -292,6 +315,18 @@ impl User {
         )
         .execute(conn)
         .await?;
+
+        Ok(())
+    }
+
+    pub async fn set_reset_token(
+        conn: &sqlx::PgPool,
+        user_id: Uuid,
+        token: &str,
+    ) -> Result<(), Error> {
+        sqlx::query_file!("queries/user/set_reset_token.sql", user_id, token)
+            .execute(conn)
+            .await?;
 
         Ok(())
     }
