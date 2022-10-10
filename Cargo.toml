@@ -38,7 +38,7 @@ bytes = "1"
 
 actix = "0.13"
 actix-router = "0.5"
-actix-web = "4"
+actix-web = { version = "4.2.1", default-features = false, features = ["macros", "cookies"] }
 actix-web-actors = "4"
 actix-http = "3"
 actix-multipart = "0.4"
