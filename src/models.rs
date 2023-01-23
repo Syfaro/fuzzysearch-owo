@@ -1534,6 +1534,7 @@ impl PatreonWebhookEvent {
     }
 }
 
+#[derive(Serialize)]
 pub struct FListFile {
     pub id: i32,
     pub ext: String,

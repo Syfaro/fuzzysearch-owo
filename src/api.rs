@@ -382,9 +382,24 @@ async fn fuzzysearch(
     Ok(HttpResponse::Ok().body("OK"))
 }
 
+#[derive(Deserialize)]
+struct FListLookup {
+    id: i32,
+}
+
+#[get("/flist/lookup")]
+async fn flist_lookup(
+    pool: web::Data<PgPool>,
+    query: web::Query<FListLookup>,
+) -> Result<HttpResponse, Error> {
+    let file = models::FListFile::get_by_id(&pool, query.id).await?;
+
+    Ok(HttpResponse::Ok().json(file))
+}
+
 pub fn service() -> Scope {
     web::scope("/api")
-        .service(services![events, upload])
+        .service(services![events, upload, flist_lookup])
         .service(web::scope("/service").service(services![fuzzysearch]))
         .service(web::scope("/chunk").service(services![chunk_add]))
 }
