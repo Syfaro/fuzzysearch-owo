@@ -63,7 +63,7 @@ pub struct WorkerConfig {
     #[clap(long, env("FAKTORY_WORKERS"), default_value = "2")]
     pub faktory_workers: usize,
     /// Queues to fetch jobs from.
-    #[clap(long, env("FAKTORY_QUEUES"), arg_enum, use_value_delimiter = true)]
+    #[clap(long, env("FAKTORY_QUEUES"), value_enum, use_value_delimiter = true)]
     pub faktory_queues: Vec<jobs::Queue>,
 }
 
@@ -93,7 +93,7 @@ pub struct Config {
     #[clap(long, env("OTLP_AGENT"))]
     pub otlp_agent: String,
     /// If logs should output in JSON format.
-    #[clap(env("JSON_LOGS"))]
+    #[clap(long, env("JSON_LOGS"))]
     pub json_logs: bool,
     /// Metrics host for prometheus.
     #[clap(long, env("METRICS_HOST"))]

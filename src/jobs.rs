@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::{api, common, models, site, Error};
 
-#[derive(Clone, Debug, clap::ArgEnum)]
+#[derive(Clone, Debug, clap::ValueEnum)]
 pub enum Queue {
     Core,
     Outgoing,

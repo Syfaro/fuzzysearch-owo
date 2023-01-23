@@ -496,7 +496,7 @@ pub async fn handle_multipart_upload(
             .finalize()
             .try_into()
             .expect("sha256 hash was wrong size");
-        let hash_str = hex::encode(&sha256_hash);
+        let hash_str = hex::encode(sha256_hash);
 
         tracing::info!(size, hash = ?hash_str, "received complete file from client");
 

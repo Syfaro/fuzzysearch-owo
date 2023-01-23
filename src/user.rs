@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use actix_web::{get, post, services, web, HttpResponse, Scope};
 use askama::Template;
+use base64::Engine;
 use foxlib::jobs::FaktoryProducer;
 use futures::TryStreamExt;
 use rand::Rng;
@@ -370,7 +371,7 @@ async fn check_post(
         .collect();
 
         results.push(CheckResult {
-            photo_preview: base64::encode(thumbnail),
+            photo_preview: base64::engine::general_purpose::STANDARD.encode(thumbnail),
             links,
         });
     }

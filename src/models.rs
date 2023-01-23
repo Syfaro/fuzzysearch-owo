@@ -2079,7 +2079,7 @@ impl UserSetting {
     where
         S: UserSettingItem,
     {
-        let value = serde_json::to_value(&setting)?;
+        let value = serde_json::to_value(setting)?;
 
         sqlx::query_file!(
             "queries/user_setting/set.sql",

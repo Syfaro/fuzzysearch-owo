@@ -16,18 +16,18 @@ env = ["dotenv"]
 [dependencies]
 tracing = "0.1"
 anyhow = "1"
-clap = { version = "3.0.0-rc.4", features = ["derive", "env", "cargo", "wrap_help"] }
+clap = { version = "4", features = ["derive", "env", "cargo", "wrap_help"] }
 dotenv = { version = "0.15", optional = true }
 thiserror = "1"
 prometheus = { version = "0.13", features = ["process"] }
 lazy_static = "1"
 async-trait = "0.1"
 
-sentry = "0.27"
-sentry-actix = "0.27"
+sentry = "0.29"
+sentry-actix = "0.29"
 
-opentelemetry = "0.17"
-tracing-opentelemetry = "0.17"
+opentelemetry = "0.18"
+tracing-opentelemetry = "0.18"
 
 uuid = { version = "1", features = ["v4", "serde"] }
 
@@ -41,8 +41,8 @@ actix-router = "0.5"
 actix-web = { version = "4.2.1", default-features = false, features = ["macros", "cookies"] }
 actix-web-actors = "4"
 actix-http = "3"
-actix-multipart = "0.4"
-tracing-actix-web = { version = "0.6", features = ["opentelemetry_0_17"] }
+actix-multipart = "0.5"
+tracing-actix-web = { version = "0.7", features = ["opentelemetry_0_17"] }
 actix-session = { version = "0.7", features = ["cookie-session"] }
 actix-files = "0.6"
 actix-web-httpauth = "0.8"
@@ -53,30 +53,30 @@ serde_plain = "1"
 serde_with = "2"
 chrono = { version = "0.4", features = ["serde"] }
 
-askama = { git = "https://github.com/djc/askama.git", rev = "ead0498fb78077d63c9aa5c8969a05ca28e800bd", features = ["serde-json", "humansize", "markdown"] }
+askama = { git = "https://github.com/djc/askama.git", rev = "521964e12e7d4f0381c7d8d2c5ca1911c12a5466", features = ["serde-json", "humansize", "markdown"] }
 argonautica = "0.2"
 zxcvbn = "2"
 sha2 = "0.10"
 hex = "0.4"
-base64 = "0.13"
+base64 = "0.21"
 image = "0.23"
 rand = "0.8"
 ipnetwork = "0.19"
 zip = "0.6"
 
 reqwest = { version = "0.11", features = ["json", "cookies"] }
-scraper = "0.13"
+scraper = "0.14"
 regex = "1"
 
 rusoto_core = "0.48"
 rusoto_credential = "0.48"
 rusoto_s3 = "0.48"
 
-redis = { version = "0.21", features = ["tokio-comp", "aio", "connection-manager"] }
+redis = { version = "0.22", features = ["tokio-comp", "aio", "connection-manager"] }
 redlock = { git = "https://github.com/Syfaro/redlock-rs.git" }
 faktory = "0.12"
 
-lettre = { version = "0.10.0-rc.7", features = ["tokio1-native-tls", "tracing", "serde"] }
+lettre = { version = "0.10", features = ["tokio1-native-tls", "tracing", "serde"] }
 
 oauth2 = { version = "4", features = ["reqwest"] }
 hmac = "0.12"
@@ -84,7 +84,7 @@ md-5 = "0.10"
 
 roux = "2"
 radix_fmt = "1"
-infer = "0.9"
+infer = "0.12"
 rss = "2"
 egg-mode = "0.16"
 

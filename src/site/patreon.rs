@@ -417,7 +417,7 @@ async fn webhook_post(
 
     let headers = req.headers();
     let signature = headers.get("x-patreon-signature").ok_or(Error::Missing)?;
-    let signature = hex::decode(&signature.as_bytes())
+    let signature = hex::decode(signature.as_bytes())
         .map_err(|_err| Error::UnknownMessage("invalid signature hex".into()))?;
 
     let mut mac: Hmac<md5::Md5> = Hmac::new_from_slice(campaign.webhook_secret.as_bytes())

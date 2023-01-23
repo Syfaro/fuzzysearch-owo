@@ -354,7 +354,9 @@ pub mod types {
                 id: data.name,
                 author: data.author,
                 url: data.url,
-                posted_at: chrono::Utc.timestamp(data.created_utc as i64, 0),
+                posted_at: chrono::Utc
+                    .timestamp_opt(data.created_utc as i64, 0)
+                    .unwrap(),
                 permalink: format!("https://www.reddit.com{}", data.permalink),
             }
         }

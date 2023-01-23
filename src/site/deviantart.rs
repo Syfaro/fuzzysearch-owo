@@ -645,7 +645,7 @@ pub mod types {
         {
             let val = <Option<String>>::deserialize(deserializer)?
                 .and_then(|ts| ts.parse().ok())
-                .map(|ts| chrono::Utc.timestamp(ts, 0));
+                .map(|ts| chrono::Utc.timestamp_opt(ts, 0).unwrap());
 
             Ok(val)
         }

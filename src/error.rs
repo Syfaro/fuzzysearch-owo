@@ -74,7 +74,7 @@ impl Error {
             Self::Image(err) => format!("Image could not be handled: {}", err).into(),
             Self::TooLarge(_size) => "Request body too large.".into(),
             Self::LoadingError(msg) => format!("Error loading resource: {}", msg).into(),
-            Self::UserError(msg) => msg.to_owned(),
+            Self::UserError(msg) => msg.clone(),
             Self::Unauthorized => "You are not authorized to see this.".into(),
             _ => "An internal server error occured.".into(),
         }
