@@ -50,7 +50,7 @@ actix-web-httpauth = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_plain = "1"
-serde_with = "2"
+serde_with = { version = "2", features = ["hex"] }
 chrono = { version = "0.4", features = ["serde"] }
 
 askama = { git = "https://github.com/djc/askama.git", rev = "521964e12e7d4f0381c7d8d2c5ca1911c12a5466", features = ["serde-json", "humansize", "markdown"] }
@@ -75,6 +75,7 @@ rusoto_s3 = "0.48"
 redis = { version = "0.22", features = ["tokio-comp", "aio", "connection-manager"] }
 redlock = { git = "https://github.com/Syfaro/redlock-rs.git" }
 faktory = "0.12"
+async-nats = "0.27.1"
 
 lettre = { version = "0.10", features = ["tokio1-native-tls", "tracing", "serde"] }
 

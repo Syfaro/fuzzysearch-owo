@@ -7,6 +7,7 @@ use foxlib::jobs::{
 use lettre::AsyncTransport;
 use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use uuid::Uuid;
 
 use crate::{api, common, models, site, Error};
@@ -388,6 +389,7 @@ pub struct JobContext {
     pub worker_config: Arc<crate::WorkerConfig>,
     pub client: reqwest::Client,
     pub telegram: Arc<tgbotapi::Telegram>,
+    pub nats: async_nats::Client,
 }
 
 #[derive(askama::Template)]
@@ -893,4 +895,47 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
     })
     .await
     .map_err(Error::from_displayable)
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NatsSite {
+    #[serde(rename = "flist")]
+    FList,
+    Reddit,
+}
+
+#[serde_as]
+#[derive(Debug, Serialize)]
+pub struct NatsNewImage {
+    pub site: NatsSite,
+    pub image_url: String,
+    pub page_url: Option<String>,
+    pub posted_by: Option<String>,
+    #[serde_as(as = "Option<serde_with::hex::Hex>")]
+    pub perceptual_hash: Option<[u8; 8]>,
+    #[serde_as(as = "Option<serde_with::hex::Hex>")]
+    pub sha256_hash: Option<[u8; 32]>,
+}
+
+impl JobContext {
+    pub async fn nats_new_image(&self, image: NatsNewImage) {
+        let site_name = serde_plain::to_string(&image.site).unwrap();
+
+        tracing::debug!(
+            site = site_name,
+            image_url = image.image_url,
+            "sending new image to nats"
+        );
+
+        let data = match serde_json::to_vec(&image) {
+            Ok(data) => data,
+            Err(err) => return tracing::error!("could not serialize image for nats: {err}"),
+        };
+
+        let subject = format!("fuzzysearch.ingest.{site_name}");
+        if let Err(err) = self.nats.publish(subject, data.into()).await {
+            tracing::error!("could not publish new image to nats: {err}");
+        }
+    }
 }

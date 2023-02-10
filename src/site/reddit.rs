@@ -5,7 +5,9 @@ use sha2::Digest;
 
 use super::{SiteFromConfig, WatchedSite};
 use crate::{
-    jobs::{self, JobContext, JobInitiator, JobInitiatorExt, NewSubmissionJob, Queue},
+    jobs::{
+        self, JobContext, JobInitiator, JobInitiatorExt, NatsNewImage, NewSubmissionJob, Queue,
+    },
     models, Error,
 };
 
@@ -280,11 +282,11 @@ async fn load_post(
         let data = jobs::IncomingSubmission {
             site: models::Site::Reddit,
             site_id: id.to_string(),
-            page_url: Some(post.permalink),
-            posted_by: Some(post.author),
+            page_url: Some(post.permalink.clone()),
+            posted_by: Some(post.author.clone()),
             sha256: Some(sha256),
             perceptual_hash: hash,
-            content_url: url,
+            content_url: url.clone(),
             posted_at: None,
         };
 
@@ -292,6 +294,16 @@ async fn load_post(
             .enqueue_job(NewSubmissionJob(data).initiated_by(JobInitiator::external("reddit")))
             .await?;
     }
+
+    ctx.nats_new_image(NatsNewImage {
+        site: jobs::NatsSite::Reddit,
+        image_url: url,
+        page_url: Some(post.permalink),
+        posted_by: Some(post.author),
+        perceptual_hash: hash,
+        sha256_hash: Some(sha256),
+    })
+    .await;
 
     Ok(())
 }

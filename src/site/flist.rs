@@ -4,7 +4,9 @@ use async_trait::async_trait;
 use foxlib::jobs::{FaktoryForge, FaktoryJob, Job, JobExtra};
 use sha2::Digest;
 
-use crate::jobs::{self, JobContext, JobInitiator, JobInitiatorExt, NewSubmissionJob, Queue};
+use crate::jobs::{
+    self, JobContext, JobInitiator, JobInitiatorExt, NatsNewImage, NewSubmissionJob, Queue,
+};
 use crate::site::{SiteFromConfig, WatchedSite};
 use crate::{models, Config, Error};
 
@@ -333,16 +335,28 @@ async fn hash_image(ctx: JobContext, _job: FaktoryJob, id: i32) -> Result<(), Er
 
     models::FListFile::update(&ctx.conn, id, size as i32, sha256.to_vec(), perceptual_hash).await?;
 
+    let page_url = Some(format!("https://www.f-list.net/c/{}/", file.character_name));
+
     let data = jobs::IncomingSubmission {
         site: models::Site::FList,
         site_id: id.to_string(),
-        page_url: Some(format!("https://www.f-list.net/c/{}/", file.character_name)),
-        posted_by: Some(file.character_name),
+        page_url: page_url.clone(),
+        posted_by: Some(file.character_name.clone()),
         sha256: Some(sha256),
         perceptual_hash: perceptual_hash.map(|hash| hash.to_be_bytes()),
-        content_url: url,
+        content_url: url.clone(),
         posted_at: None,
     };
+
+    ctx.nats_new_image(NatsNewImage {
+        site: jobs::NatsSite::FList,
+        image_url: url,
+        page_url,
+        posted_by: Some(file.character_name),
+        perceptual_hash: perceptual_hash.map(|hash| hash.to_be_bytes()),
+        sha256_hash: Some(sha256),
+    })
+    .await;
 
     ctx.producer
         .enqueue_job(NewSubmissionJob(data).initiated_by(JobInitiator::external("flist")))

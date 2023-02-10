@@ -7,6 +7,7 @@ use actix_session::{
 };
 use actix_web::{cookie::Key, web, App, FromRequest, HttpResponse, HttpServer};
 use askama::Template;
+use async_nats::ServerAddr;
 use async_trait::async_trait;
 use clap::Parser;
 
@@ -65,6 +66,18 @@ pub struct WorkerConfig {
     /// Queues to fetch jobs from.
     #[clap(long, env("FAKTORY_QUEUES"), value_enum, use_value_delimiter = true)]
     pub faktory_queues: Vec<jobs::Queue>,
+
+    /// NATS hosts.
+    #[clap(
+        long,
+        env("NATS_HOST"),
+        use_value_delimiter = true,
+        value_delimiter = ','
+    )]
+    pub nats_host: Vec<ServerAddr>,
+    /// NATS NKEY, may be omitted if authentication is not needed.
+    #[clap(long, env("NATS_NKEY"))]
+    pub nats_nkey: Option<String>,
 }
 
 #[derive(Clone, clap::Subcommand)]
@@ -529,6 +542,17 @@ async fn main() {
 
             let telegram = Arc::new(tgbotapi::Telegram::new(config.telegram_bot_token.clone()));
 
+            let nats_opts = if let Some(nats_nkey) = &worker_config.nats_nkey {
+                async_nats::ConnectOptions::with_nkey(nats_nkey.clone())
+            } else {
+                async_nats::ConnectOptions::default()
+            };
+
+            let nats = nats_opts
+                .connect(&worker_config.nats_host)
+                .await
+                .expect("could not connect to nats");
+
             jobs::start_job_processing(jobs::JobContext {
                 producer,
                 conn: pool,
@@ -541,6 +565,7 @@ async fn main() {
                 worker_config: std::sync::Arc::new(worker_config.clone()),
                 client,
                 telegram,
+                nats,
             })
             .await
             .expect("could not run background worker");
