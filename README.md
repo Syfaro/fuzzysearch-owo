@@ -47,6 +47,7 @@ It has a few software dependencies to run:
 * Redis to send events about user actions
 * [Faktory] for managing background tasks
 * [faktory-cron] to run scheduled jobs (provided in jobs.yaml)
+* NATS for publishing information on newly discovered public images
 
 It also requires credentials or app tokens for the following sites:
 
@@ -83,4 +84,5 @@ run with the `--help` flag.
 It exposes Prometheus metrics on the host provided in the environment variable
 `METRICS_HOST` at `/metrics`.
 
-Logs are sent to a Jaeger agent available at `JAEGER_COLLECTOR`.
+OpenTelemetry traces are sent using gRPC and can be configured with the standard
+environment variables.

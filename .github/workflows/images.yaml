@@ -26,6 +26,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@v1
 
+      - run: sudo apt-get install protobuf-compiler
+
       - name: Build binary
         uses: actions-rs/cargo@v1
         with:
