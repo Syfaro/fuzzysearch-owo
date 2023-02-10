@@ -226,6 +226,7 @@ async fn events(
 }
 
 #[post("/single")]
+#[allow(clippy::too_many_arguments)]
 async fn single(
     conn: web::Data<sqlx::PgPool>,
     redis: web::Data<redis::aio::ConnectionManager>,
@@ -318,7 +319,7 @@ async fn check_post(
 
         tracing::info!(size, "received complete file from client");
 
-        file.seek(std::io::SeekFrom::Start(0)).await?;
+        file.rewind().await?;
 
         let file = file.into_std().await;
         let (perceptual_hash, thumbnail) = tokio::task::spawn_blocking(
@@ -662,7 +663,7 @@ fn decode_query(query: &str) -> HashMap<&str, &str> {
 fn encode_query(params: &HashMap<&str, &str>) -> String {
     params
         .iter()
-        .map(|(k, v)| format!("{}={}", k, v))
+        .map(|(k, v)| format!("{k}={v}"))
         .collect::<Vec<_>>()
         .join("&")
 }

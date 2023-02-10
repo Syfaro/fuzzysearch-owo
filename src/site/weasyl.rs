@@ -46,7 +46,7 @@ pub struct Weasyl {
 
 impl Weasyl {
     async fn discover_submissions(&self, username: &str) -> Result<Vec<WeasylSubmission>, Error> {
-        let url = format!("https://www.weasyl.com/api/users/{}/gallery", username);
+        let url = format!("https://www.weasyl.com/api/users/{username}/gallery");
 
         let mut subs = Vec::new();
         let mut nextid = None;

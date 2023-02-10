@@ -85,7 +85,7 @@ trait FListAuth {
 
 impl FListAuth for reqwest::RequestBuilder {
     fn inject_auth(self, auth: &str) -> Self {
-        self.header("Cookie", format!("FLS={}", auth))
+        self.header("Cookie", format!("FLS={auth}"))
     }
 }
 

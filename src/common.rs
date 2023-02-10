@@ -500,7 +500,7 @@ pub async fn handle_multipart_upload(
 
         tracing::info!(size, hash = ?hash_str, "received complete file from client");
 
-        file.seek(std::io::SeekFrom::Start(0)).await?;
+        file.rewind().await?;
 
         let file = file.into_std().await;
         let (perceptual_hash, im) = tokio::task::spawn_blocking(

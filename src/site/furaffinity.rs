@@ -25,7 +25,7 @@ impl FurAffinity {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(
             reqwest::header::COOKIE,
-            format!("a={}; b={}", cookie_a, cookie_b)
+            format!("a={cookie_a}; b={cookie_b}")
                 .parse()
                 .expect("furaffinity cookies could not be turned into header"),
         );
@@ -67,8 +67,7 @@ impl FurAffinity {
             let body = self
                 .client
                 .get(format!(
-                    "https://www.furaffinity.net/{}/{}/{}/",
-                    collection, username, page
+                    "https://www.furaffinity.net/{collection}/{username}/{page}/",
                 ))
                 .send()
                 .await?
@@ -255,7 +254,7 @@ async fn process_submission(
         .get_submission(sub_id)
         .await
         .map_err(|_err| {
-            Error::LoadingError(format!("Could not load FurAffinity submission {}", sub_id))
+            Error::LoadingError(format!("Could not load FurAffinity submission {sub_id}"))
         })?
         .ok_or(Error::Missing)?;
 
@@ -266,8 +265,7 @@ async fn process_submission(
 
     let sub = fa.calc_image_hash(sub).await.map_err(|_err| {
         Error::LoadingError(format!(
-            "Could not load FurAffinity submission content {}",
-            sub_id
+            "Could not load FurAffinity submission content {sub_id}",
         ))
     })?;
 
@@ -284,7 +282,7 @@ async fn process_submission(
         sub_id,
         sub.hash_num,
         sha256_hash,
-        Some(format!("https://www.furaffinity.net/view/{}/", sub_id)),
+        Some(format!("https://www.furaffinity.net/view/{sub_id}/")),
         Some(sub.title),
         Some(sub.posted_at),
     )

@@ -642,7 +642,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
             let mut redis = ctx.redis.clone();
             redis
                 .publish(
-                    format!("user-events:{}", user_id),
+                    format!("user-events:{user_id}"),
                     serde_json::to_string(&api::EventMessage::AccountVerified {
                         account_id,
                         verified: account_was_verified,

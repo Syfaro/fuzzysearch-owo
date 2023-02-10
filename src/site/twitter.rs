@@ -327,7 +327,7 @@ async fn callback(
     };
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", format!("/user/account/{}", id)))
+        .insert_header(("Location", format!("/user/account/{id}")))
         .finish())
 }
 
@@ -798,7 +798,7 @@ async fn load_archive(
     for chunk in chunks.iter() {
         tracing::trace!("downloading chunk {chunk}");
 
-        let path = format!("tmp/{}/{}-{}", user_id, collection_id, chunk);
+        let path = format!("tmp/{user_id}/{collection_id}-{chunk}");
 
         let get = rusoto_s3::GetObjectRequest {
             bucket: ctx.config.s3_bucket.clone(),
@@ -831,7 +831,7 @@ async fn load_archive(
     });
 
     web::block(move || -> Result<(), TweetError> {
-        file.seek(std::io::SeekFrom::Start(0)).unwrap();
+        file.rewind().unwrap();
 
         let mut archive = zip::ZipArchive::new(std::io::BufReader::new(file)).unwrap();
 
@@ -870,7 +870,7 @@ async fn load_archive(
 
     let objects: Vec<_> = chunks
         .into_iter()
-        .map(|chunk| format!("tmp/{}/{}-{}", user_id, collection_id, chunk))
+        .map(|chunk| format!("tmp/{user_id}/{collection_id}-{chunk}"))
         .map(|path| rusoto_s3::ObjectIdentifier {
             key: path,
             version_id: None,

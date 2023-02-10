@@ -250,7 +250,7 @@ async fn telegram(
 
     let data = data
         .into_iter()
-        .map(|(key, value)| format!("{}={}", key, value))
+        .map(|(key, value)| format!("{key}={value}"))
         .collect::<Vec<_>>()
         .join("\n");
 

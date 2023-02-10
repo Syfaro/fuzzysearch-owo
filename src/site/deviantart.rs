@@ -531,7 +531,7 @@ async fn callback(
     };
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", format!("/user/account/{}", id)))
+        .insert_header(("Location", format!("/user/account/{id}")))
         .finish())
 }
 

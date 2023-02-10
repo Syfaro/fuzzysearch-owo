@@ -89,9 +89,6 @@ pub struct Config {
     #[clap(long, env("RUN_MIGRATIONS"))]
     pub run_migrations: bool,
 
-    /// OTLP agent for tracing spans.
-    #[clap(long, env("OTLP_AGENT"))]
-    pub otlp_agent: String,
     /// If logs should output in JSON format.
     #[clap(long, env("JSON_LOGS"))]
     pub json_logs: bool,
@@ -442,17 +439,16 @@ async fn main() {
     let config = load_config();
 
     let name = match config.service_mode {
-        ServiceMode::Web(ref _config) => "web",
-        ServiceMode::BackgroundWorker(ref _config) => "worker",
+        ServiceMode::Web(ref _config) => "fuzzysearch-owo-web",
+        ServiceMode::BackgroundWorker(ref _config) => "fuzzysearch-owo-worker",
     };
 
-    foxlib::metrics::configure_tracing(
-        &config.otlp_agent,
-        env!("CARGO_PKG_NAME"),
+    foxlib::trace::init(foxlib::trace::TracingConfig {
+        namespace: env!("CARGO_PKG_NAME"),
         name,
-        env!("CARGO_PKG_VERSION"),
-        config.json_logs,
-    );
+        version: env!("CARGO_PKG_VERSION"),
+        otlp: config.json_logs,
+    });
 
     if let Some(host) = config.metrics_host {
         foxlib::metrics::serve(host).await;

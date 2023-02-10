@@ -163,7 +163,7 @@ where
     } else {
         tracing::info!("user has {} submissions to load", len);
 
-        let key = format!("account-import-ids:loading:{}", account_id);
+        let key = format!("account-import-ids:loading:{account_id}");
         redis.sadd::<_, _, ()>(&key, ids).await?;
         redis.expire::<_, ()>(key, 60 * 60 * 24 * 7).await?;
 
@@ -211,8 +211,8 @@ async fn update_import_progress<S: ToString>(
     account_id: Uuid,
     site_id: S,
 ) -> Result<(), Error> {
-    let loading_key = format!("account-import-ids:loading:{}", account_id);
-    let completed_key = format!("account-import-ids:completed:{}", account_id);
+    let loading_key = format!("account-import-ids:loading:{account_id}");
+    let completed_key = format!("account-import-ids:completed:{account_id}");
 
     let site_id = site_id.to_string();
 
@@ -254,7 +254,7 @@ async fn update_import_progress<S: ToString>(
 
     redis
         .publish(
-            format!("user-events:{}", user_id),
+            format!("user-events:{user_id}"),
             serde_json::to_string(&crate::api::EventMessage::LoadingProgress {
                 account_id,
                 loaded: completed,
@@ -294,7 +294,7 @@ where
         return Ok(AccessToken::new(initial_access_token));
     }
 
-    let lock_key = format!("refresh-credentials:{}", account_id);
+    let lock_key = format!("refresh-credentials:{account_id}");
     let lock_key = lock_key.as_bytes();
     let lock = loop {
         if let Some(lock) = redlock.lock(lock_key, 10 * 1000).await {
