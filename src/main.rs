@@ -18,7 +18,6 @@ mod common;
 mod error;
 mod jobs;
 mod models;
-mod routes;
 mod site;
 mod user;
 
@@ -346,7 +345,7 @@ async fn index(
 ) -> Result<HttpResponse, Error> {
     if user.is_some() {
         return Ok(HttpResponse::Found()
-            .insert_header(("Location", routes::USER_HOME))
+            .insert_header(("Location", request.url_for_static("user_home")?.as_str()))
             .finish());
     }
 

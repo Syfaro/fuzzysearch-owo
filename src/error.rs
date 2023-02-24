@@ -26,6 +26,8 @@ pub enum Error {
     Job(#[from] foxlib::jobs::Error),
     #[error("actix error: {0}")]
     Actix(#[from] actix_web::Error),
+    #[error("route error: {0}")]
+    Route(#[from] actix_web::error::UrlGenerationError),
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
     #[error("plain error: {0}")]

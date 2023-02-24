@@ -15,7 +15,7 @@ use uuid::Uuid;
 use zxcvbn::zxcvbn;
 
 use crate::jobs::JobInitiatorExt;
-use crate::{jobs, models, routes::*, AddFlash, ClientIpAddr, Error, WrappedTemplate};
+use crate::{jobs, models, AddFlash, ClientIpAddr, Error, WrappedTemplate};
 
 pub trait FuzzySearchSessionToken {
     const TOKEN_NAME: &'static str;
@@ -84,6 +84,7 @@ struct RegisterFormData {
 #[post("/register")]
 async fn register_post(
     telegram_login: web::Data<TelegramLoginConfig>,
+    request: actix_web::HttpRequest,
     client_ip: ClientIpAddr,
     session: Session,
     pool: web::Data<sqlx::PgPool>,
@@ -138,7 +139,7 @@ async fn register_post(
     session.set_session_token(user_id, session_id)?;
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", USER_HOME))
+        .insert_header(("Location", request.url_for_static("user_home")?.as_str()))
         .finish())
 }
 
@@ -149,7 +150,7 @@ struct Login<'a> {
     error_message: Option<&'a str>,
 }
 
-#[get("/login")]
+#[get("/login", name = "auth_login")]
 async fn login_get(
     request: actix_web::HttpRequest,
     telegram_login: web::Data<TelegramLoginConfig>,
@@ -157,7 +158,7 @@ async fn login_get(
 ) -> Result<HttpResponse, Error> {
     if session.get_session_token()?.is_some() {
         return Ok(HttpResponse::Found()
-            .insert_header(("Location", USER_HOME))
+            .insert_header(("Location", request.url_for_static("user_home")?.as_str()))
             .finish());
     }
 
@@ -180,6 +181,7 @@ struct LoginFormData {
 #[post("/login")]
 async fn login_post(
     telegram_login: web::Data<TelegramLoginConfig>,
+    request: actix_web::HttpRequest,
     client_ip: ClientIpAddr,
     session: Session,
     pool: web::Data<sqlx::PgPool>,
@@ -198,7 +200,7 @@ async fn login_post(
         session.set_session_token(user.id, session_id)?;
 
         Ok(HttpResponse::Found()
-            .insert_header(("Location", USER_HOME))
+            .insert_header(("Location", request.url_for_static("user_home")?.as_str()))
             .finish())
     } else {
         let body = Login {
@@ -214,6 +216,7 @@ async fn login_post(
 #[get("/telegram")]
 async fn telegram(
     telegram_login: web::Data<TelegramLoginConfig>,
+    request: actix_web::HttpRequest,
     pool: web::Data<sqlx::PgPool>,
     client_ip: ClientIpAddr,
     query: web::Query<HashMap<String, String>>,
@@ -300,12 +303,13 @@ async fn telegram(
     session.set_session_token(user_id, session_id)?;
 
     return Ok(HttpResponse::Found()
-        .insert_header(("Location", USER_HOME))
+        .insert_header(("Location", request.url_for_static("user_home")?.as_str()))
         .finish());
 }
 
 #[post("/logout")]
 async fn logout(
+    request: actix_web::HttpRequest,
     session: Session,
     conn: web::Data<sqlx::PgPool>,
     redis: web::Data<redis::aio::ConnectionManager>,
@@ -317,7 +321,7 @@ async fn logout(
     session.purge();
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", AUTH_LOGIN))
+        .insert_header(("Location", request.url_for_static("auth_login")?.as_str()))
         .finish())
 }
 
@@ -328,7 +332,7 @@ struct Sessions {
     sessions: Vec<models::UserSession>,
 }
 
-#[get("/sessions")]
+#[get("/sessions", name = "auth_sessions")]
 async fn sessions(
     request: actix_web::HttpRequest,
     session: Session,
@@ -358,6 +362,7 @@ struct SessionsRemoveForm {
 
 #[post("/sessions/remove")]
 async fn sessions_remove(
+    request: actix_web::HttpRequest,
     session: Session,
     user: models::User,
     conn: web::Data<sqlx::PgPool>,
@@ -375,7 +380,10 @@ async fn sessions_remove(
     models::UserSession::destroy(&conn, &redis, form.session_id, user.id).await?;
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", AUTH_SESSIONS))
+        .insert_header((
+            "Location",
+            request.url_for_static("auth_sessions")?.as_str(),
+        ))
         .finish())
 }
 
@@ -541,7 +549,7 @@ async fn forgot_email_post(
     session.add_flash(crate::FlashStyle::Success, "Password was reset.");
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", USER_HOME))
+        .insert_header(("Location", request.url_for_static("user_home")?.as_str()))
         .finish())
 }
 

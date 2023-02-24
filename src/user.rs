@@ -16,7 +16,6 @@ use crate::{
     common,
     jobs::{self, JobInitiatorExt},
     models::{self, setting, Site, UserSettingItem},
-    routes::*,
     AddFlash, ClientIpAddr, Error, FlashStyle, WrappedTemplate,
 };
 
@@ -32,7 +31,7 @@ struct Home<'a> {
     monitored_accounts: Vec<models::LinkedAccount>,
 }
 
-#[get("/home")]
+#[get("/home", name = "user_home")]
 async fn home(
     request: actix_web::HttpRequest,
     conn: web::Data<sqlx::PgPool>,
@@ -233,6 +232,7 @@ async fn single(
     s3: web::Data<rusoto_s3::S3Client>,
     faktory: web::Data<FaktoryProducer>,
     config: web::Data<crate::Config>,
+    request: actix_web::HttpRequest,
     session: actix_session::Session,
     user: models::User,
     form: actix_multipart::Multipart,
@@ -243,7 +243,7 @@ async fn single(
     session.add_flash(FlashStyle::Success, "Uploaded image.");
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", USER_HOME))
+        .insert_header(("Location", request.url_for_static("user_home")?.as_str()))
         .finish())
 }
 
@@ -474,6 +474,7 @@ struct AccountIdForm {
 #[post("/remove")]
 async fn account_remove(
     conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
     session: actix_session::Session,
     user: models::User,
     form: web::Form<AccountIdForm>,
@@ -486,7 +487,7 @@ async fn account_remove(
     );
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", USER_HOME))
+        .insert_header(("Location", request.url_for_static("user_home")?.as_str()))
         .finish())
 }
 
@@ -633,6 +634,7 @@ struct MediaRemoveForm {
 #[post("/remove")]
 async fn media_remove(
     conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
     session: actix_session::Session,
     user: models::User,
     form: web::Form<MediaRemoveForm>,
@@ -642,7 +644,7 @@ async fn media_remove(
     session.add_flash(FlashStyle::Success, "Removed media.");
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", USER_HOME))
+        .insert_header(("Location", request.url_for_static("user_home")?.as_str()))
         .finish())
 }
 
@@ -890,6 +892,7 @@ struct AddEmailForm {
 async fn email_add_post(
     conn: web::Data<sqlx::PgPool>,
     faktory: web::Data<FaktoryProducer>,
+    request: actix_web::HttpRequest,
     user: models::User,
     form: web::Form<AddEmailForm>,
 ) -> Result<HttpResponse, Error> {
@@ -915,7 +918,7 @@ async fn email_add_post(
         .await?;
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", USER_HOME))
+        .insert_header(("Location", request.url_for_static("user_home")?.as_str()))
         .finish())
 }
 
@@ -962,6 +965,7 @@ async fn verify_email_get(
 
 #[post("/verify")]
 async fn verify_email_post(
+    request: actix_web::HttpRequest,
     client_ip: ClientIpAddr,
     conn: web::Data<sqlx::PgPool>,
     form: web::Form<EmailVerifyQuery>,
@@ -995,7 +999,7 @@ async fn verify_email_post(
     session.add_flash(FlashStyle::Success, "Email address verified.");
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", USER_HOME))
+        .insert_header(("Location", request.url_for_static("user_home")?.as_str()))
         .finish())
 }
 
@@ -1079,6 +1083,7 @@ async fn unsubscribe_get(
 
 #[post("/unsubscribe")]
 async fn unsubscribe_post(
+    request: actix_web::HttpRequest,
     conn: web::Data<sqlx::PgPool>,
     form: web::Form<UnsubscribeQuery>,
 ) -> Result<HttpResponse, Error> {
@@ -1098,7 +1103,7 @@ async fn unsubscribe_post(
     .await?;
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", USER_HOME))
+        .insert_header(("Location", request.url_for_static("user_home")?.as_str()))
         .finish())
 }
 
