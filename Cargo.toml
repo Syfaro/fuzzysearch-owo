@@ -23,8 +23,8 @@ prometheus = { version = "0.13", features = ["process"] }
 lazy_static = "1"
 async-trait = "0.1"
 
-sentry = "0.29"
-sentry-actix = "0.29"
+sentry = "0.30"
+sentry-actix = "0.30"
 
 opentelemetry = "0.18"
 tracing-opentelemetry = "0.18"

@@ -464,7 +464,7 @@ async fn main() {
     });
 
     if let Some(host) = config.metrics_host {
-        foxlib::metrics::serve(host).await;
+        foxlib::MetricsServer::serve(host, true).await;
     }
 
     let pool = sqlx::PgPool::connect(&config.database_url)
