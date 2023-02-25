@@ -902,19 +902,6 @@
     },
     "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url,\n    event_count,\n    last_event\nFROM\n    owned_media_item\nWHERE\n    id = $1\n    AND owner_id = $2;\n"
   },
-  "36b0904705803176ec4d6ce31ae9a1200aa00a866d61c8e768e9a834830ad25d": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Text"
-        ]
-      }
-    },
-    "query": "UPDATE\n    user_account\nSET\n    hashed_password = $2\nWHERE\n    id = $1;\n"
-  },
   "3950c47de61f6ba464700f0ed9092333a3c0a4de4f45afd6949efd6a75276490": {
     "describe": {
       "columns": [
@@ -2208,6 +2195,19 @@
       }
     },
     "query": "INSERT INTO\n    user_session (user_id, source, creation_ip)\nVALUES\n    ($1, $2, $3) RETURNING id;\n"
+  },
+  "91bdb611ffad22047bf43c0deef4bc188412092c97d2b77e4ac69453735d17cd": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text"
+        ]
+      }
+    },
+    "query": "UPDATE\n    user_account\nSET\n    hashed_password = $2,\n    reset_token = NULL\nWHERE\n    id = $1;\n"
   },
   "930ae63c1ef71a87799036a706f5ce4a5522872ba7c1aad2f2c8ad68b2d4f883": {
     "describe": {

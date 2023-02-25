@@ -15,7 +15,7 @@ use crate::jobs::{
 };
 use crate::models::{LinkedAccount, Site};
 use crate::site::{CollectedSite, SiteFromConfig, SiteServices};
-use crate::{models, Config, Error};
+use crate::{models, AsUrl, Config, Error};
 
 pub struct DeviantArt {
     auth_url: AuthUrl,
@@ -448,6 +448,7 @@ async fn callback(
     config: web::Data<crate::Config>,
     conn: web::Data<sqlx::PgPool>,
     faktory: web::Data<FaktoryProducer>,
+    request: actix_web::HttpRequest,
     user: models::User,
     query: web::Query<types::DeviantArtOAuthCallback>,
 ) -> Result<HttpResponse, Error> {
@@ -531,7 +532,10 @@ async fn callback(
     };
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", format!("/user/account/{id}")))
+        .insert_header((
+            "Location",
+            request.url_for("user_account", [id.as_url()])?.as_str(),
+        ))
         .finish())
 }
 

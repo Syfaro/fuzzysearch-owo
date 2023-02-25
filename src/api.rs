@@ -21,7 +21,7 @@ use crate::{
     auth::FuzzySearchSessionToken,
     common,
     jobs::{JobInitiator, JobInitiatorExt, NewSubmissionJob},
-    models, Error,
+    models, Error, UrlUuid,
 };
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
@@ -286,15 +286,17 @@ async fn upload(
         None => return Err(Error::user_error("basic auth password required")),
     };
 
-    let (user_id, api_token): (Uuid, Uuid) = match (auth.user_id().parse(), password.parse()) {
+    let (user_id, api_token): (UrlUuid, UrlUuid) = match (auth.user_id().parse(), password.parse())
+    {
         (Ok(user_id), Ok(api_token)) => (user_id, api_token),
         _ => return Err(Error::user_error("username and password should be uuids")),
     };
 
-    let user = match models::User::lookup_by_api_token(&pool, user_id, api_token).await? {
-        Some(user) => user,
-        None => return Err(Error::Unauthorized),
-    };
+    let user =
+        match models::User::lookup_by_api_token(&pool, user_id.into(), api_token.into()).await? {
+            Some(user) => user,
+            None => return Err(Error::Unauthorized),
+        };
 
     let ids =
         common::handle_multipart_upload(&pool, &redis, &s3, &faktory, &config, &user, form).await?;

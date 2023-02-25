@@ -2088,6 +2088,7 @@ dependencies = [
  "md-5 0.10.5",
  "oauth2",
  "opentelemetry 0.18.0",
+ "percent-encoding",
  "prometheus",
  "radix_fmt",
  "rand 0.8.5",

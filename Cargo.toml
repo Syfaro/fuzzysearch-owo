@@ -14,80 +14,68 @@ pre-release-hook = "tools/pre-release-check.sh"
 env = ["dotenv"]
 
 [dependencies]
-tracing = "0.1"
-anyhow = "1"
-clap = { version = "4", features = ["derive", "env", "cargo", "wrap_help"] }
-dotenv = { version = "0.15", optional = true }
-thiserror = "1"
-prometheus = { version = "0.13", features = ["process"] }
-lazy_static = "1"
-async-trait = "0.1"
-
-sentry = "0.30"
-sentry-actix = "0.30"
-
-opentelemetry = "0.18"
-tracing-opentelemetry = "0.18"
-
-uuid = { version = "1", features = ["v4", "serde"] }
-
-futures = "0.3"
-tokio = { version = "1", features = ["full"] }
-tempfile = "3"
-bytes = "1"
-
 actix = "0.13"
-actix-router = "0.5"
-actix-web = { version = "4.2.1", default-features = false, features = ["macros", "cookies"] }
-actix-web-actors = "4"
+actix-files = "0.6"
 actix-http = "3"
 actix-multipart = "0.5"
-tracing-actix-web = { version = "0.7", features = ["opentelemetry_0_18"] }
+actix-router = "0.5"
 actix-session = { version = "0.7", features = ["cookie-session"] }
-actix-files = "0.6"
+actix-web = { version = "4.2.1", default-features = false, features = ["macros", "cookies"] }
+actix-web-actors = "4"
 actix-web-httpauth = "0.8"
-
+anyhow = "1"
+argonautica = "0.2"
+askama = { git = "https://github.com/djc/askama.git", rev = "521964e12e7d4f0381c7d8d2c5ca1911c12a5466", features = ["serde-json", "humansize", "markdown"] }
+async-nats = "0.27.1"
+async-trait = "0.1"
+base64 = "0.21"
+bytes = "1"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive", "env", "cargo", "wrap_help"] }
+dotenv = { version = "0.15", optional = true }
+egg-mode = "0.16"
+faktory = "0.12"
+futures = "0.3"
+hex = "0.4"
+hmac = "0.12"
+image = "0.23"
+infer = "0.12"
+ipnetwork = "0.19"
+lazy_static = "1"
+lettre = { version = "0.10", features = ["tokio1-native-tls", "tracing", "serde"] }
+md-5 = "0.10"
+oauth2 = { version = "4", features = ["reqwest"] }
+opentelemetry = "0.18"
+prometheus = { version = "0.13", features = ["process"] }
+radix_fmt = "1"
+rand = "0.8"
+redis = { version = "0.22", features = ["tokio-comp", "aio", "connection-manager"] }
+redlock = { git = "https://github.com/Syfaro/redlock-rs.git" }
+regex = "1"
+reqwest = { version = "0.11", features = ["json", "cookies"] }
+roux = "2"
+rss = "2"
+rusoto_core = "0.48"
+rusoto_credential = "0.48"
+rusoto_s3 = "0.48"
+scraper = "0.14"
+sentry = "0.30"
+sentry-actix = "0.30"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_plain = "1"
 serde_with = { version = "2", features = ["hex"] }
-chrono = { version = "0.4", features = ["serde"] }
-
-askama = { git = "https://github.com/djc/askama.git", rev = "521964e12e7d4f0381c7d8d2c5ca1911c12a5466", features = ["serde-json", "humansize", "markdown"] }
-argonautica = "0.2"
-zxcvbn = "2"
 sha2 = "0.10"
-hex = "0.4"
-base64 = "0.21"
-image = "0.23"
-rand = "0.8"
-ipnetwork = "0.19"
+tempfile = "3"
+thiserror = "1"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-actix-web = { version = "0.7", features = ["opentelemetry_0_18"] }
+tracing-opentelemetry = "0.18"
+uuid = { version = "1", features = ["v4", "serde"] }
 zip = "0.6"
-
-reqwest = { version = "0.11", features = ["json", "cookies"] }
-scraper = "0.14"
-regex = "1"
-
-rusoto_core = "0.48"
-rusoto_credential = "0.48"
-rusoto_s3 = "0.48"
-
-redis = { version = "0.22", features = ["tokio-comp", "aio", "connection-manager"] }
-redlock = { git = "https://github.com/Syfaro/redlock-rs.git" }
-faktory = "0.12"
-async-nats = "0.27.1"
-
-lettre = { version = "0.10", features = ["tokio1-native-tls", "tracing", "serde"] }
-
-oauth2 = { version = "4", features = ["reqwest"] }
-hmac = "0.12"
-md-5 = "0.10"
-
-roux = "2"
-radix_fmt = "1"
-infer = "0.12"
-rss = "2"
-egg-mode = "0.16"
+zxcvbn = "2"
+percent-encoding = "2.2"
 
 furaffinity-rs = { git = "https://github.com/Syfaro/furaffinity-rs.git" }
 fuzzysearch = { git = "https://github.com/Syfaro/fuzzysearch-rs.git", features = ["trace", "local_hash"] }

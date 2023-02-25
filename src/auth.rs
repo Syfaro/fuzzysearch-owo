@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::pin::Pin;
 use std::{collections::HashMap, future::Future};
 
@@ -15,7 +16,7 @@ use uuid::Uuid;
 use zxcvbn::zxcvbn;
 
 use crate::jobs::JobInitiatorExt;
-use crate::{jobs, models, AddFlash, ClientIpAddr, Error, WrappedTemplate};
+use crate::{jobs, models, AddFlash, ClientIpAddr, Error, UrlUuid, WrappedTemplate};
 
 pub trait FuzzySearchSessionToken {
     const TOKEN_NAME: &'static str;
@@ -55,7 +56,7 @@ pub struct TelegramLoginConfig {
 #[template(path = "auth/register.html")]
 struct Register<'a> {
     telegram_login: &'a TelegramLoginConfig,
-    error_messages: Option<Vec<&'a str>>,
+    error_messages: Option<Vec<Cow<'static, str>>>,
 }
 
 #[get("/register")]
@@ -81,6 +82,36 @@ struct RegisterFormData {
     password_confirm: String,
 }
 
+fn add_password_feedback(
+    password: &str,
+    inputs: &[&str],
+    error_messages: &mut Vec<Cow<'static, str>>,
+) -> Result<(), Error> {
+    let estimate = zxcvbn(password, inputs).map_err(Error::from_displayable)?;
+
+    if estimate.score() < 3 {
+        match estimate.feedback() {
+            Some(feedback)
+                if feedback.warning().is_some() || !feedback.suggestions().is_empty() =>
+            {
+                if let Some(warning) = feedback.warning() {
+                    error_messages.push(warning.to_string().into());
+                }
+
+                error_messages.extend(
+                    feedback
+                        .suggestions()
+                        .iter()
+                        .map(|suggestion| suggestion.to_string().into()),
+                )
+            }
+            _ => error_messages.push("Password must be longer or contain more symbols.".into()),
+        }
+    }
+
+    Ok(())
+}
+
 #[post("/register")]
 async fn register_post(
     telegram_login: web::Data<TelegramLoginConfig>,
@@ -90,32 +121,29 @@ async fn register_post(
     pool: web::Data<sqlx::PgPool>,
     form: web::Form<RegisterFormData>,
 ) -> Result<HttpResponse, Error> {
-    let mut error_messages = Vec::with_capacity(1);
+    let mut error_messages: Vec<Cow<'static, str>> = Vec::with_capacity(1);
 
     if form.username.len() < 5 {
-        error_messages.push("Username must be 5 characters or greater.");
+        error_messages.push("Username must be 5 characters or greater.".into());
     }
 
     if form.username.len() > 24 {
-        error_messages.push("Username must be less than 24 characters.");
+        error_messages.push("Username must be less than 24 characters.".into());
     }
 
     if form.username.contains('@') {
-        error_messages.push("Username may not contain the '@' symbol.");
+        error_messages.push("Username may not contain the '@' symbol.".into());
     }
 
     if models::User::username_exists(&pool, &form.username).await? {
-        error_messages.push("Username already in use.");
+        error_messages.push("Username already in use.".into());
     }
 
     if form.password != form.password_confirm {
-        error_messages.push("Passwords do not match.");
+        error_messages.push("Passwords do not match.".into());
     }
 
-    let estimate = zxcvbn(&form.password, &[&form.username]).map_err(Error::from_displayable)?;
-    if estimate.score() < 3 {
-        error_messages.push("Password must be longer or contain more symbols.");
-    }
+    add_password_feedback(&form.password, &[&form.username], &mut error_messages)?;
 
     if !error_messages.is_empty() {
         let body = Register {
@@ -441,7 +469,7 @@ async fn forgot_post(
 #[derive(Deserialize)]
 struct ForgotEmailQuery {
     #[serde(rename = "u")]
-    user_id: Uuid,
+    user_id: UrlUuid,
     #[serde(rename = "t")]
     token: String,
 }
@@ -449,7 +477,7 @@ struct ForgotEmailQuery {
 #[derive(Template)]
 #[template(path = "auth/forgot_email.html")]
 struct ForgotEmailTemplate<'a> {
-    user_id: Uuid,
+    user_id: UrlUuid,
     token: &'a str,
 }
 
@@ -459,12 +487,12 @@ async fn forgot_email_form(
     conn: web::Data<sqlx::PgPool>,
     query: web::Query<ForgotEmailQuery>,
 ) -> Result<HttpResponse, Error> {
-    let user = models::User::lookup_by_id(&conn, query.user_id)
+    let user = models::User::lookup_by_id(&conn, query.user_id.into())
         .await?
         .ok_or(Error::Missing)?;
 
     if !matches!(user.reset_token, Some(token) if token == query.token) {
-        return Err(Error::Missing);
+        return Err(Error::user_error("Did you already use this reset link?"));
     }
 
     let body = ForgotEmailTemplate {
@@ -479,7 +507,7 @@ async fn forgot_email_form(
 
 #[derive(Deserialize)]
 struct ForgotEmailForm {
-    user_id: Uuid,
+    user_id: UrlUuid,
     token: String,
 
     password: String,
@@ -494,7 +522,7 @@ async fn forgot_email_post(
     session: Session,
     form: web::Form<ForgotEmailForm>,
 ) -> Result<HttpResponse, Error> {
-    let user = models::User::lookup_by_id(&conn, form.user_id)
+    let user = models::User::lookup_by_id(&conn, form.user_id.into())
         .await?
         .ok_or(Error::Missing)?;
 
@@ -502,10 +530,10 @@ async fn forgot_email_post(
         return Err(Error::Missing);
     }
 
-    let mut error_messages = Vec::with_capacity(1);
+    let mut error_messages: Vec<Cow<'static, str>> = Vec::with_capacity(1);
 
     if form.password != form.password_confirm {
-        error_messages.push("Passwords do not match.");
+        error_messages.push("Passwords do not match.".into());
     }
 
     let user_inputs: Vec<&str> = [
@@ -517,10 +545,7 @@ async fn forgot_email_post(
     .flatten()
     .collect();
 
-    let estimate = zxcvbn(&form.password, &user_inputs).map_err(Error::from_displayable)?;
-    if estimate.score() < 3 {
-        error_messages.push("Password must be longer or contain more symbols.");
-    }
+    add_password_feedback(&form.password, &user_inputs, &mut error_messages)?;
 
     if !error_messages.is_empty() {
         session.add_flash(crate::FlashStyle::Error, error_messages.join(" "));

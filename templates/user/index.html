@@ -33,7 +33,7 @@
             <ul>
               {% for account in monitored_accounts %}
               <li>
-                <a href="/user/account/{{ account.id.to_string() }}">
+                <a href="/user/account/{{ account.id.as_url() }}">
                   {{ account.source_site.to_string() }} &mdash; {{ account.username }}
                 </a>
               </li>
@@ -94,7 +94,7 @@
         {% match item.thumb_url %}
         {% when Some with (thumb_url) %}
         <figure class="image is-128x128 is-inline-block" style="overflow: hidden;">
-          <a href="/user/media/view/{{ item.id }}">
+          <a href="/user/media/view/{{ item.id.as_url() }}">
             {% match item.content_url %}
             {% when Some with (content_url) %}
             <img src="{{ thumb_url }}" alt="{{ item.alt_text() }}">

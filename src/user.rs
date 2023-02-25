@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use actix_session::Session;
 use actix_web::{get, post, services, web, HttpResponse, Scope};
 use askama::Template;
 use base64::Engine;
@@ -16,7 +17,7 @@ use crate::{
     common,
     jobs::{self, JobInitiatorExt},
     models::{self, setting, Site, UserSettingItem},
-    AddFlash, ClientIpAddr, Error, FlashStyle, WrappedTemplate,
+    AddFlash, AsUrl, ClientIpAddr, Error, FlashStyle, UrlUuid, WrappedTemplate,
 };
 
 #[derive(Template)]
@@ -203,6 +204,7 @@ async fn settings_post(
 #[post("/delete")]
 async fn delete(
     conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
     session: actix_session::Session,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
@@ -210,7 +212,7 @@ async fn delete(
     session.purge();
 
     return Ok(HttpResponse::Found()
-        .insert_header(("Location", "/"))
+        .insert_header(("Location", request.url_for_static("index")?.as_str()))
         .finish());
 }
 
@@ -413,6 +415,7 @@ struct AccountLinkForm {
 async fn account_link_post(
     config: web::Data<crate::Config>,
     conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
     session: actix_session::Session,
     user: models::User,
     form: web::Form<AccountLinkForm>,
@@ -462,7 +465,12 @@ async fn account_link_post(
     session.add_flash(style, message);
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", format!("/user/account/{}", account.id)))
+        .insert_header((
+            "Location",
+            request
+                .url_for("user_account", [account.id.as_url()])?
+                .as_str(),
+        ))
         .finish())
 }
 
@@ -502,14 +510,14 @@ struct AccountView {
     recent_media: Vec<models::OwnedMediaItem>,
 }
 
-#[get("/{account_id}")]
+#[get("/{account_id}", name = "user_account")]
 async fn account_view(
     request: actix_web::HttpRequest,
     conn: web::Data<sqlx::PgPool>,
-    path: web::Path<(Uuid,)>,
+    path: web::Path<(UrlUuid,)>,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
-    let account_id: Uuid = path.into_inner().0;
+    let account_id: Uuid = path.into_inner().0.into();
 
     let account = models::LinkedAccount::lookup_by_id(&conn, account_id)
         .await?
@@ -541,6 +549,7 @@ async fn account_view(
 async fn account_verify(
     conn: web::Data<sqlx::PgPool>,
     faktory: web::Data<FaktoryProducer>,
+    request: actix_web::HttpRequest,
     user: models::User,
     form: web::Form<AccountIdForm>,
 ) -> Result<HttpResponse, Error> {
@@ -563,7 +572,12 @@ async fn account_verify(
         .await?;
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", format!("/user/account/{}", account.id)))
+        .insert_header((
+            "Location",
+            request
+                .url_for("user_account", [account.id.as_url()])?
+                .as_str(),
+        ))
         .finish())
 }
 
@@ -577,14 +591,14 @@ struct MediaView<'a> {
     allowlisted_users: HashMap<(Site, String), Uuid>,
 }
 
-#[get("/view/{media_id}")]
+#[get("/view/{media_id}", name = "media_view")]
 async fn media_view(
     request: actix_web::HttpRequest,
     conn: web::Data<sqlx::PgPool>,
-    path: web::Path<(Uuid,)>,
+    path: web::Path<(UrlUuid,)>,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
-    let media = models::OwnedMediaItem::get_by_id(&conn, path.0, user.id)
+    let media = models::OwnedMediaItem::get_by_id(&conn, path.0.into(), user.id)
         .await?
         .ok_or(Error::Missing)?;
 
@@ -650,7 +664,7 @@ async fn media_remove(
 
 #[derive(Debug, Deserialize)]
 struct MediaListQuery {
-    account_id: Option<Uuid>,
+    account_id: Option<UrlUuid>,
     page: Option<u32>,
     sort: Option<models::MediaListSort>,
 }
@@ -756,11 +770,17 @@ async fn media_list(
     let page = query.page.unwrap_or(0);
     let sort = query.sort.unwrap_or(models::MediaListSort::Recent);
 
-    let media =
-        models::OwnedMediaItem::media_page(&conn, user.id, page, sort, query.account_id).await?;
+    let media = models::OwnedMediaItem::media_page(
+        &conn,
+        user.id,
+        page,
+        sort,
+        query.account_id.map(Into::into),
+    )
+    .await?;
 
     let account = if let Some(account_id) = query.account_id {
-        match models::LinkedAccount::lookup_by_id(&conn, account_id).await? {
+        match models::LinkedAccount::lookup_by_id(&conn, account_id.into()).await? {
             Some(account) if account.owner_id == user.id => Some(account),
             _ => return Err(Error::Missing),
         }
@@ -932,9 +952,9 @@ struct EmailVerify<'a> {
 #[derive(Deserialize)]
 struct EmailVerifyQuery {
     #[serde(rename = "u")]
-    user_id: Uuid,
+    user_id: UrlUuid,
     #[serde(rename = "v")]
-    verifier: Uuid,
+    verifier: UrlUuid,
 }
 
 #[get("/verify")]
@@ -943,19 +963,21 @@ async fn verify_email_get(
     conn: web::Data<sqlx::PgPool>,
     query: web::Query<EmailVerifyQuery>,
 ) -> Result<HttpResponse, Error> {
-    if !models::User::check_email_verifier_token(&conn, query.user_id, query.verifier).await? {
+    if !models::User::check_email_verifier_token(&conn, query.user_id.into(), query.verifier.into())
+        .await?
+    {
         return Err(Error::user_error(
             "Account has already been verified or an invalid token was provided.",
         ));
     }
 
-    let user = models::User::lookup_by_id(&conn, query.user_id)
+    let user = models::User::lookup_by_id(&conn, query.user_id.into())
         .await?
         .ok_or(Error::Missing)?;
 
     let body = EmailVerify {
         user: &user,
-        verifier: query.verifier,
+        verifier: query.verifier.into(),
     }
     .wrap(&request, Some(&user))
     .await
@@ -972,8 +994,8 @@ async fn verify_email_post(
     user: Option<models::User>,
     session: actix_session::Session,
 ) -> Result<HttpResponse, Error> {
-    if !models::User::verify_email(&conn, form.user_id, form.verifier).await? {
-        if models::User::lookup_by_id(&conn, form.user_id)
+    if !models::User::verify_email(&conn, form.user_id.into(), form.verifier.into()).await? {
+        if models::User::lookup_by_id(&conn, form.user_id.into())
             .await?
             .is_some()
         {
@@ -988,12 +1010,12 @@ async fn verify_email_post(
     if user.is_none() {
         let session_id = models::UserSession::create(
             &conn,
-            form.user_id,
+            form.user_id.into(),
             models::UserSessionSource::EmailVerification,
             client_ip.ip_addr.as_deref(),
         )
         .await?;
-        session.set_session_token(form.user_id, session_id)?;
+        session.set_session_token(form.user_id.into(), session_id)?;
     }
 
     session.add_flash(FlashStyle::Success, "Email address verified.");
@@ -1052,9 +1074,9 @@ struct Unsubscribe<'a> {
 #[derive(Deserialize)]
 struct UnsubscribeQuery {
     #[serde(rename = "u")]
-    user_id: Uuid,
+    user_id: UrlUuid,
     #[serde(rename = "t")]
-    verifier: Uuid,
+    verifier: UrlUuid,
 }
 
 #[get("/unsubscribe")]
@@ -1063,17 +1085,17 @@ async fn unsubscribe_get(
     conn: web::Data<sqlx::PgPool>,
     query: web::Query<UnsubscribeQuery>,
 ) -> Result<HttpResponse, Error> {
-    let user = models::User::lookup_by_id(&conn, query.user_id)
+    let user = models::User::lookup_by_id(&conn, query.user_id.into())
         .await?
         .ok_or(Error::Missing)?;
 
-    if user.unsubscribe_token != query.verifier {
+    if user.unsubscribe_token != query.verifier.into() {
         return Err(Error::Missing);
     }
 
     let body = Unsubscribe {
         user: &user,
-        verifier: query.verifier,
+        verifier: query.verifier.into(),
     }
     .wrap(&request, Some(&user))
     .await
@@ -1084,23 +1106,29 @@ async fn unsubscribe_get(
 #[post("/unsubscribe")]
 async fn unsubscribe_post(
     request: actix_web::HttpRequest,
+    session: Session,
     conn: web::Data<sqlx::PgPool>,
     form: web::Form<UnsubscribeQuery>,
 ) -> Result<HttpResponse, Error> {
-    let user = models::User::lookup_by_id(&conn, form.user_id)
+    let user = models::User::lookup_by_id(&conn, form.user_id.into())
         .await?
         .ok_or(Error::Missing)?;
 
-    if user.unsubscribe_token != form.verifier {
+    if user.unsubscribe_token != form.verifier.into() {
         return Err(Error::Missing);
     }
 
     models::UserSetting::set(
         &conn,
         user.id,
-        &models::setting::EmailNotifications::off_value(),
+        &models::setting::EmailFrequency::off_value(),
     )
     .await?;
+
+    session.add_flash(
+        crate::FlashStyle::Success,
+        "Unsubscribed from future emails.",
+    );
 
     Ok(HttpResponse::Found()
         .insert_header(("Location", request.url_for_static("user_home")?.as_str()))
@@ -1120,18 +1148,19 @@ struct FeedItem<'a> {
 #[derive(Deserialize)]
 struct RssQuery {
     #[serde(rename = "u")]
-    user_id: Uuid,
+    user_id: UrlUuid,
     #[serde(rename = "t")]
-    token: Uuid,
+    token: UrlUuid,
 }
 
 #[get("/feed/rss")]
 async fn rss_feed(
     config: web::Data<crate::Config>,
     conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
     query: web::Query<RssQuery>,
 ) -> Result<HttpResponse, Error> {
-    let user = models::User::lookup_by_rss_token(&conn, query.user_id, query.token)
+    let user = models::User::lookup_by_rss_token(&conn, query.user_id.into(), query.token.into())
         .await?
         .ok_or(Error::Missing)?;
 
@@ -1145,7 +1174,7 @@ async fn rss_feed(
             _ => return None,
         };
 
-        let media_url = format!("{}/user/media/view/{}", config.host_url, media.id);
+        let media_url = request.url_for("media_view", [media.id.as_url()]).ok()?;
 
         let content = FeedItem {
             posted_by: similar_image
@@ -1154,7 +1183,7 @@ async fn rss_feed(
                 .unwrap_or("an unknown user"),
             site: similar_image.site,
             content_url: media.content_url.as_deref(),
-            media_url: &media_url,
+            media_url: media_url.as_str(),
             at_url: similar_image
                 .page_url
                 .as_deref()
@@ -1174,7 +1203,7 @@ async fn rss_feed(
             .title("Image match found".to_string())
             .description(entry.event.display())
             .content(content)
-            .link(media_url)
+            .link(media_url.to_string())
             .build();
 
         Some(item)

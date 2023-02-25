@@ -9,6 +9,7 @@ use actix_web::{cookie::Key, web, App, FromRequest, HttpResponse, HttpServer};
 use askama::Template;
 use async_nats::ServerAddr;
 use async_trait::async_trait;
+use base64::Engine;
 use clap::Parser;
 
 mod admin;
@@ -23,6 +24,8 @@ mod user;
 
 pub use error::Error;
 use foxlib::jobs::FaktoryProducer;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 type Mailer = lettre::AsyncSmtpTransport<lettre::Tokio1Executor>;
 
@@ -247,6 +250,96 @@ fn load_config() -> Config {
     Config::parse()
 }
 
+/// Something that can be converted into a format suitable for URLs.
+pub trait AsUrl {
+    fn as_url(&self) -> String;
+}
+
+/// A Uuid that gets base64 encoded for usage in URLs.
+#[derive(Clone, Copy, Debug)]
+pub struct UrlUuid(Uuid);
+
+impl AsUrl for UrlUuid {
+    fn as_url(&self) -> String {
+        self.to_string()
+    }
+}
+
+impl AsUrl for Uuid {
+    fn as_url(&self) -> String {
+        UrlUuid(*self).to_string()
+    }
+}
+
+impl std::fmt::Display for UrlUuid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let data = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(self.0);
+
+        write!(f, "{data}")
+    }
+}
+
+impl std::str::FromStr for UrlUuid {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(uuid) = Uuid::from_str(s) {
+            return Ok(Self(uuid));
+        }
+
+        let data = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(s)
+            .map_err(|_err| "not base64")?;
+        let data: [u8; 16] = data.try_into().map_err(|_err| "not 16 bytes")?;
+
+        Ok(Self(Uuid::from_bytes(data)))
+    }
+}
+
+impl From<Uuid> for UrlUuid {
+    fn from(value: Uuid) -> Self {
+        Self(value)
+    }
+}
+
+impl From<UrlUuid> for Uuid {
+    fn from(value: UrlUuid) -> Self {
+        value.0
+    }
+}
+
+impl Serialize for UrlUuid {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for UrlUuid {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let input: &str = Deserialize::deserialize(deserializer)?;
+
+        if let Ok(uuid) = Uuid::try_parse(input) {
+            return Ok(Self(uuid));
+        }
+
+        let data = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(input)
+            .map_err(serde::de::Error::custom)?;
+
+        let data: [u8; 16] = data
+            .try_into()
+            .map_err(|_err| serde::de::Error::custom("incorrectly sized base64 data"))?;
+
+        Ok(Self(Uuid::from_bytes(data)))
+    }
+}
+
 #[derive(Template)]
 #[template(path = "base.html")]
 pub struct BaseTemplate<'a, T: std::fmt::Display + askama::Template> {
@@ -338,7 +431,7 @@ impl<T: Sized + std::fmt::Display + askama::Template> WrappedTemplate for T {
 #[template(path = "index.html")]
 struct Home;
 
-#[actix_web::get("/")]
+#[actix_web::get("/", name = "index")]
 async fn index(
     request: actix_web::HttpRequest,
     user: Option<models::User>,

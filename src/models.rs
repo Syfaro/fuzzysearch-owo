@@ -2081,6 +2081,11 @@ impl UserSetting {
     {
         let value = serde_json::to_value(setting)?;
 
+        tracing::debug!(
+            name = S::SETTING_NAME,
+            "updating user setting to value: {value:?}"
+        );
+
         sqlx::query_file!(
             "queries/user_setting/set.sql",
             owner_id,
@@ -2098,23 +2103,6 @@ pub mod setting {
     use serde::{Deserialize, Serialize};
 
     use super::UserSettingItem;
-
-    #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct EmailNotifications(pub bool);
-
-    impl Default for EmailNotifications {
-        fn default() -> Self {
-            Self(true)
-        }
-    }
-
-    impl UserSettingItem for EmailNotifications {
-        const SETTING_NAME: &'static str = "email-notifications";
-
-        fn off_value() -> Self {
-            Self(false)
-        }
-    }
 
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
     pub struct TelegramNotifications(pub bool);

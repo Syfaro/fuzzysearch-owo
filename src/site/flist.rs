@@ -335,7 +335,11 @@ async fn hash_image(ctx: JobContext, _job: FaktoryJob, id: i32) -> Result<(), Er
 
     models::FListFile::update(&ctx.conn, id, size as i32, sha256.to_vec(), perceptual_hash).await?;
 
-    let page_url = Some(format!("https://www.f-list.net/c/{}/", file.character_name));
+    let character_name = percent_encoding::utf8_percent_encode(
+        &file.character_name,
+        percent_encoding::NON_ALPHANUMERIC,
+    );
+    let page_url = Some(format!("https://www.f-list.net/c/{character_name}/"));
 
     let data = jobs::IncomingSubmission {
         site: models::Site::FList,

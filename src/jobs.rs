@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use uuid::Uuid;
 
-use crate::{api, common, models, site, Error};
+use crate::{api, common, models, site, AsUrl, Error};
 
 #[derive(Clone, Debug, clap::ValueEnum)]
 pub enum Queue {
@@ -488,7 +488,9 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
             username: user.display_name(),
             link: &format!(
                 "{}/user/email/verify?u={}&v={}",
-                ctx.config.host_url, user.id, verifier,
+                ctx.config.host_url,
+                user.id.as_url(),
+                verifier.as_url(),
             ),
         }
         .render()?;
@@ -811,7 +813,9 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                 items: &items,
                 unsubscribe_link: format!(
                     "{}/user/unsubscribe?u={}&t={}",
-                    ctx.config.host_url, user.id, user.unsubscribe_token
+                    ctx.config.host_url,
+                    user.id.as_url(),
+                    user.unsubscribe_token.as_url()
                 ),
             }
             .render()?;
@@ -858,7 +862,9 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
             username: display_name,
             link: format!(
                 "{}/auth/forgot/email?u={}&t={}",
-                ctx.config.host_url, user.id, token
+                ctx.config.host_url,
+                user.id.as_url(),
+                token
             ),
         }
         .render()?;

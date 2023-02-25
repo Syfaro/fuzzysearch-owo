@@ -30,7 +30,7 @@ struct Admin {
     recent_flist_runs: Vec<models::FListImportRun>,
 }
 
-#[get("/tools")]
+#[get("/tools", name = "admin_tools")]
 async fn admin(
     request: actix_web::HttpRequest,
     conn: web::Data<sqlx::PgPool>,
@@ -74,6 +74,7 @@ struct InjectForm {
 #[post("/inject")]
 async fn inject_post(
     faktory: web::Data<FaktoryProducer>,
+    request: actix_web::HttpRequest,
     user: models::User,
     form: web::Form<InjectForm>,
 ) -> Result<HttpResponse, Error> {
@@ -114,7 +115,7 @@ async fn inject_post(
         .await?;
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", "/admin/tools"))
+        .insert_header(("Location", request.url_for_static("admin_tools")?.as_str()))
         .finish())
 }
 
@@ -126,6 +127,7 @@ struct SubredditForm {
 #[post("/subreddit/add")]
 async fn subreddit_add(
     conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
     user: models::User,
     form: web::Form<SubredditForm>,
 ) -> Result<HttpResponse, Error> {
@@ -136,13 +138,14 @@ async fn subreddit_add(
     models::RedditSubreddit::add(&conn, &form.subreddit_name).await?;
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", "/admin/tools"))
+        .insert_header(("Location", request.url_for_static("admin_tools")?.as_str()))
         .finish())
 }
 
 #[post("/subreddit/state")]
 async fn subreddit_state(
     conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
     user: models::User,
     form: web::Form<SubredditForm>,
 ) -> Result<HttpResponse, Error> {
@@ -160,7 +163,7 @@ async fn subreddit_state(
     models::RedditSubreddit::update_state(&conn, &form.subreddit_name, new_state).await?;
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", "/admin/tools"))
+        .insert_header(("Location", request.url_for_static("admin_tools")?.as_str()))
         .finish())
 }
 
@@ -172,6 +175,7 @@ struct FListImportRunForm {
 #[post("/flist/abort")]
 async fn flist_abort(
     conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
     user: models::User,
     form: web::Form<FListImportRunForm>,
 ) -> Result<HttpResponse, Error> {
@@ -182,7 +186,7 @@ async fn flist_abort(
     models::FListImportRun::abort_run(&conn, form.import_run_id).await?;
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", "/admin/tools"))
+        .insert_header(("Location", request.url_for_static("admin_tools")?.as_str()))
         .finish())
 }
 
@@ -201,10 +205,11 @@ struct ManualJobForm {
     data: String,
 }
 
-#[post("/job/manual")]
+#[post("/job/manual", name = "admin_job_manual")]
 async fn job_manual(
     conn: web::Data<sqlx::PgPool>,
     faktory: web::Data<FaktoryProducer>,
+    request: actix_web::HttpRequest,
     user: models::User,
     form: web::Form<ManualJobForm>,
 ) -> Result<HttpResponse, Error> {
@@ -282,6 +287,6 @@ async fn job_manual(
     }
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", "/admin/tools"))
+        .insert_header(("Location", request.url_for_static("admin_tools")?.as_str()))
         .finish())
 }

@@ -15,7 +15,7 @@ use uuid::Uuid;
 use crate::{
     jobs::{self, JobContext, JobInitiator, JobInitiatorExt, Queue, SearchExistingSubmissionsJob},
     models::{self, LinkedAccount},
-    AddFlash, Config, Error,
+    AddFlash, AsUrl, Config, Error,
 };
 
 use super::{CollectedSite, SiteFromConfig, SiteServices};
@@ -238,6 +238,7 @@ async fn callback(
     config: web::Data<Config>,
     conn: web::Data<sqlx::PgPool>,
     faktory: web::Data<FaktoryProducer>,
+    request: actix_web::HttpRequest,
     user: models::User,
     web::Query(verifier): web::Query<TwitterVerifier>,
 ) -> Result<HttpResponse, Error> {
@@ -327,7 +328,10 @@ async fn callback(
     };
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", format!("/user/account/{id}")))
+        .insert_header((
+            "Location",
+            request.url_for("user_account", [id.as_url()])?.as_str(),
+        ))
         .finish())
 }
 
@@ -342,6 +346,7 @@ async fn archive_post(
     conn: web::Data<sqlx::PgPool>,
     redis: web::Data<redis::aio::ConnectionManager>,
     faktory: web::Data<FaktoryProducer>,
+    request: actix_web::HttpRequest,
     session: actix_session::Session,
     user: models::User,
     form: web::Form<TwitterArchiveForm>,
@@ -394,7 +399,12 @@ async fn archive_post(
     session.add_flash(crate::FlashStyle::Success, "Successfully uploaded Twitter archive! It may take up to an hour for all of your photos to be imported.".to_string());
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", format!("/user/account/{}", account.id)))
+        .insert_header((
+            "Location",
+            request
+                .url_for("user_account", [account.id.as_url()])?
+                .as_str(),
+        ))
         .finish())
 }
 

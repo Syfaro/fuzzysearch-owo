@@ -100,7 +100,7 @@
               <label class="label">RSS feed</label>
 
               <a type="application/rss+xml" class="button"
-                href="/user/feed/rss?u={{ user.id }}&t={{ user.rss_token }}">Subscribe to RSS feed</a>
+                href="/user/feed/rss?u={{ user.id.as_url() }}&t={{ user.rss_token.as_url() }}">Subscribe to RSS feed</a>
             </div>
           </div>
 
@@ -117,19 +117,19 @@
           </div>
 
           <div class="block mt-6">
-            <h2 class="subtitle is-4">API access</h2>
+            <h2 class="subtitle is-4">API Access</h2>
 
             <div class="field">
               <label class="label" for="api-username">Username</label>
               <div class="control">
-                <input type="text" class="input" value="{{ user.id }}" id="api-username" readonly>
+                <input type="text" class="input" value="{{ user.id.as_url() }}" id="api-username" readonly>
               </div>
             </div>
 
             <div class="field">
               <label class="label" for="api-password">Password</label>
               <div class="control">
-                <input type="text" class="input" value="{{ user.api_token }}" id="api-password" readonly>
+                <input type="text" class="input" value="{{ user.api_token.as_url() }}" id="api-password" readonly>
               </div>
             </div>
 

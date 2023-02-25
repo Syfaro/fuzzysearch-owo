@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::{
     jobs::{self, JobContext, JobInitiatorExt},
     models::{self, setting, SimilarImage},
-    Error,
+    AsUrl, Error,
 };
 
 /// Maximum permitted download size for an image.
@@ -65,10 +65,15 @@ fn fuzzysearch_to_similar(file: fuzzysearch::File) -> Option<SimilarAndPosted> {
 }
 
 fn flist_to_similar(file: models::FListFile) -> SimilarAndPosted {
+    let character_name = percent_encoding::utf8_percent_encode(
+        &file.character_name,
+        percent_encoding::NON_ALPHANUMERIC,
+    );
+
     (
         models::SimilarImage {
             site: models::Site::FList,
-            page_url: Some(format!("https://www.f-list.net/c/{}/", file.character_name)),
+            page_url: Some(format!("https://www.f-list.net/c/{character_name}/")),
             posted_by: Some(file.character_name),
             content_url: format!(
                 "https://static.f-list.net/images/charimage/{}.{}",
@@ -191,16 +196,14 @@ async fn notify_found(
         }
     }
 
-    let email_settings: setting::EmailFrequency = models::UserSetting::get(&ctx.conn, user.id)
-        .await?
-        .unwrap_or_default();
-
-    let telegram_enabled: setting::TelegramNotifications =
+    let (email_frequency, telegram_enabled) = futures::try_join!(
+        models::UserSetting::get(&ctx.conn, user.id),
         models::UserSetting::get(&ctx.conn, user.id)
-            .await?
-            .unwrap_or_default();
+    )?;
+    let email_frequency: setting::EmailFrequency = email_frequency.unwrap_or_default();
+    let telegram_enabled: setting::TelegramNotifications = telegram_enabled.unwrap_or_default();
 
-    if email_settings.0 == models::setting::Frequency::Never && !telegram_enabled.0 {
+    if email_frequency.0 == models::setting::Frequency::Never && !telegram_enabled.0 {
         tracing::info!("user had all notifications disabled, skipping");
         return Ok(());
     }
@@ -215,7 +218,7 @@ async fn notify_found(
             if let Err(err) = notify_email(
                 ctx,
                 &user,
-                email_settings.0,
+                email_frequency.0,
                 email,
                 &event_ids,
                 sub,
@@ -297,7 +300,9 @@ async fn notify_email(
         similar_link: sub.page_url.as_deref().unwrap_or(&sub.content_url),
         unsubscribe_link: format!(
             "{}/user/unsubscribe?u={}&t={}",
-            ctx.config.host_url, user.id, user.unsubscribe_token
+            ctx.config.host_url,
+            user.id.as_url(),
+            user.unsubscribe_token.as_url()
         ),
     }
     .render()?;

@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.15.0 — February 25th, 2023
+
+* Improved URLs for accounts and media.
+* Improved weak password feedback.
+* Fixed an issue with email unsubscribe link not working.
+* Internal updates.
+
 ## v0.14.4 — February 9th, 2023
 
 * Internal updates.

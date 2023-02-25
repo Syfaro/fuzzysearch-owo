@@ -7,7 +7,7 @@
         {% match account %}
         {% when Some with (account) %}
         <h1 class="title has-text-centered">
-          Media on <a href="/user/account/{{ account.id }}">{{ account.source_site.to_string() }} &mdash; {{ account.username }}</a>
+          Media on <a href="/user/account/{{ account.id.as_url() }}">{{ account.source_site.to_string() }} &mdash; {{ account.username }}</a>
         </h1>
         {% else %}
         <h1 class="title has-text-centered">All Media</h1>
@@ -64,20 +64,20 @@
                   {% match item.thumb_url %}
                   {% when Some with (thumb_url) %}
                   <figure class="image is-128x128 is-inline-block" style="overflow: hidden;">
-                    <a href="/user/media/view/{{ item.id }}">
+                    <a href="/user/media/view/{{ item.id.as_url() }}">
                       <img src="{{ thumb_url }}" alt="{{ item.alt_text() }}">
                     </a>
                   </figure>
                   {% else %}
                   <p class="image is-128x128 has-text-centered">
-                    <a href="/user/media/view/{{ item.id }}">
+                    <a href="/user/media/view/{{ item.id.as_url() }}">
                       No preview available
                     </a>
                   </p>
                   {% endmatch %}
                 </td>
                 <td>
-                  <a href="/user/media/view/{{ item.id }}">
+                  <a href="/user/media/view/{{ item.id.as_url() }}">
                     {% match item.title %}
                     {% when Some with (title) %}
                     {{ title }}
