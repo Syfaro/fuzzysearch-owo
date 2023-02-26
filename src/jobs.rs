@@ -4,8 +4,10 @@ use askama::Template;
 use foxlib::jobs::{
     FaktoryForge, FaktoryForgeMiddleware, FaktoryProducer, Job, JobExtra, JobQueue,
 };
+use futures::{StreamExt, TryStreamExt};
 use lettre::AsyncTransport;
 use redis::AsyncCommands;
+use rusoto_s3::S3;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use uuid::Uuid;
@@ -333,6 +335,54 @@ impl Job for SendPasswordResetEmailJob {
 
     fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
         Ok(vec![serde_json::to_value(self.user_id)?])
+    }
+
+    fn deserialize(mut args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
+        serde_json::from_value(args.remove(0))
+    }
+}
+
+struct PendingDeletionJob;
+
+impl Job for PendingDeletionJob {
+    const NAME: &'static str = "pending_deletion";
+    type Data = ();
+    type Queue = Queue;
+
+    fn queue(&self) -> Self::Queue {
+        Queue::Core
+    }
+
+    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
+        Ok(None)
+    }
+
+    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+        Ok(vec![])
+    }
+
+    fn deserialize(_args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
+        Ok(())
+    }
+}
+
+struct MigrateStorageJob(i64);
+
+impl Job for MigrateStorageJob {
+    const NAME: &'static str = "migrate_storage";
+    type Data = i64;
+    type Queue = Queue;
+
+    fn queue(&self) -> Self::Queue {
+        Queue::Core
+    }
+
+    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
+        Ok(None)
+    }
+
+    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+        Ok(vec![self.0.into()])
     }
 
     fn deserialize(mut args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
@@ -881,6 +931,111 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
             .body(body)?;
 
         ctx.mailer.send(email).await?;
+
+        Ok(())
+    });
+
+    PendingDeletionJob::register(&mut forge, |cx, _job, _args| async move {
+        let mut pending =
+            sqlx::query!("SELECT id, url FROM pending_deletion LIMIT 100").fetch(&cx.conn);
+
+        while let Some(Ok(row)) = pending.next().await {
+            match models::delete_prefixed_object(&cx.s3, &cx.config, Some(&row.url)).await {
+                Ok(_) => {
+                    tracing::info!("deleted item");
+                    sqlx::query!("DELETE FROM pending_deletion WHERE id = $1", row.id)
+                        .execute(&cx.conn)
+                        .await?;
+                }
+                Err(err) => {
+                    tracing::error!("could not delete object: {err}");
+                }
+            }
+        }
+
+        Ok(())
+    });
+
+    MigrateStorageJob::register(&mut forge, |cx, _job, batch_size| async move {
+        let items = sqlx::query_file!(
+            "queries/owned_media/old_storage.sql",
+            format!("{}%", cx.config.s3_cdn_prefix),
+            batch_size
+        )
+        .fetch_all(&cx.conn)
+        .await?;
+
+        if items.is_empty() {
+            tracing::info!("no items to migrate");
+            return Ok(());
+        }
+
+        async fn migrate_item(cx: &JobContext, old_url: &str) -> Result<String, Error> {
+            let buf = cx.client.get(old_url).send().await?.bytes().await?;
+
+            let id = hex::encode(Uuid::new_v4().as_bytes());
+            let path = format!("{}/{}/{}.jpg", &id[0..2], &id[2..4], &id);
+
+            let put = rusoto_s3::PutObjectRequest {
+                bucket: cx.config.s3_bucket.clone(),
+                content_type: Some("image/jpeg".to_string()),
+                key: path.clone(),
+                content_length: Some(buf.len() as i64),
+                body: Some(rusoto_core::ByteStream::from(buf.to_vec())),
+                content_disposition: Some("inline".to_string()),
+                ..Default::default()
+            };
+
+            cx.s3
+                .put_object(put)
+                .await
+                .map_err(|err| Error::S3(err.to_string()))?;
+
+            Ok(format!("{}/{path}", cx.config.s3_cdn_prefix))
+        }
+
+        async fn migrate_row(
+            cx: JobContext,
+            id: Uuid,
+            content_url: Option<String>,
+            thumb_url: Option<String>,
+        ) -> Result<(), Error> {
+            tracing::info!(%id, "attempting to migrate item");
+
+            let new_content_url = if let Some(content_url) = content_url {
+                Some(migrate_item(&cx, &content_url).await?)
+            } else {
+                None
+            };
+
+            let new_thumb_url = if let Some(thumb_url) = thumb_url {
+                Some(migrate_item(&cx, &thumb_url).await?)
+            } else {
+                None
+            };
+
+            sqlx::query!(
+                "UPDATE owned_media_item SET content_url = $2, thumb_url = $3 WHERE id = $1",
+                id,
+                new_content_url,
+                new_thumb_url
+            )
+            .execute(&cx.conn)
+            .await?;
+
+            Ok(())
+        }
+
+        futures::stream::iter(items)
+            .map(Ok)
+            .try_for_each_concurrent(4, |item| {
+                migrate_row(cx.clone(), item.id, item.content_url, item.thumb_url)
+            })
+            .await?;
+
+        cx.producer
+            .enqueue_job(MigrateStorageJob(batch_size))
+            .await?;
 
         Ok(())
     });

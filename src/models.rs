@@ -10,7 +10,6 @@ use redis::AsyncCommands;
 use rusoto_s3::S3;
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
-use sha2::Digest;
 use uuid::Uuid;
 
 use crate::site::SiteFromConfig;
@@ -296,9 +295,17 @@ impl User {
     }
 
     pub async fn delete(conn: &sqlx::PgPool, user_id: Uuid) -> Result<(), Error> {
-        sqlx::query_file!("queries/user/delete.sql", user_id)
-            .execute(conn)
+        let mut tx = conn.begin().await?;
+
+        sqlx::query_file!("queries/user/move_media_to_delete.sql", user_id)
+            .execute(&mut tx)
             .await?;
+
+        sqlx::query_file!("queries/user/delete.sql", user_id)
+            .fetch_one(&mut tx)
+            .await?;
+
+        tx.commit().await?;
 
         Ok(())
     }
@@ -703,7 +710,22 @@ impl OwnedMediaItem {
         Ok(items)
     }
 
-    pub async fn remove(conn: &sqlx::PgPool, user_id: Uuid, media_id: Uuid) -> Result<(), Error> {
+    pub async fn remove(
+        conn: &sqlx::PgPool,
+        s3: &rusoto_s3::S3Client,
+        config: &crate::Config,
+        user_id: Uuid,
+        media_id: Uuid,
+    ) -> Result<(), Error> {
+        let media = Self::get_by_id(conn, media_id, user_id)
+            .await?
+            .ok_or(Error::Missing)?;
+
+        futures::try_join!(
+            delete_prefixed_object(s3, config, media.content_url.as_deref()),
+            delete_prefixed_object(s3, config, media.thumb_url.as_deref())
+        )?;
+
         sqlx::query_file!("queries/owned_media/remove.sql", user_id, media_id)
             .execute(conn)
             .await?;
@@ -796,26 +818,29 @@ async fn upload_image(
 ) -> Result<(String, usize), Error> {
     tracing::debug!("uploading image to s3");
 
-    // Remove transparency before attempting to save as JPEG.
-    let im = image::DynamicImage::ImageRgb8(im.to_rgb8());
+    let im_with_alpha = image::DynamicImage::ImageRgba8(im.to_rgba8());
+    let has_useful_alpha = im_with_alpha
+        .pixels()
+        .any(|(_x, _y, color)| color.0[3] < u8::MAX);
+    tracing::debug!(has_useful_alpha, "checked image alpha");
 
     let mut buf = Vec::new();
-    im.write_to(&mut buf, image::ImageOutputFormat::Jpeg(80))?;
+    let (ext, mime_type) = if has_useful_alpha {
+        im_with_alpha.write_to(&mut buf, image::ImageOutputFormat::Png)?;
+        ("png", "image/png")
+    } else {
+        let im = image::DynamicImage::ImageRgb8(im.to_rgb8());
+        im.write_to(&mut buf, image::ImageOutputFormat::Jpeg(80))?;
+        ("jpg", "image/jpeg")
+    };
     let size = buf.len();
 
-    let mut hasher = sha2::Sha256::default();
-    hasher.update(&buf);
-    let hash: [u8; 32] = hasher
-        .finalize()
-        .try_into()
-        .expect("sha256 hash had wrong length");
-    let hash = hex::encode(hash);
-    let path = format!("{}/{}/{}.jpg", &hash[0..2], &hash[2..4], &hash);
+    let id = hex::encode(Uuid::new_v4().as_bytes());
+    let path = format!("{}/{}/{}.{ext}", &id[0..2], &id[2..4], &id);
 
     let put = rusoto_s3::PutObjectRequest {
-        acl: Some("download".to_string()),
         bucket: config.s3_bucket.clone(),
-        content_type: Some("image/jpeg".to_string()),
+        content_type: Some(mime_type.to_string()),
         key: path.clone(),
         content_length: Some(buf.len() as i64),
         body: Some(rusoto_core::ByteStream::from(buf)),
@@ -827,13 +852,35 @@ async fn upload_image(
         .await
         .map_err(|err| Error::S3(err.to_string()))?;
 
-    Ok((
-        format!(
-            "{}/{}/{}",
-            config.s3_region_endpoint, config.s3_bucket, path
-        ),
-        size,
-    ))
+    Ok((format!("{}/{path}", config.s3_cdn_prefix), size))
+}
+
+#[tracing::instrument(skip(s3, config))]
+pub async fn delete_prefixed_object(
+    s3: &rusoto_s3::S3Client,
+    config: &crate::Config,
+    url: Option<&str>,
+) -> Result<(), Error> {
+    if let Some(object_name) = url.and_then(|url| {
+        url.strip_prefix(&config.s3_cdn_prefix)
+            .map(|name| name.to_string())
+    }) {
+        tracing::info!(object_name, "attempting to delete object");
+
+        let delete = rusoto_s3::DeleteObjectRequest {
+            bucket: config.s3_bucket.clone(),
+            key: object_name,
+            ..Default::default()
+        };
+
+        s3.delete_object(delete)
+            .await
+            .map_err(|err| Error::S3(err.to_string()))?;
+    } else {
+        tracing::warn!("wanted to delete object with unknown prefix");
+    }
+
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1027,9 +1074,20 @@ impl LinkedAccount {
     }
 
     pub async fn remove(conn: &sqlx::PgPool, user_id: Uuid, account_id: Uuid) -> Result<(), Error> {
+        let mut tx = conn.begin().await?;
+
+        sqlx::query_file!(
+            "queries/linked_account/move_media_to_delete.sql",
+            account_id
+        )
+        .execute(&mut tx)
+        .await?;
+
         sqlx::query_file!("queries/linked_account/remove.sql", user_id, account_id)
-            .execute(conn)
+            .fetch_one(&mut tx)
             .await?;
+
+        tx.commit().await?;
 
         Ok(())
     }

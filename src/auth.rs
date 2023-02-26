@@ -235,6 +235,8 @@ async fn login_post(
             telegram_login: &telegram_login,
             error_message: Some("Unknown username or password."),
         }
+        .wrap(&request, user.as_ref())
+        .await
         .render()?;
 
         Ok(HttpResponse::Ok().content_type("text/html").body(body))

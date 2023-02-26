@@ -2,9 +2,12 @@
 
 ## v0.15.0 — February 25th, 2023
 
+* Improved image performance and allowed PNGs for images with transparency.
 * Improved URLs for accounts and media.
 * Improved weak password feedback.
-* Fixed an issue with email unsubscribe link not working.
+* Fixed an issue with the email unsubscribe link not working.
+* Fixed an issue where deleting media would not remove it from the server.
+* Fixed an issue where the wrong password screen would not render correctly.
 * Internal updates.
 
 ## v0.14.4 — February 9th, 2023

@@ -1,0 +1,5 @@
+CREATE TABLE pending_deletion (
+    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    url TEXT NOT NULL UNIQUE,
+    deleted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT current_timestamp
+);

@@ -41,3 +41,9 @@ jobs:
     args: ["weekly"]
     custom:
       initiator: schedule
+  - name: process pending deletes
+    every: "0 * * * *"
+    job_type: pending_deletion
+    queue: fuzzysearch_owo_core
+    custom:
+      initiator: schedule

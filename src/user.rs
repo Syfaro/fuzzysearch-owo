@@ -648,12 +648,14 @@ struct MediaRemoveForm {
 #[post("/remove")]
 async fn media_remove(
     conn: web::Data<sqlx::PgPool>,
+    s3: web::Data<rusoto_s3::S3Client>,
+    config: web::Data<crate::Config>,
     request: actix_web::HttpRequest,
     session: actix_session::Session,
     user: models::User,
     form: web::Form<MediaRemoveForm>,
 ) -> Result<HttpResponse, Error> {
-    models::OwnedMediaItem::remove(&conn, user.id, form.media_id).await?;
+    models::OwnedMediaItem::remove(&conn, &s3, &config, user.id, form.media_id).await?;
 
     session.add_flash(FlashStyle::Success, "Removed media.");
 
