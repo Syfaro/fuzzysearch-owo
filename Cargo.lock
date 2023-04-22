@@ -2139,7 +2139,7 @@ dependencies = [
 
 [[package]]
 name = "fuzzysearch-owo"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
  "actix",
  "actix-files",
