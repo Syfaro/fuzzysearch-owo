@@ -78,7 +78,6 @@ impl FurAffinity {
 
             let mut new_ids = body
                 .select(&id_selector)
-                .into_iter()
                 .filter_map(|element| element.value().attr("href"))
                 .filter_map(|href| href.split('/').nth(2))
                 .filter_map(|id| id.parse::<i32>().ok())

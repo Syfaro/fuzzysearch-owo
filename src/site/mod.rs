@@ -217,7 +217,7 @@ async fn update_import_progress<S: ToString>(
     let site_id = site_id.to_string();
 
     redis
-        .smove::<_, _, ()>(&loading_key, &completed_key, &site_id)
+        .smove::<_, _, _, ()>(&loading_key, &completed_key, &site_id)
         .await?;
 
     redis

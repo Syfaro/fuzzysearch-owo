@@ -36,7 +36,7 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error("image error: {0}")]
     Image(#[from] image::ImageError),
-    #[error("s3 error")]
+    #[error("s3 error: {0}")]
     S3(String),
     #[error("reqwest error: {0}")]
     Reqwest(#[from] reqwest::Error),
