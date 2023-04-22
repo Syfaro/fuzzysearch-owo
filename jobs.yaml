@@ -20,13 +20,6 @@ jobs:
     args: []
     custom:
       initiator: schedule
-  - name: collect twitter
-    every: "0 4 * * *"
-    job_type: twitter_accounts
-    queue: fuzzysearch_owo_core
-    args: []
-    custom:
-      initiator: schedule
   - name: create daily digests
     every: "0 6 * * *"
     job_type: create_email_digests
