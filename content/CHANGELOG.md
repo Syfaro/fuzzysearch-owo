@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.15.1 — April 22nd, 2023
+
+* Removed linking Twitter accounts due to API changes.
+
 ## v0.15.0 — February 25th, 2023
 
 * Improved image performance and allowed PNGs for images with transparency.
