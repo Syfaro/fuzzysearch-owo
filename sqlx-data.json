@@ -591,26 +591,6 @@
     },
     "query": "SELECT\n    exists(\n        SELECT\n            1\n        FROM\n            user_allowlist\n        WHERE\n            owner_id = $1\n            AND site = $2\n            AND lower(site_username) = lower($3)\n    );\n"
   },
-  "16eaab434285da83fc7156e52f59e4007d8db3ff41b56d91479943a75fb3a030": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Uuid"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      }
-    },
-    "query": "SELECT\n    id\nFROM\n    linked_account\nWHERE\n    source_site = $1;\n"
-  },
   "16f7262fba553df30055709a9a51f4eb353dce7aa3ec8c361ce0b61e70ef63eb": {
     "describe": {
       "columns": [
@@ -968,7 +948,28 @@
     },
     "query": "SELECT\n    value\nFROM\n    user_setting\nWHERE\n    owner_id = $1\n    AND setting = $2;\n"
   },
-  "3e1a263e5d37619937d78ff82a3c74398f307e866a94337e827e61afd74beeb1": {
+  "3f091fdddbee429487163837c17f18b8139e3c2bee1d43168d936018169d868f": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Jsonb"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    patreon_webhook_event (linked_account_id, data)\nVALUES\n    ($1, $2) RETURNING id;\n"
+  },
+  "400c8b6fd85d1719f741a04552bf7875b95841e8efe6a792e1691f3bf7f5e2df": {
     "describe": {
       "columns": [
         {
@@ -1005,6 +1006,11 @@
           "name": "data",
           "ordinal": 6,
           "type_info": "Jsonb"
+        },
+        {
+          "name": "disabled",
+          "ordinal": 7,
+          "type_info": "Bool"
         }
       ],
       "nullable": [
@@ -1014,7 +1020,8 @@
         false,
         true,
         true,
-        true
+        true,
+        false
       ],
       "parameters": {
         "Left": [
@@ -1024,28 +1031,7 @@
         ]
       }
     },
-    "query": "SELECT\n    *\nFROM\n    linked_account\nWHERE\n    owner_id = $1\n    AND source_site = $2\n    AND data ->> 'site_id' = $3;\n"
-  },
-  "3f091fdddbee429487163837c17f18b8139e3c2bee1d43168d936018169d868f": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Uuid"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Jsonb"
-        ]
-      }
-    },
-    "query": "INSERT INTO\n    patreon_webhook_event (linked_account_id, data)\nVALUES\n    ($1, $2) RETURNING id;\n"
+    "query": "SELECT\n    *\nFROM\n    linked_account\nWHERE\n    owner_id = $1\n    AND source_site = $2\n    AND data->>'site_id' = $3;\n"
   },
   "432653c3dd8926da7a9565c36ec6db289917d56fe19df29900b7440e9588581a": {
     "describe": {
@@ -1843,62 +1829,6 @@
     },
     "query": "SELECT\n    exists(\n        SELECT\n            1\n        FROM\n            user_account\n        WHERE\n            id = $1\n            AND email_verifier = $2\n    );\n"
   },
-  "751d48d0988dbf5948192377f4bf36b4b65afbb6c90ec23d12d45afffe182dd5": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "owner_id",
-          "ordinal": 1,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "source_site",
-          "ordinal": 2,
-          "type_info": "Text"
-        },
-        {
-          "name": "username",
-          "ordinal": 3,
-          "type_info": "Text"
-        },
-        {
-          "name": "last_update",
-          "ordinal": 4,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "loading_state",
-          "ordinal": 5,
-          "type_info": "Jsonb"
-        },
-        {
-          "name": "data",
-          "ordinal": 6,
-          "type_info": "Jsonb"
-        }
-      ],
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        true,
-        true,
-        true
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid"
-        ]
-      }
-    },
-    "query": "SELECT\n    *\nFROM\n    linked_account\nWHERE\n    owner_id = $1;\n"
-  },
   "7771385d57fa5aef4120fb21b4e4216e4b75c263ff82e59e35e1b482c6cf9606": {
     "describe": {
       "columns": [
@@ -1936,6 +1866,11 @@
           "name": "data",
           "ordinal": 6,
           "type_info": "Jsonb"
+        },
+        {
+          "name": "disabled",
+          "ordinal": 7,
+          "type_info": "Bool"
         }
       ],
       "nullable": [
@@ -1945,7 +1880,8 @@
         false,
         true,
         true,
-        true
+        true,
+        false
       ],
       "parameters": {
         "Left": [
@@ -2291,6 +2227,19 @@
     },
     "query": "UPDATE\n    user_account\nSET\n    hashed_password = $2,\n    reset_token = NULL\nWHERE\n    id = $1;\n"
   },
+  "9256e2b5b3865b72ad7cf3ab1fc98f6d01630fa44fbe82b5b184e58d25597b44": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Bool"
+        ]
+      }
+    },
+    "query": "UPDATE linked_account SET disabled = $2 WHERE source_site = $1"
+  },
   "930ae63c1ef71a87799036a706f5ce4a5522872ba7c1aad2f2c8ad68b2d4f883": {
     "describe": {
       "columns": [
@@ -2328,6 +2277,11 @@
           "name": "data",
           "ordinal": 6,
           "type_info": "Jsonb"
+        },
+        {
+          "name": "disabled",
+          "ordinal": 7,
+          "type_info": "Bool"
         }
       ],
       "nullable": [
@@ -2337,7 +2291,8 @@
         false,
         true,
         true,
-        true
+        true,
+        false
       ],
       "parameters": {
         "Left": [
@@ -2433,6 +2388,26 @@
       }
     },
     "query": "SELECT\n    *\nFROM\n    user_event\nWHERE\n    owner_id = $1\n    AND related_to_media_item_id = $2\nORDER BY\n    created_at DESC\nLIMIT\n    50;\n"
+  },
+  "993d20c56e9eb4083f21d653c3c113649c4c646dc077c46f464dd787d778c6fa": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "SELECT\n    id\nFROM\n    linked_account\nWHERE\n    source_site = $1\n    AND disabled = false;\n"
   },
   "9d27333f331ae7e2157ba4bb0654b9af300cb4b5d5db26ca2c538421e9ee612f": {
     "describe": {
@@ -2781,6 +2756,68 @@
       }
     },
     "query": "SELECT\n    *\nFROM\n    user_account\nWHERE\n    telegram_id = $1;\n"
+  },
+  "b6035fc6b8ac52f4325d8f5535320c3c5f7e2c4f987aa01b9f1e3efe2904a699": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "owner_id",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "source_site",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "username",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "last_update",
+          "ordinal": 4,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "loading_state",
+          "ordinal": 5,
+          "type_info": "Jsonb"
+        },
+        {
+          "name": "data",
+          "ordinal": 6,
+          "type_info": "Jsonb"
+        },
+        {
+          "name": "disabled",
+          "ordinal": 7,
+          "type_info": "Bool"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        true,
+        true,
+        true,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT\n    *\nFROM\n    linked_account\nWHERE\n    owner_id = $1\n    AND disabled = false;\n"
   },
   "b8946dfef01780773713136e31594b2347be98536da6e066ed49378f88b11e13": {
     "describe": {

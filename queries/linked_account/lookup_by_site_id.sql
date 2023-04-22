@@ -5,4 +5,4 @@ FROM
 WHERE
     owner_id = $1
     AND source_site = $2
-    AND data ->> 'site_id' = $3;
+    AND data->>'site_id' = $3;

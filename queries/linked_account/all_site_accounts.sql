@@ -3,4 +3,5 @@ SELECT
 FROM
     linked_account
 WHERE
-    source_site = $1;
+    source_site = $1
+    AND disabled = false;
