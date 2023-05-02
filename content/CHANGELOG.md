@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.15.3 — May 1st, 2023
+
+* Fixed an issue causing Reddit data to not load.
+
 ## v0.15.2 — May 1st, 2023
 
 * Internal updates.

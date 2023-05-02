@@ -48,6 +48,8 @@ pub enum Error {
     Telegram(#[from] tgbotapi::Error),
     #[error("twitter error: {0}")]
     Twitter(#[from] egg_mode::error::Error),
+    #[error("reddit error: {0}")]
+    Reddit(#[from] roux::util::RouxError),
 
     #[error("request too large: {0}")]
     TooLarge(usize),

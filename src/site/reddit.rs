@@ -139,7 +139,15 @@ async fn update_subreddit(ctx: JobContext, _job: FaktoryJob, name: String) -> Re
         return Ok(());
     }
 
-    let sub = roux::Subreddit::new(&name);
+    let sub = roux::Reddit::new(
+        &ctx.config.user_agent,
+        &ctx.config.reddit_client_id,
+        &ctx.config.reddit_client_secret,
+    )
+    .username(&ctx.config.reddit_username)
+    .password(&ctx.config.reddit_password)
+    .subreddit(&name)
+    .await?;
 
     let previous_max = data
         .last_page
