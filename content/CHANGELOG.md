@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.15.2 — May 1st, 2023
+
+* Internal updates.
+
 ## v0.15.1 — April 22nd, 2023
 
 * Removed linking Twitter accounts due to API changes.

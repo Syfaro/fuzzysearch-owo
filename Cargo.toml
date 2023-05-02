@@ -64,7 +64,7 @@ sentry-actix = "0.31"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_plain = "1"
-serde_with = { version = "2", features = ["hex"] }
+serde_with = { version = "3", features = ["hex"] }
 sha2 = "0.10"
 tempfile = "3"
 thiserror = "1"

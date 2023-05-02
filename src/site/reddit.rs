@@ -121,7 +121,6 @@ async fn check_subreddits(ctx: JobContext, _job: FaktoryJob, _args: ()) -> Resul
             .initiated_by(JobInitiator::Schedule)
             .job()?;
         job.retry = Some(0);
-
         ctx.producer.enqueue_existing_job(job).await?;
     }
 
