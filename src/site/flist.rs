@@ -362,9 +362,11 @@ async fn hash_image(ctx: JobContext, _job: FaktoryJob, id: i32) -> Result<(), Er
     })
     .await;
 
-    ctx.producer
-        .enqueue_job(NewSubmissionJob(data).initiated_by(JobInitiator::external("flist")))
-        .await?;
+    let mut job = NewSubmissionJob(data)
+        .initiated_by(JobInitiator::external("flist"))
+        .job()?;
+    job.retry = Some(0);
+    ctx.producer.enqueue_existing_job(job).await?;
 
     Ok(())
 }

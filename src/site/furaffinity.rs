@@ -31,7 +31,7 @@ impl FurAffinity {
         );
 
         let client = reqwest::ClientBuilder::new()
-            .user_agent(&user_agent)
+            .user_agent(user_agent)
             .default_headers(headers)
             .build()?;
 

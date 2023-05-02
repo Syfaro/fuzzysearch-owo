@@ -117,9 +117,12 @@ async fn check_subreddits(ctx: JobContext, _job: FaktoryJob, _args: ()) -> Resul
     for sub in subs {
         tracing::info!("queueing subreddit {}", sub.name);
 
-        ctx.producer
-            .enqueue_job(UpdateSubredditJob(&sub.name).initiated_by(JobInitiator::Schedule))
-            .await?;
+        let mut job = UpdateSubredditJob(&sub.name)
+            .initiated_by(JobInitiator::Schedule)
+            .job()?;
+        job.retry = Some(0);
+
+        ctx.producer.enqueue_existing_job(job).await?;
     }
 
     Ok(())
