@@ -14,8 +14,7 @@ downloaded from FurAffinity, Weasyl, e621, F-list, and more. It then keeps the
 hash of the uploaded image to compare against every new image added to all of
 those sites.
 
-The parent project, FuzzySearch, is
-[open source](https://github.com/Syfaro/fuzzysearch).
+It's also [open source](https://github.com/Syfaro/fuzzysearch-owo).
 
 ## Where can I report an issue or suggest a feature?
 
