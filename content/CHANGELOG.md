@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.16.0 — May 9th, 2023
+
+* Added ability to allowlist entire sites.
+
 ## v0.15.3 — May 1st, 2023
 
 * Fixed an issue causing Reddit data to not load.
