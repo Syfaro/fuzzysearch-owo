@@ -75,7 +75,7 @@
             </div>
 
             <div class="field">
-              <label class="label">Telegram notifications</label>
+              <h3 class="subtitle is-5">Telegram notifications</h3>
 
               <label class="checkbox" for="telegram-notifications">
                 <input type="checkbox" id="telegram-notifications" name="telegram-notifications" {% if user.telegram_id.is_none() %} disabled {%
@@ -95,13 +95,6 @@
               <p class="help">Telegram messages are sent as soon as matches are found.</p>
               {% endif %}
             </div>
-
-            <div class="field">
-              <label class="label">RSS feed</label>
-
-              <a type="application/rss+xml" class="button"
-                href="/user/feed/rss?u={{ user.id.as_url() }}&t={{ user.rss_token.as_url() }}">Subscribe to RSS feed</a>
-            </div>
           </div>
 
           <div class="field">
@@ -113,34 +106,41 @@
           <div class="block mt-6">
             <h2 class="subtitle is-4">Security</h2>
 
-            <a class="button is-link is-outlined" href="/auth/sessions">Active Sessions </a>
+            <a class="button is-link is-outlined" href="/auth/sessions">Active Sessions</a>
           </div>
 
-          <div class="block mt-6">
-            <h2 class="subtitle is-4">API Access</h2>
+          <div class="block">
+            <h2 class="subtitle is-4">Integrations</h2>
 
             <div class="field">
+              <h3 class="subtitle is-5">RSS feed</h3>
+
+              <a type="application/rss+xml" class="button"
+                href="/user/feed/rss?u={{ user.id.as_url() }}&t={{ user.rss_token.as_url() }}">Subscribe to RSS feed</a>
+            </div>
+
+            <div class="field">
+              <h3 class="subtitle is-5">API Access</h3>
+
               <label class="label" for="api-username">Username</label>
               <div class="control">
                 <input type="text" class="input" value="{{ user.id.as_url() }}" id="api-username" readonly>
               </div>
-            </div>
 
-            <div class="field">
               <label class="label" for="api-password">Password</label>
               <div class="control">
                 <input type="text" class="input" value="{{ user.api_token.as_url() }}" id="api-password" readonly>
               </div>
-            </div>
 
-            <p class="help">
-              You may use this username and password for basic auth to upload
-              new images by sending a POST request to <code>/api/upload</code>.
-              Use a multipart form, putting images in a field named
-              <code>image</code>. You may specify the header
-              <code>x-image-title</code> on the multipart field to set the title
-              for that image.
-            </p>
+              <p class="help">
+                You may use this username and password for basic auth to upload
+                new images by sending a POST request to <code>/api/upload</code>.
+                Use a multipart form, putting images in a field named
+                <code>image</code>. You may specify the header
+                <code>x-image-title</code> on the multipart field to set the title
+                for that image.
+              </p>
+            </div>
           </div>
 
           <div class="field mt-6">
