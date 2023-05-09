@@ -69,6 +69,7 @@ struct Settings<'a> {
 
     email_frequency: String,
     telegram_notifications: setting::TelegramNotifications,
+    skipped_sites: setting::SkippedSites,
 }
 
 #[get("/settings")]
@@ -86,6 +87,10 @@ async fn settings_get(
         .await?
         .unwrap_or_default();
 
+    let skipped_sites = models::UserSetting::get(&conn, user.id)
+        .await?
+        .unwrap_or_default();
+
     let body = Settings {
         telegram_login: &telegram_login,
 
@@ -94,6 +99,7 @@ async fn settings_get(
 
         email_frequency: serde_plain::to_string(&email_frequency.0)?,
         telegram_notifications,
+        skipped_sites,
     }
     .wrap(&request, Some(&user))
     .await
@@ -109,12 +115,18 @@ async fn settings_post(
     conn: web::Data<sqlx::PgPool>,
     faktory: web::Data<FaktoryProducer>,
     user: models::User,
-    form: web::Form<HashMap<String, String>>,
+    form: web::Form<Vec<(String, String)>>,
 ) -> Result<HttpResponse, Error> {
-    tracing::trace!("got settings: {:?}", form);
+    let mut form_fields: HashMap<String, Vec<String>> = HashMap::with_capacity(form.len());
+    for (name, value) in form.0 {
+        form_fields.entry(name.clone()).or_default().push(value);
+    }
 
-    let email_frequency = form
+    tracing::trace!("got settings: {:?}", form_fields);
+
+    let email_frequency = form_fields
         .get("email-frequency")
+        .and_then(|value| value.first())
         .and_then(|value| {
             serde_plain::from_str(value)
                 .ok()
@@ -122,12 +134,27 @@ async fn settings_post(
         })
         .unwrap_or_else(models::UserSettingItem::off_value);
 
-    let telegram_notifications = form
+    let telegram_notifications = form_fields
         .get("telegram-notifications")
+        .and_then(|value| value.first())
         .map(|value| setting::TelegramNotifications(value == "on"))
         .unwrap_or_else(models::UserSettingItem::off_value);
 
-    let display_name = match form.get("display_name") {
+    let skipped_sites = form_fields
+        .get("skipped-sites")
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(|site| serde_plain::from_str(site).ok())
+                .collect()
+        })
+        .map(setting::SkippedSites)
+        .unwrap_or_else(models::UserSettingItem::off_value);
+
+    let display_name = match form_fields
+        .get("display-name")
+        .and_then(|value| value.first())
+    {
         Some(display_name) if !display_name.is_empty() => Some(display_name.as_str()),
         _ => None,
     };
@@ -135,10 +162,11 @@ async fn settings_post(
     futures::try_join!(
         models::UserSetting::set(&conn, user.id, &email_frequency),
         models::UserSetting::set(&conn, user.id, &telegram_notifications),
-        models::User::update_display_name(&conn, user.id, display_name)
+        models::UserSetting::set(&conn, user.id, &skipped_sites),
+        models::User::update_display_name(&conn, user.id, display_name),
     )?;
 
-    let email_address = match form.get("email") {
+    let email_address = match form_fields.get("email").and_then(|value| value.first()) {
         None => None,
         Some(email) if email.is_empty() => None,
         Some(email) => Some(email),
@@ -193,6 +221,7 @@ async fn settings_post(
 
         email_frequency: serde_plain::to_string(&email_frequency.0)?,
         telegram_notifications,
+        skipped_sites,
     }
     .wrap(&request, Some(&user))
     .await
@@ -850,7 +879,10 @@ async fn feed(
     let page = query.page.unwrap_or(0);
     let site = query.site.map(|site| site.to_string());
 
-    let visible_sites = models::Site::visible_sites();
+    let visible_sites: Vec<_> = models::Site::visible_sites()
+        .into_iter()
+        .map(|site| site.to_string())
+        .collect();
 
     let count = models::UserEvent::count(
         &conn,

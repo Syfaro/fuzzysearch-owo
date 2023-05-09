@@ -196,15 +196,22 @@ async fn notify_found(
         }
     }
 
-    let (email_frequency, telegram_enabled) = futures::try_join!(
+    let (email_frequency, telegram_enabled, skipped_sites) = futures::try_join!(
         models::UserSetting::get(&ctx.conn, user.id),
-        models::UserSetting::get(&ctx.conn, user.id)
+        models::UserSetting::get(&ctx.conn, user.id),
+        models::UserSetting::get(&ctx.conn, user.id),
     )?;
     let email_frequency: setting::EmailFrequency = email_frequency.unwrap_or_default();
     let telegram_enabled: setting::TelegramNotifications = telegram_enabled.unwrap_or_default();
+    let skipped_sites: setting::SkippedSites = skipped_sites.unwrap_or_default();
 
     if email_frequency.0 == models::setting::Frequency::Never && !telegram_enabled.0 {
         tracing::info!("user had all notifications disabled, skipping");
+        return Ok(());
+    }
+
+    if skipped_sites.0.contains(&sub.site) {
+        tracing::info!(site = %sub.site, "user skipping site, skipping");
         return Ok(());
     }
 

@@ -1169,7 +1169,7 @@ pub enum Site {
 }
 
 impl Site {
-    pub fn visible_sites() -> Vec<String> {
+    pub fn visible_sites() -> Vec<Self> {
         [
             Self::FurAffinity,
             Self::E621,
@@ -1178,7 +1178,6 @@ impl Site {
             Self::FList,
             Self::Reddit,
         ]
-        .map(|site| site.to_string())
         .to_vec()
     }
 
@@ -2158,6 +2157,8 @@ impl UserSetting {
 }
 
 pub mod setting {
+    use std::collections::HashSet;
+
     use serde::{Deserialize, Serialize};
 
     use super::UserSettingItem;
@@ -2202,6 +2203,17 @@ pub mod setting {
 
         fn off_value() -> Self {
             Self(Frequency::Never)
+        }
+    }
+
+    #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+    pub struct SkippedSites(pub HashSet<super::Site>);
+
+    impl UserSettingItem for SkippedSites {
+        const SETTING_NAME: &'static str = "skipped-sites";
+
+        fn off_value() -> Self {
+            Self(Default::default())
         }
     }
 }

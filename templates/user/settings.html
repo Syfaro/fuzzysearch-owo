@@ -1,5 +1,12 @@
 {% import "_pagination.html" as pagination %}
 
+{% macro site_option(site, selected) %}
+  {% let is_selected = selected.contains(site) %}
+  <option value="{{ site }}" {% if is_selected %}selected{% endif %}>
+    {{ site }}
+  </option>
+{% endmacro %}
+
 {% block header %}
   <style>
     code {
@@ -29,7 +36,7 @@
             <div class="field">
               <label class="label" for="profile-name">Name</label>
               <div class="control">
-                <input class="input" type="text" placeholder="Name" name="display_name"
+                <input class="input" type="text" placeholder="Name" name="display-name"
                   value="{{ user.display_name() }}" id="profile-name" required>
               </div>
             </div>
@@ -97,6 +104,26 @@
             </div>
           </div>
 
+          <div class="block">
+            <h2 class="subtitle is-4">Sites</h2>
+
+            <div class="field">
+              <label class="label" for="skipped-sites">Skipped sites</label>
+              <div class="select is-multiple is-fullwidth">
+                {% let sites = Site::visible_sites() %}
+                <select name="skipped-sites" id="skipped-sites" multiple size="{{ sites.len() }}">
+                  {% for site in sites %}
+                    {% call site_option(site, skipped_sites.0) %}
+                  {% endfor %}
+                </select>
+              </div>
+
+              <p class="help">
+                Any images posted to sites selected here will <strong>not</strong> generate notifications.
+              </p>
+            </div>
+          </div>
+
           <div class="field">
             <div class="control">
               <button class="button is-primary is-fullwidth">Save Settings</button>
@@ -109,7 +136,7 @@
             <a class="button is-link is-outlined" href="/auth/sessions">Active Sessions</a>
           </div>
 
-          <div class="block">
+          <div class="block mt-6">
             <h2 class="subtitle is-4">Integrations</h2>
 
             <div class="field">
@@ -119,7 +146,7 @@
                 href="/user/feed/rss?u={{ user.id.as_url() }}&t={{ user.rss_token.as_url() }}">Subscribe to RSS feed</a>
             </div>
 
-            <div class="field">
+            <div class="field mt-5">
               <h3 class="subtitle is-5">API Access</h3>
 
               <label class="label" for="api-username">Username</label>
