@@ -7,22 +7,23 @@
         <div class="block">
           <form method="POST" action="/user/account/link">
             <div class="field">
-              <label class="label">Site</label>
+              <label class="label" for="site-select">Site</label>
               <div class="control">
                 <div class="select is-fullwidth">
                   <select name="site" id="site-select">
+                    <option value="Bluesky">Bluesky</option>
+                    <option value="DeviantArt">DeviantArt</option>
                     <option value="FurAffinity">FurAffinity</option>
                     <option value="Weasyl">Weasyl</option>
-                    <option value="DeviantArt">DeviantArt</option>
                   </select>
                 </div>
               </div>
             </div>
 
             <div class="field" id="username-input">
-              <label class="label">Username</label>
+              <label class="label" for="username">Username</label>
               <div class="control">
-                <input class="input" type="text" placeholder="Username" name="username" autocomplete="off">
+                <input class="input" type="text" id="username" placeholder="Username" name="username" autocomplete="off">
               </div>
             </div>
 
@@ -42,16 +43,27 @@
 
 {% block footer %}
 <script>
-  const noFormSites = ['Patreon', 'DeviantArt', 'Twitter'];
+  const noFormSites = [
+    'Bluesky',
+    'DeviantArt',
+    'Patreon',
+    'Twitter',
+  ];
 
+  const siteSelect = document.getElementById('site-select');
   const usernameInput = document.getElementById('username-input');
 
-  document.getElementById('site-select').addEventListener('change', (ev) => {
-    if (noFormSites.includes(ev.target.value)) {
+  function update(value) {
+    if (noFormSites.includes(value)) {
       usernameInput.style.display = 'none';
     } else {
       usernameInput.style.display = 'block';
     }
+  }
+
+  update(siteSelect.value);
+  siteSelect.addEventListener('change', (ev) => {
+    update(ev.target.value);
   });
 </script>
 {% endblock %}

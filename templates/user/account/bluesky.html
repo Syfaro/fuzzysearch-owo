@@ -1,0 +1,46 @@
+<section class="section">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-one-third">
+        <h1 class="title has-text-centered">Link Bluesky Account</h1>
+
+        <div class="block">
+          <form method="POST" action="/bluesky/auth">
+            <div class="field">
+              <label class="label" for="server">Server</label>
+              <div class="control">
+                <input class="input" type="text" id="server" placeholder="Server" name="server" autocomplete="off" value="bsky.social" disabled>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="label" for="username">Username</label>
+              <div class="control">
+                <input class="input" type="text" id="username" placeholder="Username" name="username" autocomplete="off">
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="label" for="password">App Password</label>
+              <div class="control">
+                <input class="input" type="password" id="password" placeholder="App Password" name="password" autocomplete="off">
+              </div>
+              <p class="help">
+                Please generate a new app password for account verification.
+                You should revoke this password as soon as the account is added.
+              </p>
+            </div>
+
+            <div class="control">
+              <button class="button is-primary is-fullwidth">Verify</button>
+            </div>
+          </form>
+
+          <hr>
+
+          <a href="/user/home" class="button is-danger has-text-centered">Cancel</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

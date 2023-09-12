@@ -1,15 +1,19 @@
 use std::num::NonZeroU64;
 
+use actix_web::{get, post, services, web, HttpResponse};
+use askama::Template;
 use async_trait::async_trait;
-use foxlib::jobs::{FaktoryForge, FaktoryJob, Job, JobExtra};
+use foxlib::jobs::{FaktoryForge, FaktoryJob, FaktoryProducer, Job, JobExtra};
 use futures::TryStreamExt;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     jobs::{self, JobContext, JobInitiator, JobInitiatorExt, NewSubmissionJob, Queue},
-    models,
-    site::{reddit::limited_image_download, SiteFromConfig, WatchedSite},
-    Error,
+    models::{self, LinkedAccount, Site},
+    site::{
+        reddit::limited_image_download, CollectedSite, SiteFromConfig, SiteServices, WatchedSite,
+    },
+    AsUrl, Error, WrappedTemplate,
 };
 
 pub struct BSky;
@@ -25,6 +29,26 @@ impl SiteFromConfig for BSky {
 impl WatchedSite for BSky {
     fn register_jobs(&self, forge: &mut FaktoryForge<jobs::JobContext, Error>) {
         LoadBlueskyPostJob::register(forge, load_bluesky_post);
+    }
+}
+
+#[async_trait(?Send)]
+impl CollectedSite for BSky {
+    fn oauth_page(&self) -> Option<&'static str> {
+        Some("/bluesky/auth")
+    }
+
+    fn register_jobs(&self, _forge: &mut FaktoryForge<jobs::JobContext, Error>) {}
+
+    #[tracing::instrument(skip_all, fields(user_id = %_account.owner_id, account_id = %_account.id))]
+    async fn add_account(&self, _ctx: &JobContext, _account: LinkedAccount) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
+impl SiteServices for BSky {
+    fn services() -> Vec<actix_web::Scope> {
+        vec![web::scope("/bluesky").service(services![auth, auth_verify])]
     }
 }
 
@@ -293,4 +317,85 @@ struct PayloadData<D> {
     repo: String,
     path: String,
     data: D,
+}
+
+#[derive(Template)]
+#[template(path = "user/account/bluesky.html")]
+struct BlueskyLink {}
+
+#[get("/auth")]
+async fn auth(request: actix_web::HttpRequest, user: models::User) -> Result<HttpResponse, Error> {
+    let body = BlueskyLink {}.wrap(&request, Some(&user)).await.render()?;
+
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[derive(Deserialize)]
+struct BlueskyAuthForm {
+    username: String,
+    password: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BlueskySession {
+    did: String,
+}
+
+#[post("/auth")]
+async fn auth_verify(
+    conn: web::Data<sqlx::PgPool>,
+    faktory: web::Data<FaktoryProducer>,
+    request: actix_web::HttpRequest,
+    user: models::User,
+    form: web::Form<BlueskyAuthForm>,
+) -> Result<HttpResponse, Error> {
+    let client = reqwest::Client::default();
+    let resp: BlueskySession = client
+        .post("https://bsky.social/xrpc/com.atproto.server.createSession")
+        .json(&serde_json::json!({
+            "identifier": form.username,
+            "password": form.password,
+        }))
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+    tracing::debug!(did = resp.did, "got session for user credentials");
+
+    let linked_account =
+        match models::LinkedAccount::lookup_by_site_id(&conn, user.id, Site::Bluesky, &resp.did)
+            .await?
+        {
+            Some(account) => account,
+            None => {
+                tracing::info!("got new account");
+
+                let account =
+                    models::LinkedAccount::create(&conn, user.id, Site::Bluesky, &resp.did, None)
+                        .await?;
+
+                faktory
+                    .enqueue_job(
+                        jobs::AddAccountJob {
+                            user_id: user.id,
+                            account_id: account.id,
+                        }
+                        .initiated_by(jobs::JobInitiator::user(user.id)),
+                    )
+                    .await?;
+
+                account
+            }
+        };
+
+    Ok(HttpResponse::Found()
+        .insert_header((
+            "Location",
+            request
+                .url_for("user_account", [linked_account.id.as_url()])?
+                .as_str(),
+        ))
+        .finish())
 }

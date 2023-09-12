@@ -20,7 +20,7 @@ mod reddit;
 mod twitter;
 mod weasyl;
 
-pub use bsky::ingest_bsky;
+pub use bsky::{ingest_bsky, BSky};
 pub use deviantart::{types::DeviantArtSubmission, DeviantArt};
 pub use flist::FList;
 pub use furaffinity::FurAffinity;
@@ -73,6 +73,7 @@ pub fn service() -> Vec<actix_web::Scope> {
         .into_iter()
         .chain(patreon::Patreon::services())
         .chain(twitter::Twitter::services())
+        .chain(bsky::BSky::services())
         .collect()
 }
 
@@ -111,6 +112,7 @@ pub async fn collected_sites(config: &crate::Config) -> Result<Vec<Box<dyn Colle
         Box::new(patreon::Patreon::site_from_config(config).await?),
         Box::new(weasyl::Weasyl::site_from_config(config).await?),
         Box::new(twitter::Twitter::site_from_config(config).await?),
+        Box::new(bsky::BSky::site_from_config(config).await?),
     ])
 }
 

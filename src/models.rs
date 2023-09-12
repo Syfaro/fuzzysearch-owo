@@ -1193,6 +1193,7 @@ impl Site {
             Site::Patreon => Some(Box::new(site::Patreon::site_from_config(config).await?)),
             Site::Weasyl => Some(Box::new(site::Weasyl::site_from_config(config).await?)),
             Site::Twitter => Some(Box::new(site::Twitter::site_from_config(config).await?)),
+            Site::Bluesky => Some(Box::new(site::BSky::site_from_config(config).await?)),
             _ => None,
         };
 
