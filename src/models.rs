@@ -1172,12 +1172,13 @@ pub enum Site {
 impl Site {
     pub fn visible_sites() -> Vec<Self> {
         [
-            Self::FurAffinity,
+            Self::Bluesky,
             Self::E621,
-            Self::Weasyl,
-            Self::Twitter,
             Self::FList,
+            Self::FurAffinity,
             Self::Reddit,
+            Self::Twitter,
+            Self::Weasyl,
         ]
         .to_vec()
     }
