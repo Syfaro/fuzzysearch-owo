@@ -6,9 +6,14 @@ use async_trait::async_trait;
 use foxlib::jobs::{FaktoryForge, FaktoryJob, FaktoryProducer, Job, JobExtra};
 use futures::TryStreamExt;
 use serde::{Deserialize, Serialize};
+use sha2::Digest;
+use uuid::Uuid;
 
 use crate::{
-    jobs::{self, JobContext, JobInitiator, JobInitiatorExt, NewSubmissionJob, Queue},
+    jobs::{
+        self, JobContext, JobInitiator, JobInitiatorExt, NewSubmissionJob, Queue,
+        SearchExistingSubmissionsJob,
+    },
     models::{self, LinkedAccount, Site},
     site::{
         reddit::limited_image_download, CollectedSite, SiteFromConfig, SiteServices, WatchedSite,
@@ -32,16 +37,239 @@ impl WatchedSite for BSky {
     }
 }
 
+#[derive(Deserialize)]
+struct BlueskyActorFeed {
+    #[serde(rename = "feed")]
+    entries: Vec<BlueskyFeedEntry>,
+    cursor: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct BlueskyFeedEntry {
+    post: BlueskyPost,
+}
+
+#[derive(Serialize, Deserialize)]
+struct BlueskyPost {
+    uri: String,
+    author: BlueskyAuthor,
+    record: Post,
+}
+
+#[derive(Serialize, Deserialize)]
+struct BlueskyAuthor {
+    did: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ImportSubmissionBlueskyJob {
+    user_id: Uuid,
+    account_id: Uuid,
+    post: BlueskyPost,
+}
+
+impl Job for ImportSubmissionBlueskyJob {
+    const NAME: &'static str = "bluesky_import";
+    type Data = Self;
+    type Queue = Queue;
+
+    fn queue(&self) -> Self::Queue {
+        Queue::Outgoing
+    }
+
+    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
+        Ok(None)
+    }
+
+    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+        Ok(vec![serde_json::to_value(self)?])
+    }
+
+    fn deserialize(mut args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
+        serde_json::from_value(args.remove(0))
+    }
+}
+
+async fn import_submission(
+    ctx: JobContext,
+    _job: FaktoryJob,
+    ImportSubmissionBlueskyJob {
+        user_id,
+        account_id,
+        post,
+    }: ImportSubmissionBlueskyJob,
+) -> Result<(), Error> {
+    let (_, rkey) = post.uri.rsplit_once('/').ok_or(Error::Missing)?;
+
+    for image in post
+        .record
+        .embed
+        .and_then(|embed| match embed {
+            PostEmbed::Images { images } => Some(images),
+            _ => None,
+        })
+        .unwrap_or_default()
+    {
+        let image_cid = match image.image {
+            File::Blob { link, .. } => link.link,
+            File::Cid { cid, .. } => cid,
+        };
+
+        let url = format!(
+            "https://bsky.social/xrpc/com.atproto.sync.getBlob?did={}&cid={image_cid}",
+            post.author.did
+        );
+
+        let image_data = ctx.client.get(url).send().await?.bytes().await?;
+
+        let mut sha256 = sha2::Sha256::new();
+        sha256.update(&image_data);
+        let sha256: [u8; 32] = sha256
+            .finalize()
+            .try_into()
+            .expect("sha256 was wrong length");
+
+        let (im, perceptual_hash) = if let Ok(im) = image::load_from_memory(&image_data) {
+            let hasher = fuzzysearch_common::get_hasher();
+            let hash: [u8; 8] = hasher
+                .hash_image(&im)
+                .as_bytes()
+                .try_into()
+                .expect("perceptual hash was wrong length");
+            let perceptual_hash = i64::from_be_bytes(hash);
+
+            (Some(im), Some(perceptual_hash))
+        } else {
+            (None, None)
+        };
+
+        let item_id = models::OwnedMediaItem::add_item(
+            &ctx.conn,
+            user_id,
+            account_id,
+            image_cid,
+            perceptual_hash,
+            sha256,
+            Some(format!(
+                "https://bsky.app/profile/{}/post/{}",
+                post.author.did, rkey
+            )),
+            None,
+            parse_time(&post.record.created_at),
+        )
+        .await?;
+
+        if let Some(im) = im {
+            models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im)
+                .await?;
+
+            ctx.producer
+                .enqueue_job(
+                    SearchExistingSubmissionsJob {
+                        user_id,
+                        media_id: item_id,
+                    }
+                    .initiated_by(JobInitiator::user(user_id)),
+                )
+                .await?;
+        }
+    }
+
+    let mut redis = ctx.redis.clone();
+    super::update_import_progress(&ctx.conn, &mut redis, user_id, account_id, post.uri).await?;
+
+    Ok(())
+}
+
 #[async_trait(?Send)]
 impl CollectedSite for BSky {
     fn oauth_page(&self) -> Option<&'static str> {
         Some("/bluesky/auth")
     }
 
-    fn register_jobs(&self, _forge: &mut FaktoryForge<jobs::JobContext, Error>) {}
+    fn register_jobs(&self, forge: &mut FaktoryForge<jobs::JobContext, Error>) {
+        ImportSubmissionBlueskyJob::register(forge, import_submission)
+    }
 
-    #[tracing::instrument(skip_all, fields(user_id = %_account.owner_id, account_id = %_account.id))]
-    async fn add_account(&self, _ctx: &JobContext, _account: LinkedAccount) -> Result<(), Error> {
+    #[tracing::instrument(skip_all, fields(user_id = %account.owner_id, account_id = %account.id))]
+    async fn add_account(&self, ctx: &JobContext, account: LinkedAccount) -> Result<(), Error> {
+        let data: BlueskySession = serde_json::from_value(account.data.unwrap_or_default())?;
+
+        let resp: BlueskySession = ctx
+            .client
+            .post("https://bsky.social/xrpc/com.atproto.server.refreshSession")
+            .bearer_auth(data.refresh_jwt)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+
+        let query = &[
+            ("actor", data.did.clone()),
+            ("limit", "100".to_string()),
+            ("filter", "posts_with_media".to_string()),
+        ];
+
+        let mut cursor: Option<String> = None;
+
+        let mut posts = Vec::new();
+
+        loop {
+            let mut query = query.to_vec();
+            if let Some(cursor) = cursor {
+                query.push(("cursor", cursor.to_string()))
+            }
+            tracing::debug!("loading feed with query: {query:?}");
+
+            let feed: BlueskyActorFeed = ctx
+                .client
+                .get("https://bsky.social/xrpc/app.bsky.feed.getAuthorFeed")
+                .bearer_auth(&resp.access_jwt)
+                .query(&query)
+                .send()
+                .await?
+                .error_for_status()?
+                .json()
+                .await?;
+
+            for entry in feed.entries {
+                tracing::info!("found post: {}", entry.post.uri);
+                posts.push(entry.post);
+            }
+
+            match feed.cursor {
+                Some(cur) => cursor = Some(cur),
+                None => {
+                    tracing::info!("empty cursor, ending loop");
+                    break;
+                }
+            }
+        }
+
+        tracing::info!("discovered {} submissions", posts.len());
+        let ids = posts.iter().map(|post| &post.uri);
+
+        let mut redis = ctx.redis.clone();
+
+        super::set_loading_submissions(&ctx.conn, &mut redis, account.owner_id, account.id, ids)
+            .await?;
+
+        super::queue_new_submissions(
+            &ctx.producer,
+            account.owner_id,
+            account.id,
+            posts,
+            |user_id, account_id, post| ImportSubmissionBlueskyJob {
+                user_id,
+                account_id,
+                post,
+            },
+        )
+        .await?;
+
+        models::LinkedAccount::update_data(&ctx.conn, account.id, None).await?;
+
         Ok(())
     }
 }
@@ -125,6 +353,17 @@ impl Job for LoadBlueskyPostJob {
     }
 }
 
+fn parse_time(created_at: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    if let Ok(created_at) = chrono::DateTime::parse_from_rfc3339(created_at) {
+        Some(created_at.into())
+    } else if let Ok(created_at) = chrono::NaiveDateTime::parse_from_str(created_at, "%FT%T.%f") {
+        Some(created_at.and_utc())
+    } else {
+        tracing::warn!("could not parse date: {}", created_at);
+        None
+    }
+}
+
 async fn load_bluesky_post(
     ctx: JobContext,
     _job: FaktoryJob,
@@ -137,18 +376,7 @@ async fn load_bluesky_post(
 
         let mut tx = ctx.conn.begin().await?;
 
-        let created_at = if let Ok(created_at) =
-            chrono::DateTime::parse_from_rfc3339(&payload.data.created_at)
-        {
-            Some(created_at.into())
-        } else if let Ok(created_at) =
-            chrono::NaiveDateTime::parse_from_str(&payload.data.created_at, "%FT%T.%f")
-        {
-            Some(created_at.and_utc())
-        } else {
-            tracing::warn!("could not parse date: {}", payload.data.created_at);
-            None
-        };
+        let created_at = parse_time(&payload.data.created_at);
 
         models::BlueskyPost::create_post(&mut tx, &payload.repo, cid, created_at).await?;
 
@@ -336,10 +564,12 @@ struct BlueskyAuthForm {
     password: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct BlueskySession {
     did: String,
+    access_jwt: String,
+    refresh_jwt: String,
 }
 
 #[post("/auth")]
@@ -372,9 +602,14 @@ async fn auth_verify(
             None => {
                 tracing::info!("got new account");
 
-                let account =
-                    models::LinkedAccount::create(&conn, user.id, Site::Bluesky, &resp.did, None)
-                        .await?;
+                let account = models::LinkedAccount::create(
+                    &conn,
+                    user.id,
+                    Site::Bluesky,
+                    &resp.did.clone(),
+                    Some(serde_json::to_value(resp)?),
+                )
+                .await?;
 
                 faktory
                     .enqueue_job(
