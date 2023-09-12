@@ -1,7 +1,7 @@
 INSERT INTO
     bluesky_image (
         repo,
-        post_cid,
+        post_rkey,
         blob_cid,
         size,
         sha256,

@@ -109,7 +109,7 @@ fn bsky_to_similar(image: models::BlueskyImage) -> SimilarAndPosted {
             site: models::Site::Bluesky,
             page_url: Some(format!(
                 "https://bsky.app/profile/{}/post/{}",
-                image.repo, image.post_cid
+                image.repo, image.post_rkey
             )),
             content_url: format!(
                 "https://bsky.social/xrpc/com.atproto.sync.getBlob?did={}&cid={}",

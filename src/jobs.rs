@@ -1109,6 +1109,7 @@ pub enum NatsSite {
     #[serde(rename = "flist")]
     FList,
     Reddit,
+    Bluesky,
 }
 
 #[serde_as]

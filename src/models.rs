@@ -1817,17 +1817,17 @@ impl BlueskyPost {
     pub async fn create_post(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         repo: &str,
-        cid: &str,
+        rkey: &str,
         created_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<(), Error> {
-        sqlx::query_file!("queries/bluesky/create_post.sql", repo, cid, created_at)
+        sqlx::query_file!("queries/bluesky/create_post.sql", repo, rkey, created_at)
             .execute(tx)
             .await?;
         Ok(())
     }
 
-    pub async fn delete_post(conn: &sqlx::PgPool, repo: &str, cid: &str) -> Result<(), Error> {
-        sqlx::query_file!("queries/bluesky/delete_post.sql", repo, cid)
+    pub async fn delete_post(conn: &sqlx::PgPool, repo: &str, rkey: &str) -> Result<(), Error> {
+        sqlx::query_file!("queries/bluesky/delete_post.sql", repo, rkey)
             .execute(conn)
             .await?;
         Ok(())
@@ -1836,7 +1836,7 @@ impl BlueskyPost {
 
 pub struct BlueskyImage {
     pub repo: String,
-    pub post_cid: String,
+    pub post_rkey: String,
     pub blob_cid: String,
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
 
@@ -1849,7 +1849,7 @@ impl BlueskyImage {
     pub async fn create_image(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         repo: &str,
-        cid: &str,
+        rkey: &str,
         file_cid: &str,
         size: i64,
         sha256: &[u8],
@@ -1858,7 +1858,7 @@ impl BlueskyImage {
         sqlx::query_file!(
             "queries/bluesky/create_image.sql",
             repo,
-            cid,
+            rkey,
             file_cid,
             size,
             sha256,
@@ -1876,7 +1876,7 @@ impl BlueskyImage {
         let images = sqlx::query_file!("queries/bluesky/similar_images.sql", perceptual_hash, 3)
             .map(|row| Self {
                 repo: row.repo,
-                post_cid: row.post_cid,
+                post_rkey: row.post_rkey,
                 blob_cid: row.blob_cid,
                 created_at: row.created_at,
                 size: row.size,

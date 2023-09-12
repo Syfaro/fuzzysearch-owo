@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     jobs::{
-        self, JobContext, JobInitiator, JobInitiatorExt, NewSubmissionJob, Queue,
+        self, JobContext, JobInitiator, JobInitiatorExt, NatsNewImage, NewSubmissionJob, Queue,
         SearchExistingSubmissionsJob,
     },
     models::{self, LinkedAccount, Site},
@@ -372,13 +372,13 @@ async fn load_bluesky_post(
     if let Some(PostEmbed::Images { images }) = payload.data.embed {
         tracing::debug!(repo = payload.repo, "got images: {images:?}");
 
-        let (_collection, cid) = payload.path.split_once('/').ok_or(Error::Missing)?;
+        let (_collection, rkey) = payload.path.split_once('/').ok_or(Error::Missing)?;
 
         let mut tx = ctx.conn.begin().await?;
 
         let created_at = parse_time(&payload.data.created_at);
 
-        models::BlueskyPost::create_post(&mut tx, &payload.repo, cid, created_at).await?;
+        models::BlueskyPost::create_post(&mut tx, &payload.repo, rkey, created_at).await?;
 
         for image in images {
             let image_cid = match image.image {
@@ -418,7 +418,7 @@ async fn load_bluesky_post(
             models::BlueskyImage::create_image(
                 &mut tx,
                 &payload.repo,
-                cid,
+                rkey,
                 &image_cid,
                 data.len() as i64,
                 &sha256,
@@ -428,21 +428,34 @@ async fn load_bluesky_post(
 
             let data = jobs::IncomingSubmission {
                 site: models::Site::Bluesky,
-                site_id: format!("{}:{}", payload.repo, payload.path),
+                site_id: format!("{}:{}", payload.repo, rkey),
                 page_url: Some(format!(
                     "https://bsky.app/profile/{}/post/{}",
-                    payload.repo, payload.path
+                    payload.repo, rkey
                 )),
                 posted_by: Some(payload.repo.clone()),
                 sha256: Some(sha256),
                 perceptual_hash: hash,
-                content_url: url,
-                posted_at: None,
+                content_url: url.clone(),
+                posted_at: created_at,
             };
 
             ctx.producer
                 .enqueue_job(NewSubmissionJob(data).initiated_by(JobInitiator::external("bluesky")))
                 .await?;
+
+            ctx.nats_new_image(NatsNewImage {
+                site: jobs::NatsSite::Bluesky,
+                image_url: url,
+                page_url: Some(format!(
+                    "https://bsky.app/profile/{}/post/{}",
+                    payload.repo, rkey
+                )),
+                posted_by: Some(payload.repo.clone()),
+                perceptual_hash: hash,
+                sha256_hash: Some(sha256),
+            })
+            .await;
 
             tracing::info!("processed image {}, {hash:?}", hex::encode(sha256));
         }
@@ -522,13 +535,13 @@ pub async fn ingest_bsky(ctx: JobContext) {
                         }
                     };
 
-                let Some((_collection, cid)) = payload.path.split_once('/') else {
+                let Some((_collection, rkey)) = payload.path.split_once('/') else {
                     tracing::error!("payload path was unexpected");
                     continue;
                 };
 
                 if let Err(err) =
-                    models::BlueskyPost::delete_post(&ctx.conn, &payload.repo, cid).await
+                    models::BlueskyPost::delete_post(&ctx.conn, &payload.repo, rkey).await
                 {
                     tracing::error!("could not mark post as deleted: {err}");
                 }
