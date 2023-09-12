@@ -46,10 +46,17 @@ pub async fn search_perceptual_hash(
         .map_ok(|results| results.into_iter().map(reddit_to_similar))
         .map_err(Error::from);
 
-    let (fuzzysearch_items, flist_items, reddit_items) =
-        futures::try_join!(fuzzysearch_fut, flist_fut, reddit_fut)?;
+    let bsky_fut = models::BlueskyImage::similar_images(&ctx.conn, perceptual_hash)
+        .map_ok(|results| results.into_iter().map(bsky_to_similar))
+        .map_err(Error::from);
 
-    Ok(fuzzysearch_items.chain(flist_items).chain(reddit_items))
+    let (fuzzysearch_items, flist_items, reddit_items, bsky_items) =
+        futures::try_join!(fuzzysearch_fut, flist_fut, reddit_fut, bsky_fut)?;
+
+    Ok(fuzzysearch_items
+        .chain(flist_items)
+        .chain(reddit_items)
+        .chain(bsky_items))
 }
 
 fn fuzzysearch_to_similar(file: fuzzysearch::File) -> Option<SimilarAndPosted> {
@@ -93,6 +100,24 @@ fn reddit_to_similar(image: models::RedditImage) -> SimilarAndPosted {
             content_url: image.post.content_link,
         },
         Some(image.post.posted_at),
+    )
+}
+
+fn bsky_to_similar(image: models::BlueskyImage) -> SimilarAndPosted {
+    (
+        models::SimilarImage {
+            site: models::Site::Bluesky,
+            page_url: Some(format!(
+                "https://bsky.app/profile/{}/post/{}",
+                image.repo, image.post_cid
+            )),
+            content_url: format!(
+                "https://bsky.social/xrpc/com.atproto.sync.getBlob?did={}&cid={}",
+                image.repo, image.blob_cid
+            ),
+            posted_by: Some(image.repo),
+        },
+        image.created_at,
     )
 }
 

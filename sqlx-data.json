@@ -731,6 +731,23 @@
     },
     "query": "UPDATE\n    reddit_subreddit\nSET\n    disabled = $2\nWHERE\n    name = $1;\n"
   },
+  "1fd5aded561515c5b1b23ecac2ee028130a41b4f13166f9fb89e575af71dd240": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text",
+          "Text",
+          "Int8",
+          "Bytea",
+          "Int8"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    bluesky_image (\n        repo,\n        post_cid,\n        blob_cid,\n        size,\n        sha256,\n        perceptual_hash\n    )\nVALUES\n    ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING;\n"
+  },
   "2aa0ada2357ae99086950c0e5d8dfd750f977e830a031f24f62063c6277933f9": {
     "describe": {
       "columns": [
@@ -926,6 +943,63 @@
       }
     },
     "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url,\n    event_count,\n    last_event\nFROM\n    owned_media_item\nWHERE\n    id = $1\n    AND owner_id = $2;\n"
+  },
+  "388b9c19ba6831daa0355473c7ebc86d6d73123d5e46eff963655ca5193a1c7c": {
+    "describe": {
+      "columns": [
+        {
+          "name": "created_at",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "repo",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "post_cid",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "blob_cid",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "size",
+          "ordinal": 4,
+          "type_info": "Int8"
+        },
+        {
+          "name": "sha256",
+          "ordinal": 5,
+          "type_info": "Bytea"
+        },
+        {
+          "name": "perceptual_hash",
+          "ordinal": 6,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Int8",
+          "Int8"
+        ]
+      }
+    },
+    "query": "SELECT\n    bluesky_post.created_at,\n    bluesky_image.*\nFROM\n    bluesky_image\n    JOIN bluesky_post ON bluesky_post.repo = bluesky_image.repo\n    AND bluesky_post.cid = bluesky_image.post_cid\nWHERE\n    perceptual_hash <@ ($1, $2)\n    AND deleted_at IS NULL;\n"
   },
   "3950c47de61f6ba464700f0ed9092333a3c0a4de4f45afd6949efd6a75276490": {
     "describe": {
@@ -1243,6 +1317,20 @@
       }
     },
     "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url,\n    event_count,\n    last_event\nFROM\n    owned_media_item\nWHERE\n    id = any($1)\n    AND owner_id = $2;\n"
+  },
+  "542a8c2eabb7b53f0672782ca63b66b1cbc679bf389b35eb1ba925a37940b213": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text",
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    bluesky_post (repo, cid, created_at)\nVALUES\n    ($1, $2, $3) ON CONFLICT DO NOTHING;\n"
   },
   "56ffbb01633cc4e31edf84afa38aca7494d2e414715fa6856f47615560f869bb": {
     "describe": {
@@ -2830,6 +2918,19 @@
       }
     },
     "query": "DELETE FROM\n    flist_import_run\nWHERE\n    id = $1;\n"
+  },
+  "c428382cb31e9c4fe8c904747ae400b02e75501e09176675af8a643550c0ce5d": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    bluesky_post (repo, cid, deleted_at)\nVALUES\n    ($1, $2, current_timestamp) ON CONFLICT (repo, cid) DO\nUPDATE\nSET\n    deleted_at = current_timestamp\n"
   },
   "c5d2ab0824d09910f1e20bac7fefdcde7e309af236bb0856bc49c626f40221cb": {
     "describe": {

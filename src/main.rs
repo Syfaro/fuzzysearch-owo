@@ -648,7 +648,7 @@ async fn main() {
                 .await
                 .expect("could not connect to nats");
 
-            jobs::start_job_processing(jobs::JobContext {
+            let ctx = jobs::JobContext {
                 producer,
                 conn: pool,
                 redis: redis_manager,
@@ -661,9 +661,13 @@ async fn main() {
                 client,
                 telegram,
                 nats,
-            })
-            .await
-            .expect("could not run background worker");
+            };
+
+            tokio::spawn(crate::site::ingest_bsky(ctx.clone()));
+
+            jobs::start_job_processing(ctx)
+                .await
+                .expect("could not run background worker");
         }
         ServiceMode::Web(web_config) => {
             let cookie_private_key = hex::decode(&web_config.cookie_private_key)

@@ -11,6 +11,7 @@ use crate::jobs::JobInitiatorExt;
 use crate::Error;
 use crate::{jobs, models};
 
+mod bsky;
 mod deviantart;
 mod flist;
 mod furaffinity;
@@ -19,6 +20,7 @@ mod reddit;
 mod twitter;
 mod weasyl;
 
+pub use bsky::ingest_bsky;
 pub use deviantart::{types::DeviantArtSubmission, DeviantArt};
 pub use flist::FList;
 pub use furaffinity::FurAffinity;
@@ -69,8 +71,8 @@ pub trait SiteServices {
 pub fn service() -> Vec<actix_web::Scope> {
     deviantart::DeviantArt::services()
         .into_iter()
-        .chain(patreon::Patreon::services().into_iter())
-        .chain(twitter::Twitter::services().into_iter())
+        .chain(patreon::Patreon::services())
+        .chain(twitter::Twitter::services())
         .collect()
 }
 
@@ -97,6 +99,7 @@ pub async fn watched_sites(config: &crate::Config) -> Result<Vec<Box<dyn Watched
     Ok(vec![
         Box::new(flist::FList::site_from_config(config).await?),
         Box::new(reddit::Reddit::site_from_config(config).await?),
+        Box::new(bsky::BSky::site_from_config(config).await?),
     ])
 }
 

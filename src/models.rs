@@ -1166,6 +1166,7 @@ pub enum Site {
     DeviantArt,
     Reddit,
     InternalTesting,
+    Bluesky,
 }
 
 impl Site {
@@ -1210,6 +1211,7 @@ impl Display for Site {
             Site::DeviantArt => write!(f, "DeviantArt"),
             Site::Reddit => write!(f, "Reddit"),
             Site::InternalTesting => write!(f, "Internal Testing"),
+            Site::Bluesky => write!(f, "Bluesky"),
         }
     }
 }
@@ -1228,6 +1230,7 @@ impl FromStr for Site {
             "DeviantArt" => Site::DeviantArt,
             "Reddit" => Site::Reddit,
             "Internal Testing" => Site::InternalTesting,
+            "Bluesky" => Site::Bluesky,
             _ => {
                 tracing::warn!(value, "had unknown site");
                 return Err("unknown source site");
@@ -1803,6 +1806,85 @@ impl RedditPost {
             .await?;
 
         Ok(exists)
+    }
+}
+
+pub struct BlueskyPost;
+
+impl BlueskyPost {
+    pub async fn create_post(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        repo: &str,
+        cid: &str,
+        created_at: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> Result<(), Error> {
+        sqlx::query_file!("queries/bluesky/create_post.sql", repo, cid, created_at)
+            .execute(tx)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn delete_post(conn: &sqlx::PgPool, repo: &str, cid: &str) -> Result<(), Error> {
+        sqlx::query_file!("queries/bluesky/delete_post.sql", repo, cid)
+            .execute(conn)
+            .await?;
+        Ok(())
+    }
+}
+
+pub struct BlueskyImage {
+    pub repo: String,
+    pub post_cid: String,
+    pub blob_cid: String,
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+
+    pub size: i64,
+    pub sha256: [u8; 32],
+    pub perceptual_hash: Option<[u8; 8]>,
+}
+
+impl BlueskyImage {
+    pub async fn create_image(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        repo: &str,
+        cid: &str,
+        file_cid: &str,
+        size: i64,
+        sha256: &[u8],
+        perceptual_gradient: Option<i64>,
+    ) -> Result<(), Error> {
+        sqlx::query_file!(
+            "queries/bluesky/create_image.sql",
+            repo,
+            cid,
+            file_cid,
+            size,
+            sha256,
+            perceptual_gradient
+        )
+        .execute(tx)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn similar_images(
+        conn: &sqlx::PgPool,
+        perceptual_hash: i64,
+    ) -> Result<Vec<Self>, Error> {
+        let images = sqlx::query_file!("queries/bluesky/similar_images.sql", perceptual_hash, 3)
+            .map(|row| Self {
+                repo: row.repo,
+                post_cid: row.post_cid,
+                blob_cid: row.blob_cid,
+                created_at: row.created_at,
+                size: row.size,
+                sha256: row.sha256.try_into().expect("sha256 was wrong length"),
+                perceptual_hash: row.perceptual_hash.map(|hash| hash.to_be_bytes()),
+            })
+            .fetch_all(conn)
+            .await?;
+
+        Ok(images)
     }
 }
 
