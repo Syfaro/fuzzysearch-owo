@@ -1,5 +1,7 @@
 use std::num::NonZeroU64;
 
+use actix_http::StatusCode;
+use actix_session::Session;
 use actix_web::{get, post, services, web, HttpResponse};
 use askama::Template;
 use async_trait::async_trait;
@@ -18,7 +20,7 @@ use crate::{
     site::{
         reddit::limited_image_download, CollectedSite, SiteFromConfig, SiteServices, WatchedSite,
     },
-    AsUrl, Error, WrappedTemplate,
+    AddFlash, AsUrl, Error, WrappedTemplate,
 };
 
 pub struct BSky;
@@ -234,14 +236,14 @@ impl CollectedSite for BSky {
                 .await?;
 
             for entry in feed.entries {
-                tracing::info!("found post: {}", entry.post.uri);
+                tracing::debug!("found post: {}", entry.post.uri);
                 posts.push(entry.post);
             }
 
             match feed.cursor {
                 Some(cur) => cursor = Some(cur),
                 None => {
-                    tracing::info!("empty cursor, ending loop");
+                    tracing::debug!("empty cursor, ending loop");
                     break;
                 }
             }
@@ -590,21 +592,32 @@ async fn auth_verify(
     conn: web::Data<sqlx::PgPool>,
     faktory: web::Data<FaktoryProducer>,
     request: actix_web::HttpRequest,
+    session: Session,
     user: models::User,
     form: web::Form<BlueskyAuthForm>,
 ) -> Result<HttpResponse, Error> {
     let client = reqwest::Client::default();
-    let resp: BlueskySession = client
+    let resp = client
         .post("https://bsky.social/xrpc/com.atproto.server.createSession")
         .json(&serde_json::json!({
             "identifier": form.username,
             "password": form.password,
         }))
         .send()
-        .await?
-        .error_for_status()?
-        .json()
         .await?;
+
+    if resp.status() == StatusCode::UNAUTHORIZED {
+        session.add_flash(
+            crate::FlashStyle::Error,
+            "Unauthorized, check that your username and password are correct.",
+        );
+
+        let body = BlueskyLink {}.wrap(&request, Some(&user)).await.render()?;
+
+        return Ok(HttpResponse::Ok().content_type("text/html").body(body));
+    }
+
+    let resp: BlueskySession = resp.error_for_status()?.json().await?;
     tracing::debug!(did = resp.did, "got session for user credentials");
 
     let linked_account =
