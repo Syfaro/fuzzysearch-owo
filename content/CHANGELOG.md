@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.17.1 – September 13th, 2023
+
+* Fixed an issue causing Bluesky posts to not process as expected.
+
 ## v0.17.0 – September 13th, 2023
 
 * Added Bluesky support.
