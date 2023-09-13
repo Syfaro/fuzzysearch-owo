@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.17.0 – September 13th, 2023
+
+* Added Bluesky support.
+
 ## v0.16.0 — May 9th, 2023
 
 * Added ability to allowlist entire sites.
