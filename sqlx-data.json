@@ -295,6 +295,19 @@
     },
     "query": "SELECT\n  owned_media_item.id,\n  owned_media_item.owner_id,\n  owned_media_item.account_id,\n  owned_media_item.source_id,\n  owned_media_item.perceptual_hash,\n  owned_media_item.sha256_hash \"sha256_hash: Sha256Hash\",\n  owned_media_item.link,\n  owned_media_item.title,\n  owned_media_item.posted_at,\n  owned_media_item.last_modified,\n  owned_media_item.content_url,\n  owned_media_item.content_size,\n  owned_media_item.thumb_url,\n  owned_media_item.event_count,\n  owned_media_item.last_event\nFROM\n  owned_media_item\n  JOIN linked_account on owned_media_item.account_id = linked_account.id\nWHERE\n  owned_media_item.owner_id = $1\n  AND linked_account.source_site = $2\n  AND source_id = $3;\n"
   },
+  "03625e2a838681ba176381cb2e22e605ff90d34b93e12fd0424a27a867d16c2f": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    bluesky_post (repo, rkey, deleted_at)\nVALUES\n    ($1, $2, current_timestamp) ON CONFLICT (repo, rkey) DO\nUPDATE\nSET\n    deleted_at = current_timestamp\n"
+  },
   "03876c0d60e8b248fdb0fa80069f3303eed779cde1c5d3398b997107955a0241": {
     "describe": {
       "columns": [
@@ -1338,6 +1351,20 @@
     },
     "query": "SELECT\n    owner_id,\n    request_key,\n    request_secret\nFROM\n    twitter_auth\nWHERE\n    request_key = $1;\n"
   },
+  "5922afb966844f33df60aa03f876c1c26c0518ad588024115e2a38f0e2272c1d": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text",
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    bluesky_post (repo, rkey, created_at)\nVALUES\n    ($1, $2, $3) ON CONFLICT DO NOTHING;\n"
+  },
   "5a31bf2e799fe5b3f6f467576b048326ce1db4ec2392f55470b81d70c38d9d5a": {
     "describe": {
       "columns": [
@@ -1463,6 +1490,63 @@
       }
     },
     "query": "SELECT\n    id,\n    owner_id,\n    account_id,\n    source_id,\n    perceptual_hash,\n    sha256_hash \"sha256_hash: Sha256Hash\",\n    link,\n    title,\n    posted_at,\n    last_modified,\n    content_url,\n    content_size,\n    thumb_url,\n    event_count,\n    last_event\nFROM\n    owned_media_item\nWHERE\n    perceptual_hash <@ ($1, $2);\n"
+  },
+  "61379e0464f4576a6958754033b3997dc844d8e3932f7f2c0d83fb6d7c45a913": {
+    "describe": {
+      "columns": [
+        {
+          "name": "created_at",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "repo",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "post_rkey",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "blob_cid",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "size",
+          "ordinal": 4,
+          "type_info": "Int8"
+        },
+        {
+          "name": "sha256",
+          "ordinal": 5,
+          "type_info": "Bytea"
+        },
+        {
+          "name": "perceptual_hash",
+          "ordinal": 6,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Int8",
+          "Int8"
+        ]
+      }
+    },
+    "query": "SELECT\n    bluesky_post.created_at,\n    bluesky_image.*\nFROM\n    bluesky_image\n    JOIN bluesky_post ON bluesky_post.repo = bluesky_image.repo\n    AND bluesky_post.rkey = bluesky_image.post_rkey\nWHERE\n    perceptual_hash <@ ($1, $2)\n    AND deleted_at IS NULL;\n"
   },
   "6290db5d27179ff6aec17e60a11c0ca7210931abf147e5fbcf2dfa17fd2315cf": {
     "describe": {
@@ -2174,6 +2258,23 @@
       }
     },
     "query": "SELECT\n    *\nFROM\n    reddit_subreddit\nWHERE\n    name = $1;\n"
+  },
+  "8e92b26285704defe89be67c7a7c236f01d7beb5ee9ffad0863755795ce2009e": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text",
+          "Text",
+          "Int8",
+          "Bytea",
+          "Int8"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    bluesky_image (\n        repo,\n        post_rkey,\n        blob_cid,\n        size,\n        sha256,\n        perceptual_hash\n    )\nVALUES\n    ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING;\n"
   },
   "8ecca7bdf1355882cde2d9586363390532b68de510da9677f92fec09360ee037": {
     "describe": {

@@ -845,7 +845,7 @@ async fn load_archive(
 
         let mut archive = zip::ZipArchive::new(std::io::BufReader::new(file)).unwrap();
 
-        let matcher = regex::Regex::new(r#"/tweet(?:-part\d+)?\.js$"#).unwrap();
+        let matcher = regex::Regex::new(r"/tweet(?:-part\d+)?\.js$").unwrap();
         let tweet_files = archive
             .file_names()
             .filter(|file_name| matcher.is_match(file_name))

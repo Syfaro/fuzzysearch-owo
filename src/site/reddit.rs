@@ -318,7 +318,7 @@ async fn load_post(
     Ok(())
 }
 
-async fn limited_image_download(
+pub async fn limited_image_download(
     client: &reqwest::Client,
     url: &str,
     max_download: usize,

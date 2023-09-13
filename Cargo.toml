@@ -46,6 +46,7 @@ lettre = { version = "0.10", features = ["tokio1-native-tls", "tracing", "serde"
 md-5 = "0.10"
 oauth2 = { version = "4", features = ["reqwest"] }
 opentelemetry = "0.18"
+percent-encoding = "2.2"
 prometheus = { version = "0.13", features = ["process"] }
 radix_fmt = "1"
 rand = "0.8"
@@ -75,7 +76,6 @@ tracing-opentelemetry = "0.18"
 uuid = { version = "1", features = ["v4", "serde"] }
 zip = "0.6"
 zxcvbn = "2"
-percent-encoding = "2.2"
 
 furaffinity-rs = { git = "https://github.com/Syfaro/furaffinity-rs.git" }
 fuzzysearch = { git = "https://github.com/Syfaro/fuzzysearch-rs.git", features = ["trace", "local_hash"] }
