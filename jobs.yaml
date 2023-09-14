@@ -2,14 +2,14 @@ jobs:
   - name: check f-list
     every: "*/5 * * * *"
     job_type: flist_gallery
-    queue: fuzzysearch_owo_outgoing
+    queue: fuzzysearch_owo_bulk
     args: []
     custom:
       initiator: schedule
   - name: check reddit
     every: "*/5 * * * *"
     job_type: reddit_check
-    queue: fuzzysearch_owo_outgoing
+    queue: fuzzysearch_owo_bulk
     args: []
     custom:
       initiator: schedule

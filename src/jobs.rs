@@ -5,6 +5,7 @@ use foxlib::jobs::{
     FaktoryForge, FaktoryForgeMiddleware, FaktoryProducer, Job, JobExtra, JobQueue,
 };
 use futures::{StreamExt, TryStreamExt};
+use itertools::Itertools;
 use lettre::AsyncTransport;
 use redis::AsyncCommands;
 use rusoto_s3::S3;
@@ -18,13 +19,14 @@ use crate::{api, common, models, site, AsUrl, Error};
 pub enum Queue {
     Core,
     Outgoing,
+    OutgoingBulk,
 }
 
 impl Queue {
     fn label(&self) -> Option<&'static str> {
         match self {
             Self::Core => None,
-            Self::Outgoing => Some("outgoing"),
+            Self::Outgoing | Self::OutgoingBulk => Some("outgoing"),
         }
     }
 }
@@ -34,6 +36,7 @@ impl JobQueue for Queue {
         match self {
             Self::Core => "fuzzysearch_owo_core".into(),
             Self::Outgoing => "fuzzysearch_owo_outgoing".into(),
+            Self::OutgoingBulk => "fuzzysearch_owo_bulk".into(),
         }
     }
 }
@@ -535,6 +538,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
         .iter()
         .flat_map(|queue| queue.label())
         .chain(["fuzzysearch-owo"].into_iter())
+        .unique()
         .map(str::to_string)
         .collect();
 

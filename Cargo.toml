@@ -41,6 +41,7 @@ hmac = "0.12"
 image = "0.23"
 infer = "0.13"
 ipnetwork = "0.19"
+itertools = "0.11"
 lazy_static = "1"
 lettre = { version = "0.10", features = ["tokio1-native-tls", "tracing", "serde"] }
 md-5 = "0.10"

@@ -76,7 +76,7 @@ impl Job for ImportSubmissionBlueskyJob {
     type Queue = Queue;
 
     fn queue(&self) -> Self::Queue {
-        Queue::Outgoing
+        Queue::OutgoingBulk
     }
 
     fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
@@ -339,7 +339,7 @@ impl Job for LoadBlueskyPostJob {
     type Queue = Queue;
 
     fn queue(&self) -> Self::Queue {
-        Queue::Outgoing
+        Queue::OutgoingBulk
     }
 
     fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {

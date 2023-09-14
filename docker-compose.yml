@@ -29,7 +29,7 @@ services:
       - "DATABASE_URL=postgres://postgres:postgres@postgres/postgres?sslmode=disable"
       - "REDIS_DSN=redis://redis:6379"
       - "FAKTORY_HOST=tcp://faktory:7419"
-      - "FAKTORY_QUEUES=core,outgoing"
+      - "FAKTORY_QUEUES=core,outgoing,outgoing-bulk"
       - "METRICS_HOST=0.0.0.0:8082"
       - "JAEGER_COLLECTOR=localhost:6831"
     depends_on:
