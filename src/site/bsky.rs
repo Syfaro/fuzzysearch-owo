@@ -105,6 +105,12 @@ async fn import_submission(
         post,
     }: ImportSubmissionBlueskyJob,
 ) -> Result<(), Error> {
+    let account = models::LinkedAccount::lookup_by_id(&ctx.conn, account_id)
+        .await?
+        .ok_or(Error::Missing)?;
+    let account_data: BlueskyAccountData =
+        serde_json::from_value(account.data.ok_or(Error::Missing)?)?;
+
     let (_, rkey) = post.uri.rsplit_once('/').ok_or(Error::Missing)?;
 
     for image in post
@@ -122,8 +128,8 @@ async fn import_submission(
         };
 
         let url = format!(
-            "https://bsky.social/xrpc/com.atproto.sync.getBlob?did={}&cid={image_cid}",
-            post.author.did
+            "{}/xrpc/com.atproto.sync.getBlob?did={}&cid={image_cid}",
+            account_data.server, post.author.did
         );
 
         let image_data = ctx.client.get(url).send().await?.bytes().await?;
@@ -199,12 +205,18 @@ impl CollectedSite for BSky {
 
     #[tracing::instrument(skip_all, fields(user_id = %account.owner_id, account_id = %account.id))]
     async fn add_account(&self, ctx: &JobContext, account: LinkedAccount) -> Result<(), Error> {
-        let data: BlueskySession = serde_json::from_value(account.data.unwrap_or_default())?;
+        let mut data: BlueskyAccountData =
+            serde_json::from_value(account.data.unwrap_or_default())?;
+
+        let session = data.session.ok_or(Error::Missing)?;
 
         let resp: BlueskySession = ctx
             .client
-            .post("https://bsky.social/xrpc/com.atproto.server.refreshSession")
-            .bearer_auth(data.refresh_jwt)
+            .post(format!(
+                "{}/xrpc/com.atproto.server.refreshSession",
+                data.server
+            ))
+            .bearer_auth(session.refresh_jwt)
             .send()
             .await?
             .error_for_status()?
@@ -212,7 +224,7 @@ impl CollectedSite for BSky {
             .await?;
 
         let query = &[
-            ("actor", data.did.clone()),
+            ("actor", session.did.clone()),
             ("limit", "100".to_string()),
             ("filter", "posts_with_media".to_string()),
         ];
@@ -230,7 +242,7 @@ impl CollectedSite for BSky {
 
             let feed: BlueskyActorFeed = ctx
                 .client
-                .get("https://bsky.social/xrpc/app.bsky.feed.getAuthorFeed")
+                .get(format!("{}/xrpc/app.bsky.feed.getAuthorFeed", data.server))
                 .bearer_auth(&resp.access_jwt)
                 .query(&query)
                 .send()
@@ -274,7 +286,14 @@ impl CollectedSite for BSky {
         )
         .await?;
 
-        models::LinkedAccount::update_data(&ctx.conn, account.id, None).await?;
+        data.session = None;
+
+        models::LinkedAccount::update_data(
+            &ctx.conn,
+            account.id,
+            Some(serde_json::to_value(data)?),
+        )
+        .await?;
 
         Ok(())
     }
@@ -823,6 +842,7 @@ async fn auth(request: actix_web::HttpRequest, user: models::User) -> Result<Htt
 struct BlueskyAuthForm {
     username: String,
     password: String,
+    server: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -831,6 +851,13 @@ struct BlueskySession {
     did: String,
     access_jwt: String,
     refresh_jwt: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct BlueskyAccountData {
+    site_id: String,
+    server: String,
+    session: Option<BlueskySession>,
 }
 
 #[post("/auth")]
@@ -843,8 +870,12 @@ async fn auth_verify(
     form: web::Form<BlueskyAuthForm>,
 ) -> Result<HttpResponse, Error> {
     let client = reqwest::Client::default();
+
     let resp = client
-        .post("https://bsky.social/xrpc/com.atproto.server.createSession")
+        .post(format!(
+            "{}/xrpc/com.atproto.server.createSession",
+            form.server
+        ))
         .json(&serde_json::json!({
             "identifier": form.username,
             "password": form.password,
@@ -870,7 +901,19 @@ async fn auth_verify(
         match models::LinkedAccount::lookup_by_site_id(&conn, user.id, Site::Bluesky, &resp.did)
             .await?
         {
-            Some(account) => account,
+            Some(mut account) => {
+                tracing::info!("account already existed, updating data");
+
+                let data = serde_json::to_value(BlueskyAccountData {
+                    server: form.server.clone(),
+                    site_id: resp.did,
+                    session: None,
+                })?;
+
+                models::LinkedAccount::update_data(&conn, account.id, Some(data.clone())).await?;
+                account.data = Some(data);
+                account
+            }
             None => {
                 tracing::info!("got new account");
 
@@ -879,7 +922,11 @@ async fn auth_verify(
                     user.id,
                     Site::Bluesky,
                     &resp.did.clone(),
-                    Some(serde_json::to_value(resp)?),
+                    Some(serde_json::to_value(BlueskyAccountData {
+                        site_id: resp.did.clone(),
+                        server: form.server.clone(),
+                        session: Some(resp),
+                    })?),
                 )
                 .await?;
 
