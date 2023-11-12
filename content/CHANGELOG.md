@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.17.2 — Noveber 12th, 2023
+
+* Improved Bluesky support with direct federated server access.
+* Fixed an issue where background tasks could reduce site responsiveness.
+
 ## v0.17.1 – September 13th, 2023
 
 * Fixed an issue causing Bluesky posts to not process as expected.
