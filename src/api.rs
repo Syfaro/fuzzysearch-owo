@@ -59,6 +59,22 @@ pub enum EventMessage {
         account_id: Uuid,
         verified: bool,
     },
+    ResolvedDid {
+        did: String,
+        result: ResolvedDidResult,
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum ResolvedDidResult {
+    Success {
+        also_known_as: String,
+        service_endpoint: String,
+    },
+    Error {
+        message: String,
+    }
 }
 
 struct UnauthorizedWsEventSession;

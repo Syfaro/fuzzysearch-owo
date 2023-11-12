@@ -1,4 +1,4 @@
-use std::num::NonZeroU64;
+use std::{borrow::Cow, num::NonZeroU64};
 
 use actix_http::StatusCode;
 use actix_session::Session;
@@ -7,11 +7,14 @@ use askama::Template;
 use async_trait::async_trait;
 use foxlib::jobs::{FaktoryForge, FaktoryJob, FaktoryProducer, Job, JobExtra};
 use futures::TryStreamExt;
+use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
+use url::Url;
 use uuid::Uuid;
 
 use crate::{
+    api::ResolvedDidResult,
     jobs::{
         self, JobContext, JobInitiator, JobInitiatorExt, NatsNewImage, NewSubmissionJob, Queue,
         SearchExistingSubmissionsJob,
@@ -36,6 +39,7 @@ impl SiteFromConfig for BSky {
 impl WatchedSite for BSky {
     fn register_jobs(&self, forge: &mut FaktoryForge<jobs::JobContext, Error>) {
         LoadBlueskyPostJob::register(forge, load_bluesky_post);
+        ResolveDidJob::register(forge, resolve_did_impl);
     }
 }
 
@@ -278,8 +282,237 @@ impl CollectedSite for BSky {
 
 impl SiteServices for BSky {
     fn services() -> Vec<actix_web::Scope> {
-        vec![web::scope("/bluesky").service(services![auth, auth_verify])]
+        vec![web::scope("/bluesky").service(services![auth, auth_verify, resolve_did])]
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct ResolveQuery {
+    did: String,
+}
+
+#[get("/resolve-did")]
+async fn resolve_did(
+    faktory: web::Data<FaktoryProducer>,
+    user: models::User,
+    web::Query(query): web::Query<ResolveQuery>,
+) -> Result<HttpResponse, Error> {
+    faktory
+        .enqueue_job(ResolveDidJob {
+            user_id: user.id,
+            did: query.did.trim().to_string(),
+        })
+        .await?;
+
+    Ok(HttpResponse::new(StatusCode::NO_CONTENT))
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct ResolveDidJob {
+    user_id: Uuid,
+    did: String,
+}
+
+impl Job for ResolveDidJob {
+    const NAME: &'static str = "resolve_did";
+    type Data = Self;
+    type Queue = Queue;
+
+    fn queue(&self) -> Self::Queue {
+        Queue::Outgoing
+    }
+
+    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
+        Ok(None)
+    }
+
+    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+        Ok(vec![serde_json::to_value(self)?])
+    }
+
+    fn deserialize(mut args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
+        serde_json::from_value(args.remove(0))
+    }
+}
+
+async fn resolve_did_impl(
+    ctx: JobContext,
+    _job: FaktoryJob,
+    ResolveDidJob { user_id, did }: ResolveDidJob,
+) -> Result<(), Error> {
+    let (Ok(event) | Err(event)) = resolve_did_to_event(&did)
+        .await
+        .map_err(|message| ResolvedDidResult::Error { message });
+
+    let mut redis = ctx.redis.clone();
+    redis
+        .publish(
+            format!("user-events:{user_id}"),
+            serde_json::to_string(&crate::api::EventMessage::ResolvedDid { did, result: event })?,
+        )
+        .await?;
+
+    Ok(())
+}
+
+#[tracing::instrument]
+async fn resolve_did_to_event(did: &str) -> Result<ResolvedDidResult, String> {
+    let client = reqwest::Client::default();
+
+    let identity_doc = if let Some(domain) = did.strip_prefix("did:web:") {
+        tracing::debug!("did was web");
+
+        let url = Url::parse(&format!("https://{domain}"))
+            .map_err(|err| format!("could not parse web domain: {err}"))?;
+
+        if !matches!(url.origin(), url::Origin::Tuple(scheme, host, 443) if scheme == "https" && host.to_string() == domain)
+        {
+            return Err("web domain is not same as origin".to_string());
+        }
+
+        url.join("/.well-known/did.json")
+            .map_err(|err| format!("could not join well-known path to origin: {err}"))?
+    } else {
+        let did: Cow<'_, _> = if did.starts_with("did:plc:") {
+            tracing::debug!("did was already did:plc");
+
+            did.into()
+        } else {
+            use futures::future::Either;
+            use hickory_resolver::config::{ResolverConfig, ResolverOpts};
+
+            tracing::debug!("did appeared to be domain, attempting to resolve");
+
+            let resolver = hickory_resolver::TokioAsyncResolver::tokio(
+                ResolverConfig::default(),
+                ResolverOpts::default(),
+            );
+
+            let lookup_http = client
+                .get(format!("https://{did}/.well-known/atproto-did"))
+                .send();
+            let lookup_dns = resolver.txt_lookup(format!("_atproto.{did}"));
+            tokio::pin!(lookup_dns);
+
+            let decode_http = |resp: reqwest::Response| async {
+                resp.text()
+                    .await
+                    .map(|body| Cow::from(body))
+                    .map_err(|err| format!("could not load http response: {err}"))
+            };
+
+            let decode_dns = |dns_results: hickory_resolver::lookup::TxtLookup| async {
+                let mut iter = dns_results.into_iter();
+                let value = iter
+                    .next()
+                    .ok_or_else(|| "no dns records found".to_string())?
+                    .to_string()
+                    .strip_prefix("did=")
+                    .ok_or_else(|| "unknown did value in dns record".to_string())?
+                    .to_string();
+                if iter.next().is_some() {
+                    return Err("too many dns records".to_string());
+                }
+                Ok(Cow::from(value))
+            };
+
+            match futures::future::select(lookup_http, lookup_dns).await {
+                Either::Left((http, dns_fut)) => {
+                    tracing::debug!("http finished first");
+                    match http.and_then(|resp| resp.error_for_status()) {
+                        Ok(resp) => decode_http(resp).await?,
+                        Err(err) => {
+                            tracing::trace!("http request failed: {err}");
+                            let dns_results = dns_fut
+                                .await
+                                .map_err(|err| format!("could not perform dns query: {err}"))?;
+                            decode_dns(dns_results).await?
+                        }
+                    }
+                }
+                Either::Right((dns, http_fut)) => {
+                    tracing::debug!("dns finished first");
+                    match dns {
+                        Ok(results) => match decode_dns(results).await {
+                            Ok(results) => results,
+                            Err(err) => {
+                                tracing::debug!("dns lookup failed: {err}");
+                                match http_fut.await {
+                                    Ok(resp) => decode_http(resp).await?,
+                                    Err(err) => {
+                                        tracing::trace!("fallback http request failed: {err}");
+                                        return Err("dns and http lookup failed".to_string());
+                                    }
+                                }
+                            }
+                        },
+                        Err(err) => {
+                            tracing::trace!("dns lookup failed: {err}");
+                            match http_fut.await {
+                                Ok(resp) => decode_http(resp).await?,
+                                Err(err) => {
+                                    tracing::trace!("fallback http request failed: {err}");
+                                    return Err("dns and http lookup failed".to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        Url::parse(&format!("https://plc.directory/{did}"))
+            .map_err(|err| format!("could not construct plc request: {err}"))?
+    };
+
+    tracing::info!(%identity_doc, "found identity doc");
+
+    let identity: IdentityDocument = client
+        .get(identity_doc)
+        .send()
+        .await
+        .map_err(|err| format!("could not load identity document: {err}"))?
+        .json()
+        .await
+        .map_err(|err| format!("identity document was not valid json: {err}"))?;
+
+    if did.starts_with("did:") && identity.id != did {
+        return Err("returned id did not match provided id".to_string());
+    }
+
+    let also_known_as = identity
+        .also_known_as
+        .first()
+        .map(|s| s.as_str())
+        .unwrap_or(did)
+        .to_string();
+
+    let service_endpoint = identity
+        .service
+        .into_iter()
+        .find(|service| service.id == "#atproto_pds")
+        .ok_or_else(|| "missing atproto service".to_string())?
+        .service_endpoint;
+
+    Ok(ResolvedDidResult::Success {
+        also_known_as,
+        service_endpoint,
+    })
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct IdentityDocument {
+    id: String,
+    also_known_as: Vec<String>,
+    service: Vec<IdentityService>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct IdentityService {
+    id: String,
+    service_endpoint: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

@@ -9,15 +9,17 @@
             <div class="field">
               <label class="label" for="server">Server</label>
               <div class="control">
-                <input class="input" type="text" id="server" placeholder="Server" name="server" autocomplete="off" value="bsky.social" disabled>
+                <input class="input" type="text" id="bluesky-server" placeholder="Server" name="server" autocomplete="off" disabled>
               </div>
+              <p class="help">Your server is automatically identified from your username.</p>
             </div>
 
-            <div class="field">
-              <label class="label" for="username">Username</label>
+            <div id="bluesky-field" class="field">
+              <label class="label" for="bluesky-username">Username</label>
               <div class="control">
-                <input class="input" type="text" id="username" placeholder="Username" name="username" autocomplete="off">
+                <input class="input" type="text" id="bluesky-username" placeholder="Username" name="username" autocomplete="off">
               </div>
+              <p class="help is-hidden" aria-hidden="true"></p>
             </div>
 
             <div class="field">
@@ -32,7 +34,7 @@
             </div>
 
             <div class="control">
-              <button class="button is-primary is-fullwidth">Verify</button>
+              <button id="bluesky-verify" class="button is-primary is-fullwidth" disabled>Verify</button>
             </div>
           </form>
 

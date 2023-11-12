@@ -107,6 +107,44 @@ function subscribeToEvents() {
         }
 
         break;
+
+      case 'resolved_did':
+        const username = document.getElementById('bluesky-username');
+        if (!username) {
+          return;
+        }
+
+        if (username.value != payload['did']) {
+          return;
+        }
+
+        const server = document.getElementById('bluesky-server');
+        const verify = document.getElementById('bluesky-verify');
+        const field = document.getElementById('bluesky-field');
+        const result = payload['result'];
+
+        const isSuccess = result['status'] === 'success';
+        if (!isSuccess) {
+          console.error(`Error resolving DID: ${result['message']}`);
+        }
+
+        verify.disabled = !isSuccess;
+        verify.classList.remove('is-loading');
+
+        server.value = isSuccess ? result['service_endpoint'] : '';
+
+        username.classList.toggle('is-success', isSuccess);
+        username.classList.toggle('is-danger', !isSuccess);
+
+        const help = field.querySelector('.help');
+        help.ariaHidden = !isSuccess;
+        help.classList.toggle('is-hidden', isSuccess);
+
+        if (!isSuccess) {
+          help.textContent = "Sorry, your username could not be resolved.";
+        }
+
+        break;
     }
   };
 
@@ -261,3 +299,20 @@ async function performChunkedUpload(file, progressBar) {
 
   return collectionId;
 }
+
+document.getElementById('bluesky-username')?.addEventListener('blur', (ev) => {
+  const username = ev.target.value.trim();
+  if (username.length === 0) {
+    return;
+  };
+
+  const help = document.querySelector('#bluesky-field .help');
+  help.textContent = "Resolving your username…";
+
+  document.getElementById('bluesky-verify').classList.add('is-loading');
+
+  const url = new URL('/bluesky/resolve-did', window.location.href);
+  url.searchParams.set('did', username);
+
+  fetch(url);
+});

@@ -25,7 +25,7 @@ actix-web-actors = "4"
 actix-web-httpauth = "0.8"
 anyhow = "1"
 argonautica = "0.2"
-askama = { git = "https://github.com/djc/askama.git", rev = "521964e12e7d4f0381c7d8d2c5ca1911c12a5466", features = ["serde-json", "humansize", "markdown"] }
+askama = { version = "0.12.1" , features = ["serde-json", "humansize", "markdown"] }
 async-nats = "0.29.0"
 async-trait = "0.1"
 base64 = "0.21"
@@ -37,6 +37,7 @@ egg-mode = "0.16"
 faktory = "0.12"
 futures = "0.3"
 hex = "0.4"
+hickory-resolver = "0.24"
 hmac = "0.12"
 image = "0.23"
 infer = "0.13"
@@ -74,6 +75,7 @@ tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-actix-web = { version = "0.7", features = ["opentelemetry_0_18"] }
 tracing-opentelemetry = "0.18"
+url = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 zip = "0.6"
 zxcvbn = "2"
