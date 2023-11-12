@@ -317,10 +317,13 @@ async fn resolve_did(
     web::Query(query): web::Query<ResolveQuery>,
 ) -> Result<HttpResponse, Error> {
     faktory
-        .enqueue_job(ResolveDidJob {
-            user_id: user.id,
-            did: query.did.trim().to_string(),
-        })
+        .enqueue_job(
+            ResolveDidJob {
+                user_id: user.id,
+                did: query.did.trim().to_string(),
+            }
+            .initiated_by(JobInitiator::User { user_id: user.id }),
+        )
         .await?;
 
     Ok(HttpResponse::new(StatusCode::NO_CONTENT))
@@ -416,7 +419,7 @@ async fn resolve_did_to_event(did: &str) -> Result<ResolvedDidResult, String> {
             let decode_http = |resp: reqwest::Response| async {
                 resp.text()
                     .await
-                    .map(|body| Cow::from(body))
+                    .map(Cow::from)
                     .map_err(|err| format!("could not load http response: {err}"))
             };
 
