@@ -3,16 +3,12 @@ INSERT INTO
         owner_id,
         perceptual_hash,
         sha256_hash,
-        posted_at,
-        last_modified,
-        title
+        last_modified
     )
 VALUES
     (
         $1,
         $2,
         $3,
-        current_timestamp,
-        current_timestamp,
-        $4
+        current_timestamp
     ) RETURNING id;

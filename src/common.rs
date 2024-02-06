@@ -324,8 +324,7 @@ async fn notify_email(
     let body = SimilarEmailTemplate {
         username: user.display_name(),
         source_link: owned_item
-            .link
-            .as_deref()
+            .best_link()
             .unwrap_or_else(|| owned_item.content_url.as_deref().unwrap_or("unknown")),
         site_name: &sub.site.to_string(),
         poster_name: sub.posted_by.as_deref().unwrap_or("unknown"),
@@ -375,8 +374,7 @@ async fn notify_telegram(
     let body = SimilarTelegramTemplate {
         username: user.display_name(),
         source_link: owned_item
-            .link
-            .as_deref()
+            .best_link()
             .unwrap_or_else(|| owned_item.content_url.as_deref().unwrap_or("unknown")),
         site_name: &sub.site.to_string(),
         poster_name: sub.posted_by.as_deref().unwrap_or("unknown"),
@@ -498,12 +496,6 @@ pub async fn handle_multipart_upload(
             continue;
         }
 
-        let title = field
-            .headers()
-            .get("x-image-title")
-            .map(|val| String::from_utf8_lossy(val.as_bytes()))
-            .map(|title| title.to_string());
-
         let mut file = tokio::task::spawn_blocking(move || -> Result<_, String> {
             let file = tempfile::tempfile().map_err(|err| err.to_string())?;
             Ok(tokio::fs::File::from_std(file))
@@ -529,10 +521,7 @@ pub async fn handle_multipart_upload(
             continue;
         }
 
-        let sha256_hash: [u8; 32] = hasher
-            .finalize()
-            .try_into()
-            .expect("sha256 hash was wrong size");
+        let sha256_hash: [u8; 32] = hasher.finalize().into();
         let hash_str = hex::encode(sha256_hash);
 
         tracing::info!(size, hash = ?hash_str, "received complete file from client");
@@ -564,7 +553,6 @@ pub async fn handle_multipart_upload(
             user.id,
             i64::from_be_bytes(perceptual_hash),
             sha256_hash,
-            title.as_deref(),
         )
         .await?;
 

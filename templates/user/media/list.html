@@ -78,7 +78,7 @@
                 </td>
                 <td>
                   <a href="/user/media/view/{{ item.id.as_url() }}">
-                    {% match item.title %}
+                    {% match item.best_title() %}
                     {% when Some with (title) %}
                     {{ title }}
                     {% else %}

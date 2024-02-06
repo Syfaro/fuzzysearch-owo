@@ -877,8 +877,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                 .flat_map(|(media_id, event)| media.get(&media_id).map(|media| (media, event)))
                 .map(|(media, event)| SimilarItem {
                     source_link: media
-                        .link
-                        .as_deref()
+                        .best_link()
                         .unwrap_or_else(|| media.content_url.as_deref().unwrap_or("unknown"))
                         .to_owned(),
                     site_name: event.site.to_string(),

@@ -10,6 +10,7 @@ use redis::AsyncCommands;
 use rusoto_s3::S3;
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
+use sqlx::types::Json;
 use uuid::Uuid;
 
 use crate::site::SiteFromConfig;
@@ -480,15 +481,8 @@ pub struct OwnedMediaItem {
     pub id: Uuid,
     pub owner_id: Uuid,
 
-    pub account_id: Option<Uuid>,
-    pub source_id: Option<String>,
-
     pub perceptual_hash: Option<i64>,
     pub sha256_hash: Sha256Hash,
-
-    pub link: Option<String>,
-    pub title: Option<String>,
-    pub posted_at: Option<chrono::DateTime<chrono::Utc>>,
 
     pub last_modified: chrono::DateTime<chrono::Utc>,
 
@@ -498,6 +492,49 @@ pub struct OwnedMediaItem {
 
     pub event_count: i32,
     pub last_event: Option<chrono::DateTime<chrono::Utc>>,
+
+    pub accounts: Option<Json<Vec<OwnedMediaItemAccount>>>,
+}
+
+impl OwnedMediaItem {
+    pub fn best_link(&self) -> Option<&str> {
+        self.accounts
+            .as_ref()?
+            .iter()
+            .max_by_key(|account| account.posted_at)
+            .map(|account| account.link.as_str())
+    }
+
+    pub fn best_title(&self) -> Option<&str> {
+        self.accounts
+            .as_ref()?
+            .iter()
+            .filter_map(|account| {
+                account
+                    .title
+                    .as_deref()
+                    .map(|title| (title, account.posted_at))
+            })
+            .max_by_key(|(_title, posted_at)| *posted_at)
+            .map(|(title, _posted_at)| title)
+    }
+
+    pub fn posted_most_recently(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        self.accounts
+            .as_ref()?
+            .iter()
+            .max_by_key(|account| account.posted_at)
+            .and_then(|account| account.posted_at)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct OwnedMediaItemAccount {
+    pub account_id: Uuid,
+    pub source_id: String,
+    pub link: String,
+    pub title: Option<String>,
+    pub posted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Deserialize)]
@@ -563,7 +600,6 @@ impl OwnedMediaItem {
         user_id: Uuid,
         perceptual_hash: i64,
         sha256_hash: [u8; 32],
-        title: Option<&str>,
     ) -> Result<Uuid, Error> {
         let item_id = sqlx::query_file_scalar!(
             "queries/owned_media/add_manual_item.sql",
@@ -574,7 +610,6 @@ impl OwnedMediaItem {
                 None
             },
             sha256_hash.to_vec(),
-            title,
         )
         .fetch_one(conn)
         .await?;
@@ -594,21 +629,32 @@ impl OwnedMediaItem {
         title: Option<String>,
         posted_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<Uuid, Error> {
-        let item = sqlx::query_file_scalar!(
+        let mut tx = conn.begin().await?;
+
+        let item_id = sqlx::query_file_scalar!(
             "queries/owned_media/add_item.sql",
             user_id,
+            perceptual_hash.filter(|hash| *hash != 0),
+            sha256_hash.to_vec()
+        )
+        .fetch_one(&mut tx)
+        .await?;
+
+        sqlx::query_file!(
+            "queries/owned_media/link_site_account.sql",
+            item_id,
             account_id,
             source_id.to_string(),
-            perceptual_hash.filter(|hash| *hash != 0),
-            sha256_hash.to_vec(),
             link,
             title,
             posted_at
         )
-        .fetch_one(conn)
+        .execute(&mut tx)
         .await?;
 
-        Ok(item)
+        tx.commit().await?;
+
+        Ok(item_id)
     }
 
     pub async fn update_media(
@@ -666,7 +712,7 @@ impl OwnedMediaItem {
     }
 
     pub fn alt_text(&self) -> String {
-        match (self.title.as_ref(), self.posted_at) {
+        match (self.best_title(), self.posted_most_recently()) {
             (Some(title), Some(posted_at)) => {
                 format!("{} posted {}", title, posted_at.to_rfc2822())
             }

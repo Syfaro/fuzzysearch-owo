@@ -471,10 +471,7 @@ async fn add_submission_twitter(
 
         let mut sha256 = sha2::Sha256::new();
         sha256.update(&image_data);
-        let sha256: [u8; 32] = sha256
-            .finalize()
-            .try_into()
-            .expect("sha256 was wrong length");
+        let sha256: [u8; 32] = sha256.finalize().into();
 
         let (im, perceptual_hash) = if let Ok(im) = image::load_from_memory(&image_data) {
             let hasher = fuzzysearch_common::get_hasher();
@@ -1036,10 +1033,7 @@ fn process_tweet<R: std::io::Read + std::io::Seek>(
 
     let mut sha256 = sha2::Sha256::new();
     sha256.update(&image_data);
-    let sha256: [u8; 32] = sha256
-        .finalize()
-        .try_into()
-        .expect("sha256 was wrong length");
+    let sha256: [u8; 32] = sha256.finalize().into();
 
     let (im, perceptual_hash) = if let Ok(im) = image::load_from_memory(&image_data) {
         let hasher = fuzzysearch_common::get_hasher();

@@ -391,13 +391,14 @@ async fn check_post(
         .await?
         .into_iter()
         .filter_map(|media| {
-            let account = accounts.get(&media.account_id?)?;
+            let account_id = media.accounts.as_ref()?.0.first()?.account_id;
+            let account = accounts.get(&account_id)?;
 
             Some(CheckLink {
-                url: media.link?,
+                url: media.best_link()?.to_string(),
                 site: account.source_site,
                 username: account.username.clone(),
-                posted_at: media.posted_at,
+                posted_at: media.posted_most_recently(),
             })
         })
         .collect();
@@ -1227,26 +1228,26 @@ async fn rss_feed(
         .ok()?;
 
         let item = rss::ItemBuilder::default()
-            .guid(
+            .guid(Some(
                 rss::GuidBuilder::default()
                     .value(entry.event.id.to_string())
                     .permalink(false)
                     .build(),
-            )
-            .pub_date(entry.event.last_updated.to_rfc2822())
-            .title("Image match found".to_string())
-            .description(entry.event.display())
-            .content(content)
-            .link(media_url.to_string())
+            ))
+            .pub_date(Some(entry.event.last_updated.to_rfc2822()))
+            .title(Some("Image match found".to_string()))
+            .description(Some(entry.event.display()))
+            .content(Some(content))
+            .link(Some(media_url.to_string()))
             .build();
 
         Some(item)
     });
 
     let channel = rss::ChannelBuilder::default()
-        .title("FuzzySearch OwO Feed")
+        .title("FuzzySearch OwO Feed".to_string())
         .link(config.host_url.clone())
-        .description("Image upload event feed.")
+        .description("Image upload event feed.".to_string())
         .items(items.collect::<Vec<_>>())
         .build();
 

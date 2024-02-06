@@ -1,23 +1,20 @@
 SELECT
-  owned_media_item.id,
-  owned_media_item.owner_id,
-  owned_media_item.account_id,
-  owned_media_item.source_id,
-  owned_media_item.perceptual_hash,
-  owned_media_item.sha256_hash "sha256_hash: Sha256Hash",
-  owned_media_item.link,
-  owned_media_item.title,
-  owned_media_item.posted_at,
-  owned_media_item.last_modified,
-  owned_media_item.content_url,
-  owned_media_item.content_size,
-  owned_media_item.thumb_url,
-  owned_media_item.event_count,
-  owned_media_item.last_event
+  owned_media_item_accounts.id "id!",
+  owned_media_item_accounts.owner_id "owner_id!",
+  perceptual_hash,
+  sha256_hash "sha256_hash!: Sha256Hash",
+  last_modified "last_modified!",
+  content_url,
+  content_size,
+  thumb_url,
+  event_count "event_count!",
+  last_event,
+  accounts "accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>"
 FROM
-  owned_media_item
-  JOIN linked_account on owned_media_item.account_id = linked_account.id
+  owned_media_item_accounts
+  JOIN owned_media_item_account ON owned_media_item_accounts.id = owned_media_item_account.owned_media_item_id
+  JOIN linked_account on owned_media_item_account.account_id = linked_account.id
 WHERE
-  owned_media_item.owner_id = $1
+  owned_media_item_accounts.owner_id = $1
   AND linked_account.source_site = $2
-  AND source_id = $3;
+  AND owned_media_item_account.source_id = $3;

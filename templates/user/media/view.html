@@ -14,14 +14,14 @@
   <div class="container">
     <div class="columns is-centered">
       <div class="column is-one-third">
-        {% match media.title %}
+        {% match media.best_title() %}
         {% when Some with (title) %}
         <h1 class="title has-text-centered">{{ title }}</h1>
         {% else %}
         <h1 class="title has-text-centered">Media Item</h1>
         {% endmatch %}
 
-        {% match media.posted_at %}
+        {% match media.posted_most_recently() %}
         {% when Some with (posted_at) %}
           <h3 class="subtitle has-text-centered">{{ posted_at }}</h3>
         {% else %}
@@ -134,7 +134,7 @@
           <form method="POST" action="/user/media/remove">
             <input type="hidden" name="media_id" value="{{ media.id }}">
             <div class="field is-grouped">
-              {% match media.link %}
+              {% match media.best_link() %}
               {% when Some with (link) %}
               <div class="control is-flex-grow-1">
                 <a href="{{ link }}" target="_blank" class="button is-fullwidth is-primary">View</a>

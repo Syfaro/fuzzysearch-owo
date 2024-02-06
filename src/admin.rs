@@ -99,7 +99,7 @@ async fn inject_post(
         } else {
             None
         },
-        sha256: Some(sha.try_into().expect("sha256 was wrong length")),
+        sha256: Some(sha.into()),
         perceptual_hash: Some(hash),
         content_url: form.content_url.clone(),
         page_url: if !form.page_url.is_empty() {
