@@ -68,7 +68,14 @@
 
           <div>
             <div class="control is-flex-grow-1">
-              <button class="button is-fullwidth is-info">Merge</button>
+              <button class="button is-fullwidth is-info">
+                <span class="icon-text">
+                  <span class="icon">
+                    <i class="bi bi-lightning-charge-fill"></i>
+                  </span>
+                  <span>Merge</span>
+                </span>
+              </button>
             </div>
           </div>
         </form>
@@ -89,7 +96,7 @@
                 <th>Posted By</th>
                 <th>Found</th>
                 <th>Link</th>
-                <th>Actions</th>
+                <th class="has-text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -116,7 +123,7 @@
                     <a href="{{ image.best_link() }}" target="_blank">{{ image.best_link()|clean_link }}</a>
                   </span>
                 </td>
-                <td class="has-text-centered">
+                <td class="has-text-right">
                   <form method="POST">
                     <input type="hidden" name="redirect_url" value="{{ url }}">
                     <input type="hidden" name="site" value="{{ image.site.to_string() }}">
@@ -124,9 +131,23 @@
                     {% match image.poster_pair() %}
                     {% when Some with (poster_pair) %}
                     {% if allowlisted_users.contains_key(poster_pair) %}
-                    <button formaction="/user/allowlist/remove" class="button has-tooltip-left" data-tooltip="Receive notifications when this account posts on this site">Un-allowlist Poster</a>
+                    <button formaction="/user/allowlist/remove" class="button has-tooltip-left" data-tooltip="Receive notifications when this account posts on this site">
+                      <span class="icon-text">
+                        <span class="icon">
+                          <i class="bi bi-clipboard-x-fill"></i>
+                        </span>
+                        <span>Un-Allowlist Poster</span>
+                      </span>
+                    </button>
                     {% else %}
-                    <button formaction="/user/allowlist/add" class="button has-tooltip-left" data-tooltip="Skip sending notifications when this account posts on this site">Allowlist Poster</a>
+                    <button formaction="/user/allowlist/add" class="button has-tooltip-left" data-tooltip="Skip sending notifications when this account posts on this site">
+                      <span class="icon-text">
+                        <span class="icon">
+                          <i class="bi bi-clipboard-plus"></i>
+                        </span>
+                        <span>Allowlist Poster</span>
+                      </span>
+                    </button>
                     {% endif %}
                     {% else %}
                     <button class="button is-text" disabled>No Actions Available</button>
@@ -217,7 +238,14 @@
           <form method="POST" action="/user/media/remove">
             <input type="hidden" name="media_id" value="{{ media.id }}">
             <div class="control is-flex-grow-1">
-              <button class="button is-fullwidth is-danger">Remove Media</button>
+              <button class="button is-fullwidth is-danger">
+                <span class="icon-text">
+                  <span class="icon">
+                    <i class="bi bi-trash-fill"></i>
+                  </span>
+                  <span>Remove Media</span>
+                </span>
+              </button>
             </div>
           </form>
         </div>
