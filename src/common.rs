@@ -436,7 +436,7 @@ async fn import_add(
 
     let sha256_hash = sub.sha256.ok_or(Error::Missing)?;
 
-    let item = models::OwnedMediaItem::add_item(
+    let media_id = models::OwnedMediaItem::add_item(
         &ctx.conn,
         user_id,
         account_id,
@@ -451,10 +451,18 @@ async fn import_add(
 
     match download_image(ctx, &sub.content_url).await {
         Ok(im) => {
-            models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item, im).await?
+            models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, media_id, im)
+                .await?;
         }
         Err(err) => tracing::warn!("could not attach image: {}", err),
     }
+
+    ctx.producer
+        .enqueue_job(
+            jobs::SearchExistingSubmissionsJob { user_id, media_id }
+                .initiated_by(jobs::JobInitiator::user(user_id)),
+        )
+        .await?;
 
     Ok(())
 }
