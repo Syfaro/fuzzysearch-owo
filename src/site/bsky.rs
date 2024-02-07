@@ -757,17 +757,20 @@ pub async fn ingest_bsky(ctx: JobContext) {
                     Ok(data) => data,
                     Err(err) => {
                         tracing::warn!("{err}: {}", String::from_utf8_lossy(&message.payload));
-                        message
-                            .ack_with(async_nats::jetstream::AckKind::Term)
-                            .await
-                            .unwrap();
+                        if let Err(err) =
+                            message.ack_with(async_nats::jetstream::AckKind::Term).await
+                        {
+                            tracing::error!("could not term message: {err:?}");
+                        }
                         continue;
                     }
                 };
 
                 if !matches!(payload.data.embed, Some(PostEmbed::Images { .. })) {
                     tracing::trace!("post did not contain images, skipping");
-                    message.ack().await.unwrap();
+                    if let Err(err) = message.ack().await {
+                        tracing::error!("could not ack empty message: {err:?}");
+                    }
                     continue;
                 }
 
@@ -793,20 +796,20 @@ pub async fn ingest_bsky(ctx: JobContext) {
                         Ok(data) => data,
                         Err(err) => {
                             tracing::warn!("{err}: {}", String::from_utf8_lossy(&message.payload));
-                            message
-                                .ack_with(async_nats::jetstream::AckKind::Term)
-                                .await
-                                .unwrap();
+                            if let Err(err) =
+                                message.ack_with(async_nats::jetstream::AckKind::Term).await
+                            {
+                                tracing::error!("could not term message: {err:?}");
+                            }
                             continue;
                         }
                     };
 
                 let Some((_collection, rkey)) = payload.path.split_once('/') else {
                     tracing::error!("payload path was unexpected");
-                    message
-                        .ack_with(async_nats::jetstream::AckKind::Term)
-                        .await
-                        .unwrap();
+                    if let Err(err) = message.ack_with(async_nats::jetstream::AckKind::Term).await {
+                        tracing::error!("could not term message: {err:?}");
+                    }
                     continue;
                 };
 
