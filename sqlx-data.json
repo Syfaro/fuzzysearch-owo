@@ -2316,6 +2316,19 @@
     },
     "query": "UPDATE\n    user_account\nSET\n    hashed_password = $2,\n    reset_token = NULL\nWHERE\n    id = $1;\n"
   },
+  "92166389b1f9acf2f9096bc524840da8a295b3530b437729b0c885e01fdf40fd": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Bool"
+        ]
+      }
+    },
+    "query": "UPDATE\n    user_account\nSET\n    is_tester = $2\nWHERE\n    id = $1;\n"
+  },
   "9256e2b5b3865b72ad7cf3ab1fc98f6d01630fa44fbe82b5b184e58d25597b44": {
     "describe": {
       "columns": [],
