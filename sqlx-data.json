@@ -2581,6 +2581,87 @@
     },
     "query": "DELETE FROM\n    user_account\nWHERE\n    id = $1 RETURNING id;\n"
   },
+  "b0912bc4ed65dd7a574c24ed1caf4bfd692aa22f9ab4c026ad40331176758477": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id!",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "owner_id!",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "perceptual_hash",
+          "ordinal": 2,
+          "type_info": "Int8"
+        },
+        {
+          "name": "sha256_hash!: Sha256Hash",
+          "ordinal": 3,
+          "type_info": "Bytea"
+        },
+        {
+          "name": "last_modified!",
+          "ordinal": 4,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "content_url",
+          "ordinal": 5,
+          "type_info": "Text"
+        },
+        {
+          "name": "content_size",
+          "ordinal": 6,
+          "type_info": "Int8"
+        },
+        {
+          "name": "thumb_url",
+          "ordinal": 7,
+          "type_info": "Text"
+        },
+        {
+          "name": "event_count!",
+          "ordinal": 8,
+          "type_info": "Int4"
+        },
+        {
+          "name": "last_event",
+          "ordinal": 9,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>",
+          "ordinal": 10,
+          "type_info": "Jsonb"
+        }
+      ],
+      "nullable": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Bytea"
+        ]
+      }
+    },
+    "query": "SELECT\n    id \"id!\",\n    owner_id \"owner_id!\",\n    perceptual_hash,\n    sha256_hash \"sha256_hash!: Sha256Hash\",\n    last_modified \"last_modified!\",\n    content_url,\n    content_size,\n    thumb_url,\n    event_count \"event_count!\",\n    last_event,\n    accounts \"accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>\"\nFROM\n    owned_media_item_accounts\nWHERE\n    owner_id = $1\n    AND sha256_hash = $2;\n"
+  },
   "b0fbf09a6604c3b9633c76f3820cdc4e1abe842981a2e4f23b72c0c5c2ed2205": {
     "describe": {
       "columns": [],
@@ -3139,6 +3220,16 @@
       }
     },
     "query": "DELETE FROM\n    twitter_auth\nWHERE\n    request_key = $1;\n"
+  },
+  "d7090cbdfb72a4cf39b1403b5abef7762c433e3db82e3c4f076029a5e5d31d9c": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "INSERT INTO\n    owned_media_item_account (\n        owned_media_item_id,\n        account_id,\n        source_id,\n        link,\n        title,\n        posted_at\n    )\nSELECT\n    id,\n    account_id,\n    source_id,\n    link,\n    title,\n    posted_at\nFROM\n    owned_media_item\nWHERE\n    account_id IS NOT NULL;\n"
   },
   "d9d29a607cd182b3e01e18a216655d4a336aa0507c5c792fc933b09b4a86f478": {
     "describe": {
