@@ -25,6 +25,7 @@ pub struct User {
     pub telegram_id: Option<i64>,
     pub telegram_name: Option<String>,
     pub is_admin: bool,
+    pub is_tester: bool,
     pub display_name: Option<String>,
     pub unsubscribe_token: Uuid,
     pub rss_token: Uuid,
@@ -85,6 +86,8 @@ impl User {
     pub fn role_name(&self) -> &'static str {
         if self.is_admin {
             "admin"
+        } else if self.is_tester {
+            "tester"
         } else {
             "user"
         }
@@ -342,6 +345,18 @@ impl User {
         )
         .execute(conn)
         .await?;
+
+        Ok(())
+    }
+
+    pub async fn update_tester(
+        conn: &sqlx::PgPool,
+        user_id: Uuid,
+        enabled: bool,
+    ) -> Result<(), Error> {
+        sqlx::query_file!("queries/user/update_tester.sql", user_id, enabled)
+            .execute(conn)
+            .await?;
 
         Ok(())
     }

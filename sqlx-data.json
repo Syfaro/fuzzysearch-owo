@@ -137,6 +137,11 @@
           "name": "reset_token",
           "ordinal": 12,
           "type_info": "Text"
+        },
+        {
+          "name": "is_tester",
+          "ordinal": 13,
+          "type_info": "Bool"
         }
       ],
       "nullable": [
@@ -152,7 +157,8 @@
         false,
         false,
         false,
-        true
+        true,
+        false
       ],
       "parameters": {
         "Left": [
@@ -1205,6 +1211,11 @@
           "name": "reset_token",
           "ordinal": 12,
           "type_info": "Text"
+        },
+        {
+          "name": "is_tester",
+          "ordinal": 13,
+          "type_info": "Bool"
         }
       ],
       "nullable": [
@@ -1220,7 +1231,8 @@
         false,
         false,
         false,
-        true
+        true,
+        false
       ],
       "parameters": {
         "Left": [
@@ -1765,6 +1777,11 @@
           "name": "reset_token",
           "ordinal": 12,
           "type_info": "Text"
+        },
+        {
+          "name": "is_tester",
+          "ordinal": 13,
+          "type_info": "Bool"
         }
       ],
       "nullable": [
@@ -1780,7 +1797,8 @@
         false,
         false,
         false,
-        true
+        true,
+        false
       ],
       "parameters": {
         "Left": [
@@ -2779,6 +2797,11 @@
           "name": "reset_token",
           "ordinal": 12,
           "type_info": "Text"
+        },
+        {
+          "name": "is_tester",
+          "ordinal": 13,
+          "type_info": "Bool"
         }
       ],
       "nullable": [
@@ -2794,7 +2817,8 @@
         false,
         false,
         false,
-        true
+        true,
+        false
       ],
       "parameters": {
         "Left": [
@@ -3389,6 +3413,11 @@
           "name": "reset_token",
           "ordinal": 12,
           "type_info": "Text"
+        },
+        {
+          "name": "is_tester",
+          "ordinal": 13,
+          "type_info": "Bool"
         }
       ],
       "nullable": [
@@ -3404,7 +3433,8 @@
         false,
         false,
         false,
-        true
+        true,
+        false
       ],
       "parameters": {
         "Left": [
@@ -3538,6 +3568,11 @@
           "name": "reset_token",
           "ordinal": 12,
           "type_info": "Text"
+        },
+        {
+          "name": "is_tester",
+          "ordinal": 13,
+          "type_info": "Bool"
         }
       ],
       "nullable": [
@@ -3553,7 +3588,8 @@
         false,
         false,
         false,
-        true
+        true,
+        false
       ],
       "parameters": {
         "Left": [

@@ -159,11 +159,18 @@ async fn settings_post(
         _ => None,
     };
 
+    let tester = form_fields
+        .get("is-tester")
+        .and_then(|value| value.first())
+        .map(|value| value == "on")
+        .unwrap_or_default();
+
     futures::try_join!(
         models::UserSetting::set(&conn, user.id, &email_frequency),
         models::UserSetting::set(&conn, user.id, &telegram_notifications),
         models::UserSetting::set(&conn, user.id, &skipped_sites),
         models::User::update_display_name(&conn, user.id, display_name),
+        models::User::update_tester(&conn, user.id, tester),
     )?;
 
     let email_address = match form_fields.get("email").and_then(|value| value.first()) {
