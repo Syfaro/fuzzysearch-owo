@@ -40,7 +40,7 @@ async fn home(
 ) -> Result<HttpResponse, Error> {
     let user_item_count = models::OwnedMediaItem::user_item_count(&conn, user.id);
     let recent_media = models::OwnedMediaItem::recent_media(&conn, user.id, None);
-    let monitored_accounts = models::LinkedAccount::owned_by_user(&conn, user.id);
+    let monitored_accounts = models::LinkedAccount::owned_by_user(&conn, user.id, false);
 
     let ((item_count, total_content_size), recent_media, monitored_accounts) =
         futures::try_join!(user_item_count, recent_media, monitored_accounts)?;
@@ -384,7 +384,7 @@ async fn check_post(
         .map_err(|_err| Error::unknown_message("join error"))??;
 
         let accounts: HashMap<Uuid, models::LinkedAccount> =
-            models::LinkedAccount::owned_by_user(&conn, user.id)
+            models::LinkedAccount::owned_by_user(&conn, user.id, true)
                 .await?
                 .into_iter()
                 .map(|account| (account.id, account))

@@ -1157,21 +1157,29 @@ impl LinkedAccount {
         Ok(account)
     }
 
-    pub async fn owned_by_user(conn: &sqlx::PgPool, user_id: Uuid) -> Result<Vec<Self>, Error> {
-        let accounts = sqlx::query_file!("queries/linked_account/owned_by_user.sql", user_id)
-            .map(|row| LinkedAccount {
-                id: row.id,
-                owner_id: row.owner_id,
-                source_site: row.source_site.parse().expect("unknown site in database"),
-                username: row.username,
-                last_update: row.last_update,
-                loading_state: row
-                    .loading_state
-                    .and_then(|loading_state| serde_json::from_value(loading_state).ok()),
-                data: row.data,
-            })
-            .fetch_all(conn)
-            .await?;
+    pub async fn owned_by_user(
+        conn: &sqlx::PgPool,
+        user_id: Uuid,
+        include_disabled: bool,
+    ) -> Result<Vec<Self>, Error> {
+        let accounts = sqlx::query_file!(
+            "queries/linked_account/owned_by_user.sql",
+            user_id,
+            include_disabled
+        )
+        .map(|row| LinkedAccount {
+            id: row.id,
+            owner_id: row.owner_id,
+            source_site: row.source_site.parse().expect("unknown site in database"),
+            username: row.username,
+            last_update: row.last_update,
+            loading_state: row
+                .loading_state
+                .and_then(|loading_state| serde_json::from_value(loading_state).ok()),
+            data: row.data,
+        })
+        .fetch_all(conn)
+        .await?;
 
         Ok(accounts)
     }

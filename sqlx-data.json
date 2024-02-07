@@ -942,6 +942,69 @@
     },
     "query": "INSERT INTO\n    owned_media_item_account (\n        owned_media_item_id,\n        account_id,\n        source_id,\n        link,\n        title,\n        posted_at\n    )\nVALUES\n    ($1, $2, $3, $4, $5, $6) ON CONFLICT (owned_media_item_id, account_id, source_id) DO\nUPDATE\nSET\n    link = EXCLUDED.link,\n    title = EXCLUDED.title,\n    posted_at = EXCLUDED.posted_at;\n"
   },
+  "386c45f7546b01868568cab8bfb04b78bb5eadfa9a883f342b240839cd12defd": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "owner_id",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "source_site",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "username",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "last_update",
+          "ordinal": 4,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "loading_state",
+          "ordinal": 5,
+          "type_info": "Jsonb"
+        },
+        {
+          "name": "data",
+          "ordinal": 6,
+          "type_info": "Jsonb"
+        },
+        {
+          "name": "disabled",
+          "ordinal": 7,
+          "type_info": "Bool"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        true,
+        true,
+        true,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Bool"
+        ]
+      }
+    },
+    "query": "SELECT\n    *\nFROM\n    linked_account\nWHERE\n    owner_id = $1\n    AND (\n        $2\n        OR disabled = false\n    );\n"
+  },
   "3950c47de61f6ba464700f0ed9092333a3c0a4de4f45afd6949efd6a75276490": {
     "describe": {
       "columns": [
@@ -2840,68 +2903,6 @@
       }
     },
     "query": "SELECT\n    *\nFROM\n    user_account\nWHERE\n    telegram_id = $1;\n"
-  },
-  "b6035fc6b8ac52f4325d8f5535320c3c5f7e2c4f987aa01b9f1e3efe2904a699": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "owner_id",
-          "ordinal": 1,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "source_site",
-          "ordinal": 2,
-          "type_info": "Text"
-        },
-        {
-          "name": "username",
-          "ordinal": 3,
-          "type_info": "Text"
-        },
-        {
-          "name": "last_update",
-          "ordinal": 4,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "loading_state",
-          "ordinal": 5,
-          "type_info": "Jsonb"
-        },
-        {
-          "name": "data",
-          "ordinal": 6,
-          "type_info": "Jsonb"
-        },
-        {
-          "name": "disabled",
-          "ordinal": 7,
-          "type_info": "Bool"
-        }
-      ],
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        true,
-        true,
-        true,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid"
-        ]
-      }
-    },
-    "query": "SELECT\n    *\nFROM\n    linked_account\nWHERE\n    owner_id = $1\n    AND disabled = false;\n"
   },
   "b8946dfef01780773713136e31594b2347be98536da6e066ed49378f88b11e13": {
     "describe": {
