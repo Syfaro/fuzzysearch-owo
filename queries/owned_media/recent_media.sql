@@ -12,11 +12,21 @@ SELECT
     accounts "accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>"
 FROM
     owned_media_item_accounts
-    LEFT JOIN owned_media_item_account ON owned_media_item_accounts.id = owned_media_item_account.owned_media_item_id
 WHERE
     owner_id = $1
     AND thumb_url IS NOT NULL
-    AND $2::uuid IS NULL OR owned_media_item_account.account_id = $2
+    AND (
+        $2::uuid IS NULL
+        OR exists(
+            SELECT
+                1
+            FROM
+                owned_media_item_account
+            WHERE
+                owned_media_item_account.owned_media_item_id = owned_media_item_accounts.id
+                AND account_id = $2
+        )
+    )
 ORDER BY
     last_modified DESC
 LIMIT

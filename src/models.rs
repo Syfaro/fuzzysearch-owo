@@ -5,6 +5,7 @@ use std::{
 };
 
 use argonautica::{Hasher, Verifier};
+use futures::{StreamExt, TryStreamExt};
 use image::GenericImageView;
 use redis::AsyncCommands;
 use rusoto_s3::S3;
@@ -526,6 +527,13 @@ impl OwnedMediaItem {
             .max_by_key(|account| account.posted_at)
             .and_then(|account| account.posted_at)
     }
+
+    pub fn accounts(&self) -> &[OwnedMediaItemAccount] {
+        self.accounts
+            .as_ref()
+            .map(|accounts| accounts.0.as_slice())
+            .unwrap_or_default()
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -777,6 +785,56 @@ impl OwnedMediaItem {
             .await?;
 
         Ok(())
+    }
+
+    pub async fn merge(
+        conn: &sqlx::PgPool,
+        s3: &rusoto_s3::S3Client,
+        config: &crate::Config,
+        user_id: Uuid,
+        media_ids: &[Uuid],
+    ) -> Result<Uuid, Error> {
+        let mut media = futures::stream::iter(
+            media_ids
+                .iter()
+                .copied()
+                .map(|id| Self::get_by_id(conn, id, user_id)),
+        )
+        .buffer_unordered(2)
+        .try_collect::<Vec<_>>()
+        .await?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+
+        media.sort_by_key(|media| media.last_modified);
+
+        let merge_into = media.remove(0);
+
+        let mut tx = conn.begin().await?;
+
+        for item in media {
+            futures::try_join!(
+                delete_prefixed_object(s3, config, item.content_url.as_deref()),
+                delete_prefixed_object(s3, config, item.thumb_url.as_deref())
+            )?;
+
+            sqlx::query_file!(
+                "queries/owned_media/update_account.sql",
+                item.id,
+                merge_into.id
+            )
+            .execute(&mut tx)
+            .await?;
+
+            sqlx::query_file!("queries/owned_media/remove.sql", user_id, item.id)
+                .execute(&mut tx)
+                .await?;
+        }
+
+        tx.commit().await?;
+
+        Ok(merge_into.id)
     }
 
     pub async fn media_page(

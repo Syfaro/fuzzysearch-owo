@@ -5,7 +5,7 @@ use actix_web::{get, post, services, web, HttpResponse, Scope};
 use askama::Template;
 use base64::Engine;
 use foxlib::jobs::FaktoryProducer;
-use futures::TryStreamExt;
+use futures::{FutureExt, TryFutureExt, TryStreamExt};
 use rand::Rng;
 use serde::Deserialize;
 use serde_with::{serde_as, NoneAsEmptyString};
@@ -390,17 +390,24 @@ async fn check_post(
         )
         .await?
         .into_iter()
-        .filter_map(|media| {
-            let account_id = media.accounts.as_ref()?.0.first()?.account_id;
-            let account = accounts.get(&account_id)?;
+        .map(|media| {
+            media
+                .accounts
+                .map(|accounts| accounts.0)
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|item_account| {
+                    let account = accounts.get(&item_account.account_id)?;
 
-            Some(CheckLink {
-                url: media.best_link()?.to_string(),
-                site: account.source_site,
-                username: account.username.clone(),
-                posted_at: media.posted_most_recently(),
-            })
+                    Some(CheckLink {
+                        url: item_account.link,
+                        site: account.source_site,
+                        username: account.username.clone(),
+                        posted_at: item_account.posted_at,
+                    })
+                })
         })
+        .flatten()
         .collect();
 
         results.push(CheckResult {
@@ -619,6 +626,7 @@ struct MediaView<'a> {
     similar_image_events: &'a [(chrono::DateTime<chrono::Utc>, models::SimilarImage)],
     other_events: &'a [models::UserEvent],
     allowlisted_users: HashMap<(Site, String), Uuid>,
+    similar_media: Vec<models::OwnedMediaItem>,
 }
 
 #[get("/view/{media_id}", name = "media_view")]
@@ -632,8 +640,21 @@ async fn media_view(
         .await?
         .ok_or(Error::Missing)?;
 
-    let recent_events =
-        models::UserEvent::recent_events_for_media(&conn, user.id, media.id).await?;
+    let similar_media_fut = if let Some(perceptual_hash) = media.perceptual_hash {
+        models::OwnedMediaItem::find_similar_with_owner(&conn, user.id, perceptual_hash)
+            .map_ok(|mut similar| {
+                similar.retain(|item| item.id != media.id);
+                similar
+            })
+            .boxed_local()
+    } else {
+        futures::future::ready(Ok(vec![])).boxed_local()
+    };
+
+    let (recent_events, similar_media) = tokio::try_join!(
+        models::UserEvent::recent_events_for_media(&conn, user.id, media.id),
+        similar_media_fut
+    )?;
 
     let (similar_events, other_events): (Vec<_>, Vec<_>) = recent_events
         .into_iter()
@@ -663,11 +684,63 @@ async fn media_view(
         similar_image_events: &similar_events,
         other_events: &other_events,
         allowlisted_users,
+        similar_media,
     }
     .wrap(&request, Some(&user))
     .await
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[post("/merge")]
+async fn media_merge(
+    conn: web::Data<sqlx::PgPool>,
+    s3: web::Data<rusoto_s3::S3Client>,
+    config: web::Data<crate::Config>,
+    request: actix_web::HttpRequest,
+    session: actix_session::Session,
+    user: models::User,
+    form: web::Form<Vec<(String, String)>>,
+) -> Result<HttpResponse, Error> {
+    let mut kvs: HashMap<String, Vec<Uuid>> = HashMap::new();
+    for (name, value) in form.0 {
+        if let Ok(value_id) = value.parse() {
+            kvs.entry(name).or_default().push(value_id)
+        }
+    }
+
+    let merge_ids = kvs.remove("merge_ids").unwrap_or_default();
+
+    if merge_ids.len() <= 1 {
+        let first_id = merge_ids.first().ok_or(Error::Missing)?;
+
+        session.add_flash(
+            FlashStyle::Warning,
+            "At least one item must be selected to perform merge.",
+        );
+
+        return Ok(HttpResponse::Found()
+            .insert_header((
+                "Location",
+                request
+                    .url_for("media_view", &[first_id.as_url()])?
+                    .as_str(),
+            ))
+            .finish());
+    }
+
+    let merged_id = models::OwnedMediaItem::merge(&conn, &s3, &config, user.id, &merge_ids).await?;
+
+    session.add_flash(FlashStyle::Success, "Merged media.");
+
+    Ok(HttpResponse::Found()
+        .insert_header((
+            "Location",
+            request
+                .url_for("media_view", &[merged_id.as_url()])?
+                .as_str(),
+        ))
+        .finish())
 }
 
 #[derive(Deserialize)]
@@ -1279,7 +1352,12 @@ pub fn service() -> Scope {
             account_view,
             account_verify,
         ]))
-        .service(web::scope("/media").service(services![media_list, media_view, media_remove]))
+        .service(web::scope("/media").service(services![
+            media_list,
+            media_view,
+            media_merge,
+            media_remove
+        ]))
         .service(web::scope("/email").service(services![
             email_add,
             email_add_post,
@@ -1287,4 +1365,19 @@ pub fn service() -> Scope {
             verify_email_post
         ]))
         .service(web::scope("/allowlist").service(services![allowlist_add, allowlist_remove]))
+}
+
+mod filters {
+    pub fn clean_link<T: std::fmt::Display>(link: T) -> askama::Result<String> {
+        let cleaned_link = link
+            .to_string()
+            .replace("https://", "")
+            .replace("http://", "")
+            .replace("www.", "");
+
+        Ok(cleaned_link
+            .strip_suffix('/')
+            .unwrap_or(&cleaned_link)
+            .to_string())
+    }
 }

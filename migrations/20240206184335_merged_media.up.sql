@@ -9,6 +9,8 @@ CREATE TABLE owned_media_item_account (
     PRIMARY KEY (owned_media_item_id, account_id, source_id)
 );
 
+CREATE INDEX owned_media_item_account_lookup_idx ON owned_media_item_account (account_id, source_id);
+
 CREATE VIEW owned_media_item_accounts (
     id,
     owner_id,
