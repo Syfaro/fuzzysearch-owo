@@ -17,7 +17,7 @@ use crate::{
     common,
     jobs::{self, JobInitiatorExt},
     models::{self, setting, Site, UserSettingItem},
-    AddFlash, AsUrl, ClientIpAddr, Error, FlashStyle, UrlUuid, WrappedTemplate,
+    AddFlash, AsUrl, ClientIpAddr, Error, Features, FlashStyle, UrlUuid, WrappedTemplate,
 };
 
 #[derive(Template)]
@@ -390,7 +390,7 @@ async fn check_post(
         )
         .await?
         .into_iter()
-        .map(|media| {
+        .flat_map(|media| {
             media
                 .accounts
                 .map(|accounts| accounts.0)
@@ -407,7 +407,6 @@ async fn check_post(
                     })
                 })
         })
-        .flatten()
         .collect();
 
         results.push(CheckResult {
@@ -528,7 +527,7 @@ async fn account_remove(
 
     session.add_flash(
         FlashStyle::Success,
-        "Removed account and associated submissions.",
+        "Removed account link.",
     );
 
     Ok(HttpResponse::Found()
@@ -626,6 +625,7 @@ struct MediaView<'a> {
     similar_image_events: &'a [(chrono::DateTime<chrono::Utc>, models::SimilarImage)],
     other_events: &'a [models::UserEvent],
     allowlisted_users: HashMap<(Site, String), Uuid>,
+    merge_enabled: bool,
     similar_media: Vec<models::OwnedMediaItem>,
 }
 
@@ -633,6 +633,7 @@ struct MediaView<'a> {
 async fn media_view(
     request: actix_web::HttpRequest,
     conn: web::Data<sqlx::PgPool>,
+    unleash: web::Data<crate::Unleash>,
     path: web::Path<(UrlUuid,)>,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
@@ -684,6 +685,7 @@ async fn media_view(
         similar_image_events: &similar_events,
         other_events: &other_events,
         allowlisted_users,
+        merge_enabled: unleash.is_enabled(Features::MergeMedia, Some(&user.context()), false),
         similar_media,
     }
     .wrap(&request, Some(&user))
@@ -693,15 +695,23 @@ async fn media_view(
 }
 
 #[post("/merge")]
+#[allow(clippy::too_many_arguments)]
 async fn media_merge(
     conn: web::Data<sqlx::PgPool>,
     s3: web::Data<rusoto_s3::S3Client>,
+    unleash: web::Data<crate::Unleash>,
     config: web::Data<crate::Config>,
     request: actix_web::HttpRequest,
     session: actix_session::Session,
     user: models::User,
     form: web::Form<Vec<(String, String)>>,
 ) -> Result<HttpResponse, Error> {
+    if !unleash.is_enabled(Features::MergeMedia, Some(&user.context()), false) {
+        return Ok(HttpResponse::Found()
+            .insert_header(("Location", request.url_for_static("user_home")?.as_str()))
+            .finish());
+    }
+
     let mut kvs: HashMap<String, Vec<Uuid>> = HashMap::new();
     for (name, value) in form.0 {
         if let Ok(value_id) = value.parse() {
@@ -722,9 +732,7 @@ async fn media_merge(
         return Ok(HttpResponse::Found()
             .insert_header((
                 "Location",
-                request
-                    .url_for("media_view", &[first_id.as_url()])?
-                    .as_str(),
+                request.url_for("media_view", [first_id.as_url()])?.as_str(),
             ))
             .finish());
     }
@@ -737,7 +745,7 @@ async fn media_merge(
         .insert_header((
             "Location",
             request
-                .url_for("media_view", &[merged_id.as_url()])?
+                .url_for("media_view", [merged_id.as_url()])?
                 .as_str(),
         ))
         .finish())

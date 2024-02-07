@@ -72,6 +72,24 @@ impl User {
         }
     }
 
+    pub fn context(&self) -> foxlib::flags::Context {
+        foxlib::flags::Context {
+            user_id: Some(self.id.to_string()),
+            properties: [("userRole".to_string(), self.role_name().to_string())]
+                .into_iter()
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    pub fn role_name(&self) -> &'static str {
+        if self.is_admin {
+            "admin"
+        } else {
+            "user"
+        }
+    }
+
     pub async fn lookup_by_id(conn: &sqlx::PgPool, id: Uuid) -> Result<Option<User>, Error> {
         let user = sqlx::query_file_as!(User, "queries/user/lookup_id.sql", id)
             .fetch_optional(conn)
@@ -1179,13 +1197,6 @@ impl LinkedAccount {
 
     pub async fn remove(conn: &sqlx::PgPool, user_id: Uuid, account_id: Uuid) -> Result<(), Error> {
         let mut tx = conn.begin().await?;
-
-        sqlx::query_file!(
-            "queries/linked_account/move_media_to_delete.sql",
-            account_id
-        )
-        .execute(&mut tx)
-        .await?;
 
         sqlx::query_file!("queries/linked_account/remove.sql", user_id, account_id)
             .fetch_one(&mut tx)

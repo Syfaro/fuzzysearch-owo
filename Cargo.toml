@@ -34,6 +34,7 @@ chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive", "env", "cargo", "wrap_help"] }
 dotenv = { version = "0.15", optional = true }
 egg-mode = "0.16"
+enum-map = "~2.0.1"
 faktory = "0.12"
 futures = "0.3"
 hex = "0.4"
@@ -84,7 +85,7 @@ furaffinity-rs = { git = "https://github.com/Syfaro/furaffinity-rs.git" }
 fuzzysearch = { git = "https://github.com/Syfaro/fuzzysearch-rs.git", features = ["trace", "local_hash"] }
 tgbotapi = { git = "https://github.com/Syfaro/tgbotapi-rs.git" }
 
-foxlib = { git = "https://github.com/Syfaro/foxlib.git", features = ["jobs"] }
+foxlib = { git = "https://github.com/Syfaro/foxlib.git", features = ["jobs", "flags", "flags-openssl"] }
 fuzzysearch-common = { git = "https://github.com/Syfaro/fuzzysearch.git", features = ["queue"] }
 
 [dependencies.sqlx]

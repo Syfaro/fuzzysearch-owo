@@ -205,6 +205,13 @@ function updateRelativeTimes() {
 
 updateRelativeTimes();
 
+[...document.querySelectorAll('.absolute-time[data-timestamp]')].forEach((elem) => {
+  const timestamp = parseInt(elem.dataset.timestamp, 10);
+  const date = new Date(timestamp * 1000);
+
+  elem.textContent = dtf.format(date);
+});
+
 [...document.querySelectorAll('input[type=file]')].forEach((input) => {
   input.addEventListener('change', () => {
     const uploadButton = document.querySelector(input.dataset.uploadButton);

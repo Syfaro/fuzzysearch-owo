@@ -449,6 +449,87 @@
     },
     "query": "SELECT\n    id,\n    content_url,\n    thumb_url\nFROM\n    owned_media_item\nWHERE\n    content_url NOT LIKE $1\n    AND content_url IS NOT NULL\nLIMIT\n    $2;\n"
   },
+  "13d4596cf3225c8a833942286ad10e7a0cc964c84335048dc159f7201d396126": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id!",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "owner_id!",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "perceptual_hash",
+          "ordinal": 2,
+          "type_info": "Int8"
+        },
+        {
+          "name": "sha256_hash!: Sha256Hash",
+          "ordinal": 3,
+          "type_info": "Bytea"
+        },
+        {
+          "name": "last_modified!",
+          "ordinal": 4,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "content_url",
+          "ordinal": 5,
+          "type_info": "Text"
+        },
+        {
+          "name": "content_size",
+          "ordinal": 6,
+          "type_info": "Int8"
+        },
+        {
+          "name": "thumb_url",
+          "ordinal": 7,
+          "type_info": "Text"
+        },
+        {
+          "name": "event_count!",
+          "ordinal": 8,
+          "type_info": "Int4"
+        },
+        {
+          "name": "last_event",
+          "ordinal": 9,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>",
+          "ordinal": 10,
+          "type_info": "Jsonb"
+        }
+      ],
+      "nullable": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT\n    id \"id!\",\n    owner_id \"owner_id!\",\n    perceptual_hash,\n    sha256_hash \"sha256_hash!: Sha256Hash\",\n    last_modified \"last_modified!\",\n    content_url,\n    content_size,\n    thumb_url,\n    event_count \"event_count!\",\n    last_event,\n    accounts \"accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>\"\nFROM\n    owned_media_item_accounts\nWHERE\n    owner_id = $1\n    AND thumb_url IS NOT NULL\n    AND (\n        $2::uuid IS NULL\n        OR exists(\n            SELECT\n                1\n            FROM\n                owned_media_item_account\n            WHERE\n                owned_media_item_account.owned_media_item_id = owned_media_item_accounts.id\n                AND account_id = $2\n        )\n    )\nORDER BY\n    last_modified DESC\nLIMIT\n    20;\n"
+  },
   "152efaf85da3eadb72bde6c7526f0e4ff037066b5eb34043c2aa0b2705a52910": {
     "describe": {
       "columns": [
@@ -824,7 +905,59 @@
     },
     "query": "UPDATE\n    user_account\nSET\n    email_verifier = null\nWHERE\n    id = $1\n    AND email_verifier = $2 RETURNING id;\n"
   },
-  "30600dda40257a1f22de4bc85c38f68f7ea200b11daa019c33d0edf61d2a9276": {
+  "3159f7eda032c78d407e8cb01daaa79c14d92a60b83e3ac30160189be75876b9": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4",
+          "Text",
+          "Text"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    flist_file (id, ext, character_name)\nVALUES\n    ($1, $2, $3) ON CONFLICT DO NOTHING;\n"
+  },
+  "3739d6da7f069c4d6e5b94b60bc37eb2d3b504ec844456f53c5e2629c3594157": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid",
+          "Text",
+          "Text",
+          "Text",
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    owned_media_item_account (\n        owned_media_item_id,\n        account_id,\n        source_id,\n        link,\n        title,\n        posted_at\n    )\nVALUES\n    ($1, $2, $3, $4, $5, $6) ON CONFLICT (owned_media_item_id, account_id, source_id) DO\nUPDATE\nSET\n    link = EXCLUDED.link,\n    title = EXCLUDED.title,\n    posted_at = EXCLUDED.posted_at;\n"
+  },
+  "3950c47de61f6ba464700f0ed9092333a3c0a4de4f45afd6949efd6a75276490": {
+    "describe": {
+      "columns": [
+        {
+          "name": "value",
+          "ordinal": 0,
+          "type_info": "Jsonb"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text"
+        ]
+      }
+    },
+    "query": "SELECT\n    value\nFROM\n    user_setting\nWHERE\n    owner_id = $1\n    AND setting = $2;\n"
+  },
+  "3cfa31c0b605317c1fedadaf0399ed2012b2f6573b1421b53cfb14a80316a35b": {
     "describe": {
       "columns": [
         {
@@ -899,63 +1032,13 @@
       "parameters": {
         "Left": [
           "Uuid",
+          "Int4",
+          "Int4",
           "Uuid"
         ]
       }
     },
-    "query": "SELECT\n    id \"id!\",\n    owner_id \"owner_id!\",\n    perceptual_hash,\n    sha256_hash \"sha256_hash!: Sha256Hash\",\n    last_modified \"last_modified!\",\n    content_url,\n    content_size,\n    thumb_url,\n    event_count \"event_count!\",\n    last_event,\n    accounts \"accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>\"\nFROM\n    owned_media_item_accounts\n    LEFT JOIN owned_media_item_account ON owned_media_item_accounts.id = owned_media_item_account.owned_media_item_id\nWHERE\n    owner_id = $1\n    AND thumb_url IS NOT NULL\n    AND $2::uuid IS NULL OR owned_media_item_account.account_id = $2\nORDER BY\n    last_modified DESC\nLIMIT\n    20;\n"
-  },
-  "3159f7eda032c78d407e8cb01daaa79c14d92a60b83e3ac30160189be75876b9": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Int4",
-          "Text",
-          "Text"
-        ]
-      }
-    },
-    "query": "INSERT INTO\n    flist_file (id, ext, character_name)\nVALUES\n    ($1, $2, $3) ON CONFLICT DO NOTHING;\n"
-  },
-  "3739d6da7f069c4d6e5b94b60bc37eb2d3b504ec844456f53c5e2629c3594157": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Uuid",
-          "Text",
-          "Text",
-          "Text",
-          "Timestamptz"
-        ]
-      }
-    },
-    "query": "INSERT INTO\n    owned_media_item_account (\n        owned_media_item_id,\n        account_id,\n        source_id,\n        link,\n        title,\n        posted_at\n    )\nVALUES\n    ($1, $2, $3, $4, $5, $6) ON CONFLICT (owned_media_item_id, account_id, source_id) DO\nUPDATE\nSET\n    link = EXCLUDED.link,\n    title = EXCLUDED.title,\n    posted_at = EXCLUDED.posted_at;\n"
-  },
-  "3950c47de61f6ba464700f0ed9092333a3c0a4de4f45afd6949efd6a75276490": {
-    "describe": {
-      "columns": [
-        {
-          "name": "value",
-          "ordinal": 0,
-          "type_info": "Jsonb"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Text"
-        ]
-      }
-    },
-    "query": "SELECT\n    value\nFROM\n    user_setting\nWHERE\n    owner_id = $1\n    AND setting = $2;\n"
+    "query": "SELECT\n    id \"id!\",\n    owner_id \"owner_id!\",\n    perceptual_hash,\n    sha256_hash \"sha256_hash!: Sha256Hash\",\n    last_modified \"last_modified!\",\n    content_url,\n    content_size,\n    thumb_url,\n    event_count \"event_count!\",\n    last_event,\n    accounts \"accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>\"\nFROM\n    owned_media_item_accounts\nWHERE\n    owner_id = $1\n    AND (\n        $4::uuid IS NULL\n        OR exists(\n            SELECT\n                1\n            FROM\n                owned_media_item_account\n            WHERE\n                owned_media_item_account.owned_media_item_id = owned_media_item_accounts.id\n                AND account_id = $4\n        )\n    )\nORDER BY\n    event_count DESC,\n    last_modified DESC\nLIMIT\n    $2 OFFSET ($3::integer * $2::integer);\n"
   },
   "3f091fdddbee429487163837c17f18b8139e3c2bee1d43168d936018169d868f": {
     "describe": {
@@ -1251,89 +1334,6 @@
     },
     "query": "INSERT INTO\n    owned_media_item (\n        owner_id,\n        perceptual_hash,\n        sha256_hash,\n        last_modified\n    )\nVALUES\n    (\n        $1,\n        $2,\n        $3,\n        current_timestamp\n    ) RETURNING id;\n"
   },
-  "56af88842546a9361a6a4e59c90364a9e48ad90b29c04337b20039cfb5370074": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id!",
-          "ordinal": 0,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "owner_id!",
-          "ordinal": 1,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "perceptual_hash",
-          "ordinal": 2,
-          "type_info": "Int8"
-        },
-        {
-          "name": "sha256_hash!: Sha256Hash",
-          "ordinal": 3,
-          "type_info": "Bytea"
-        },
-        {
-          "name": "last_modified!",
-          "ordinal": 4,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "content_url",
-          "ordinal": 5,
-          "type_info": "Text"
-        },
-        {
-          "name": "content_size",
-          "ordinal": 6,
-          "type_info": "Int8"
-        },
-        {
-          "name": "thumb_url",
-          "ordinal": 7,
-          "type_info": "Text"
-        },
-        {
-          "name": "event_count!",
-          "ordinal": 8,
-          "type_info": "Int4"
-        },
-        {
-          "name": "last_event",
-          "ordinal": 9,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>",
-          "ordinal": 10,
-          "type_info": "Jsonb"
-        }
-      ],
-      "nullable": [
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Int4",
-          "Int4",
-          "Uuid"
-        ]
-      }
-    },
-    "query": "SELECT\n    id \"id!\",\n    owner_id \"owner_id!\",\n    perceptual_hash,\n    sha256_hash \"sha256_hash!: Sha256Hash\",\n    last_modified \"last_modified!\",\n    content_url,\n    content_size,\n    thumb_url,\n    event_count \"event_count!\",\n    last_event,\n    accounts \"accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>\"\nFROM\n    owned_media_item_accounts\n    LEFT JOIN owned_media_item_account ON owned_media_item_accounts.id = owned_media_item_account.owned_media_item_id\nWHERE\n    owner_id = $1 AND\n    $4::uuid IS NULL OR owned_media_item_account.account_id = $4\nORDER BY\n    last_event DESC NULLS LAST,\n    last_modified DESC\nLIMIT\n    $2 OFFSET ($3::integer * $2::integer);\n"
-  },
   "56ffbb01633cc4e31edf84afa38aca7494d2e414715fa6856f47615560f869bb": {
     "describe": {
       "columns": [
@@ -1614,6 +1614,89 @@
       }
     },
     "query": "UPDATE owned_media_item SET content_url = $2, thumb_url = $3 WHERE id = $1"
+  },
+  "64112d8607c0a2b4011640b051c49ddab688735839bcb3ee7b2859b687ead853": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id!",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "owner_id!",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "perceptual_hash",
+          "ordinal": 2,
+          "type_info": "Int8"
+        },
+        {
+          "name": "sha256_hash!: Sha256Hash",
+          "ordinal": 3,
+          "type_info": "Bytea"
+        },
+        {
+          "name": "last_modified!",
+          "ordinal": 4,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "content_url",
+          "ordinal": 5,
+          "type_info": "Text"
+        },
+        {
+          "name": "content_size",
+          "ordinal": 6,
+          "type_info": "Int8"
+        },
+        {
+          "name": "thumb_url",
+          "ordinal": 7,
+          "type_info": "Text"
+        },
+        {
+          "name": "event_count!",
+          "ordinal": 8,
+          "type_info": "Int4"
+        },
+        {
+          "name": "last_event",
+          "ordinal": 9,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>",
+          "ordinal": 10,
+          "type_info": "Jsonb"
+        }
+      ],
+      "nullable": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Int4",
+          "Int4",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT\n    id \"id!\",\n    owner_id \"owner_id!\",\n    perceptual_hash,\n    sha256_hash \"sha256_hash!: Sha256Hash\",\n    last_modified \"last_modified!\",\n    content_url,\n    content_size,\n    thumb_url,\n    event_count \"event_count!\",\n    last_event,\n    accounts \"accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>\"\nFROM\n    owned_media_item_accounts\nWHERE\n    owner_id = $1\n    AND (\n        $4::uuid IS NULL\n        OR exists(\n            SELECT\n                1\n            FROM\n                owned_media_item_account\n            WHERE\n                owned_media_item_account.owned_media_item_id = owned_media_item_accounts.id\n                AND account_id = $4\n        )\n    )\nORDER BY\n    last_modified DESC\nLIMIT\n    $2 OFFSET ($3::integer * $2::integer);\n"
   },
   "6c0689be25c41e688a85dbc8e1365e83eec74ce2842665faf67c2ffcb970644d": {
     "describe": {
@@ -1980,6 +2063,89 @@
     },
     "query": "SELECT\n    *\nFROM\n    user_event\nWHERE\n    owner_id = $1\n    AND (\n        $4::text IS NULL\n        OR event_name = $4\n    )\n    AND (\n        $5::text IS NULL\n        OR data->'SimilarImage'->>'site' = $5\n    )\n    AND (\n        NOT $6::boolean\n        OR (\n            data->'SimilarImage'->>'site',\n            lower(data->'SimilarImage'->>'posted_by')\n        ) NOT IN (\n            SELECT\n                site,\n                lower(site_username)\n            FROM\n                user_allowlist\n            WHERE\n                owner_id = $1\n        )\n    )\nORDER BY\n    last_updated DESC\nLIMIT\n    $2 OFFSET ($3::integer * $2::integer);\n"
   },
+  "849165652830f222407a6915a6a17e3d0d237e0645047449976d123030ab2c92": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id!",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "owner_id!",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "perceptual_hash",
+          "ordinal": 2,
+          "type_info": "Int8"
+        },
+        {
+          "name": "sha256_hash!: Sha256Hash",
+          "ordinal": 3,
+          "type_info": "Bytea"
+        },
+        {
+          "name": "last_modified!",
+          "ordinal": 4,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "content_url",
+          "ordinal": 5,
+          "type_info": "Text"
+        },
+        {
+          "name": "content_size",
+          "ordinal": 6,
+          "type_info": "Int8"
+        },
+        {
+          "name": "thumb_url",
+          "ordinal": 7,
+          "type_info": "Text"
+        },
+        {
+          "name": "event_count!",
+          "ordinal": 8,
+          "type_info": "Int4"
+        },
+        {
+          "name": "last_event",
+          "ordinal": 9,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>",
+          "ordinal": 10,
+          "type_info": "Jsonb"
+        }
+      ],
+      "nullable": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Int4",
+          "Int4",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT\n    id \"id!\",\n    owner_id \"owner_id!\",\n    perceptual_hash,\n    sha256_hash \"sha256_hash!: Sha256Hash\",\n    last_modified \"last_modified!\",\n    content_url,\n    content_size,\n    thumb_url,\n    event_count \"event_count!\",\n    last_event,\n    accounts \"accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>\"\nFROM\n    owned_media_item_accounts\nWHERE\n    owner_id = $1\n    AND (\n        $4::uuid IS NULL\n        OR exists(\n            SELECT\n                1\n            FROM\n                owned_media_item_account\n            WHERE\n                owned_media_item_account.owned_media_item_id = owned_media_item_accounts.id\n                AND account_id = $4\n        )\n    )\nORDER BY\n    last_event DESC NULLS LAST,\n    last_modified DESC\nLIMIT\n    $2 OFFSET ($3::integer * $2::integer);\n"
+  },
   "88bacfdae0ff1060188b606680fd60eac3e41ee8f11fc101f88885d6fd0cb420": {
     "describe": {
       "columns": [
@@ -2333,101 +2499,6 @@
       }
     },
     "query": "SELECT\n    exists(\n        SELECT\n            1\n        FROM\n            user_account\n        WHERE\n            lower(username) = lower($1)\n    ) \"exists!\";\n"
-  },
-  "a006c52af3d32035879777b2d882e2df33337bf7721d851e8ea32378c951d1a5": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id!",
-          "ordinal": 0,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "owner_id!",
-          "ordinal": 1,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "perceptual_hash",
-          "ordinal": 2,
-          "type_info": "Int8"
-        },
-        {
-          "name": "sha256_hash!: Sha256Hash",
-          "ordinal": 3,
-          "type_info": "Bytea"
-        },
-        {
-          "name": "last_modified!",
-          "ordinal": 4,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "content_url",
-          "ordinal": 5,
-          "type_info": "Text"
-        },
-        {
-          "name": "content_size",
-          "ordinal": 6,
-          "type_info": "Int8"
-        },
-        {
-          "name": "thumb_url",
-          "ordinal": 7,
-          "type_info": "Text"
-        },
-        {
-          "name": "event_count!",
-          "ordinal": 8,
-          "type_info": "Int4"
-        },
-        {
-          "name": "last_event",
-          "ordinal": 9,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>",
-          "ordinal": 10,
-          "type_info": "Jsonb"
-        }
-      ],
-      "nullable": [
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Int4",
-          "Int4",
-          "Uuid"
-        ]
-      }
-    },
-    "query": "SELECT\n    id \"id!\",\n    owner_id \"owner_id!\",\n    perceptual_hash,\n    sha256_hash \"sha256_hash!: Sha256Hash\",\n    last_modified \"last_modified!\",\n    content_url,\n    content_size,\n    thumb_url,\n    event_count \"event_count!\",\n    last_event,\n    accounts \"accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>\"\nFROM\n    owned_media_item_accounts\n    LEFT JOIN owned_media_item_account ON owned_media_item_accounts.id = owned_media_item_account.owned_media_item_id\nWHERE\n    owner_id = $1 AND\n    $4::uuid IS NULL OR owned_media_item_account.account_id = $4\nORDER BY\n    last_modified DESC\nLIMIT\n    $2 OFFSET ($3::integer * $2::integer);\n"
-  },
-  "a0c27e43f1510d179f4506050fdcc3e7be6f04a842db3920508eee09bbfb1eed": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Uuid"
-        ]
-      }
-    },
-    "query": "INSERT INTO\n    pending_deletion (url)\nSELECT\n    content_url\nFROM\n    owned_media_item\n    JOIN owned_media_item_account ON owned_media_item.id = owned_media_item_account.owned_media_item_id\nWHERE\n    owned_media_item_account.account_id = $1\n    AND content_url IS NOT NULL\nUNION\nSELECT\n    thumb_url\nFROM\n    owned_media_item\n    JOIN owned_media_item_account ON owned_media_item.id = owned_media_item_account.owned_media_item_id\nWHERE\n    owned_media_item_account.account_id = $1\n    AND thumb_url IS NOT NULL ON CONFLICT DO NOTHING;\n"
   },
   "a6286b43713fdd80b9f3d00acccad8e51a561ae939b4ea5d8cbffa05be19b81f": {
     "describe": {
@@ -3089,6 +3160,19 @@
     },
     "query": "INSERT INTO\n    flist_import_run (starting_id)\nVALUES\n    ($1) RETURNING id;\n"
   },
+  "da03635d95779e8cbc169e57059f1a8be5c8bb727067b825f5c55be35ed181f2": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "UPDATE\n    owned_media_item_account\nSET\n    owned_media_item_id = $2\nWHERE\n    owned_media_item_id = $1;\n"
+  },
   "e12de042e0d40c9a18088e373341e3b8087bdce43c82317a274f4fec4e6c4e11": {
     "describe": {
       "columns": [
@@ -3414,89 +3498,6 @@
       }
     },
     "query": "UPDATE\n    flist_import_run\nSET\n    finished_at = current_timestamp,\n    max_id = $2\nWHERE\n    id = $1;\n"
-  },
-  "eeaf8fa5ff407aa2c7de1fec92aded7b8770518fafeff4c963da1675441e8ae9": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id!",
-          "ordinal": 0,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "owner_id!",
-          "ordinal": 1,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "perceptual_hash",
-          "ordinal": 2,
-          "type_info": "Int8"
-        },
-        {
-          "name": "sha256_hash!: Sha256Hash",
-          "ordinal": 3,
-          "type_info": "Bytea"
-        },
-        {
-          "name": "last_modified!",
-          "ordinal": 4,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "content_url",
-          "ordinal": 5,
-          "type_info": "Text"
-        },
-        {
-          "name": "content_size",
-          "ordinal": 6,
-          "type_info": "Int8"
-        },
-        {
-          "name": "thumb_url",
-          "ordinal": 7,
-          "type_info": "Text"
-        },
-        {
-          "name": "event_count!",
-          "ordinal": 8,
-          "type_info": "Int4"
-        },
-        {
-          "name": "last_event",
-          "ordinal": 9,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>",
-          "ordinal": 10,
-          "type_info": "Jsonb"
-        }
-      ],
-      "nullable": [
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Int4",
-          "Int4",
-          "Uuid"
-        ]
-      }
-    },
-    "query": "SELECT\n    id \"id!\",\n    owner_id \"owner_id!\",\n    perceptual_hash,\n    sha256_hash \"sha256_hash!: Sha256Hash\",\n    last_modified \"last_modified!\",\n    content_url,\n    content_size,\n    thumb_url,\n    event_count \"event_count!\",\n    last_event,\n    accounts \"accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>\"\nFROM\n    owned_media_item_accounts\n    LEFT JOIN owned_media_item_account ON owned_media_item_accounts.id = owned_media_item_account.owned_media_item_id\nWHERE\n    owner_id = $1 AND\n    $4::uuid IS NULL OR owned_media_item_account.account_id = $4\nORDER BY\n    event_count DESC,\n    last_modified DESC\nLIMIT\n    $2 OFFSET ($3::integer * $2::integer);\n"
   },
   "f34303d1fa62539f48e60fb54a5b666ebf42852a75ce8251c6e4f90894cb46cf": {
     "describe": {
