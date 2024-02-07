@@ -5,11 +5,13 @@ use std::{
 };
 
 use argonautica::{Hasher, Verifier};
+use futures::{StreamExt, TryStreamExt};
 use image::GenericImageView;
 use redis::AsyncCommands;
 use rusoto_s3::S3;
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
+use sqlx::types::Json;
 use uuid::Uuid;
 
 use crate::site::SiteFromConfig;
@@ -23,6 +25,7 @@ pub struct User {
     pub telegram_id: Option<i64>,
     pub telegram_name: Option<String>,
     pub is_admin: bool,
+    pub is_tester: bool,
     pub display_name: Option<String>,
     pub unsubscribe_token: Uuid,
     pub rss_token: Uuid,
@@ -67,6 +70,26 @@ impl User {
             telegram_name
         } else {
             unreachable!("user must always have display name")
+        }
+    }
+
+    pub fn context(&self) -> foxlib::flags::Context {
+        foxlib::flags::Context {
+            user_id: Some(self.id.to_string()),
+            properties: [("userRole".to_string(), self.role_name().to_string())]
+                .into_iter()
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    pub fn role_name(&self) -> &'static str {
+        if self.is_admin {
+            "admin"
+        } else if self.is_tester {
+            "tester"
+        } else {
+            "user"
         }
     }
 
@@ -326,6 +349,18 @@ impl User {
         Ok(())
     }
 
+    pub async fn update_tester(
+        conn: &sqlx::PgPool,
+        user_id: Uuid,
+        enabled: bool,
+    ) -> Result<(), Error> {
+        sqlx::query_file!("queries/user/update_tester.sql", user_id, enabled)
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
+
     pub async fn set_reset_token(
         conn: &sqlx::PgPool,
         user_id: Uuid,
@@ -480,15 +515,8 @@ pub struct OwnedMediaItem {
     pub id: Uuid,
     pub owner_id: Uuid,
 
-    pub account_id: Option<Uuid>,
-    pub source_id: Option<String>,
-
     pub perceptual_hash: Option<i64>,
     pub sha256_hash: Sha256Hash,
-
-    pub link: Option<String>,
-    pub title: Option<String>,
-    pub posted_at: Option<chrono::DateTime<chrono::Utc>>,
 
     pub last_modified: chrono::DateTime<chrono::Utc>,
 
@@ -498,6 +526,56 @@ pub struct OwnedMediaItem {
 
     pub event_count: i32,
     pub last_event: Option<chrono::DateTime<chrono::Utc>>,
+
+    pub accounts: Option<Json<Vec<OwnedMediaItemAccount>>>,
+}
+
+impl OwnedMediaItem {
+    pub fn best_link(&self) -> Option<&str> {
+        self.accounts
+            .as_ref()?
+            .iter()
+            .max_by_key(|account| account.posted_at)
+            .map(|account| account.link.as_str())
+    }
+
+    pub fn best_title(&self) -> Option<&str> {
+        self.accounts
+            .as_ref()?
+            .iter()
+            .filter_map(|account| {
+                account
+                    .title
+                    .as_deref()
+                    .map(|title| (title, account.posted_at))
+            })
+            .max_by_key(|(_title, posted_at)| *posted_at)
+            .map(|(title, _posted_at)| title)
+    }
+
+    pub fn posted_most_recently(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        self.accounts
+            .as_ref()?
+            .iter()
+            .max_by_key(|account| account.posted_at)
+            .and_then(|account| account.posted_at)
+    }
+
+    pub fn accounts(&self) -> &[OwnedMediaItemAccount] {
+        self.accounts
+            .as_ref()
+            .map(|accounts| accounts.0.as_slice())
+            .unwrap_or_default()
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct OwnedMediaItemAccount {
+    pub account_id: Uuid,
+    pub source_id: String,
+    pub link: String,
+    pub title: Option<String>,
+    pub posted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Deserialize)]
@@ -563,8 +641,18 @@ impl OwnedMediaItem {
         user_id: Uuid,
         perceptual_hash: i64,
         sha256_hash: [u8; 32],
-        title: Option<&str>,
-    ) -> Result<Uuid, Error> {
+    ) -> Result<(Uuid, bool), Error> {
+        if let Some(media) = sqlx::query_file!(
+            "queries/owned_media/lookup_by_sha256.sql",
+            user_id,
+            sha256_hash.to_vec()
+        )
+        .fetch_optional(conn)
+        .await?
+        {
+            return Ok((media.id, false));
+        }
+
         let item_id = sqlx::query_file_scalar!(
             "queries/owned_media/add_manual_item.sql",
             user_id,
@@ -574,12 +662,11 @@ impl OwnedMediaItem {
                 None
             },
             sha256_hash.to_vec(),
-            title,
         )
         .fetch_one(conn)
         .await?;
 
-        Ok(item_id)
+        Ok((item_id, true))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -593,22 +680,46 @@ impl OwnedMediaItem {
         link: Option<String>,
         title: Option<String>,
         posted_at: Option<chrono::DateTime<chrono::Utc>>,
-    ) -> Result<Uuid, Error> {
-        let item = sqlx::query_file_scalar!(
-            "queries/owned_media/add_item.sql",
+    ) -> Result<(Uuid, bool), Error> {
+        let mut tx = conn.begin().await?;
+
+        let (id, is_new) = if let Some(media) = sqlx::query_file!(
+            "queries/owned_media/lookup_by_sha256.sql",
             user_id,
+            sha256_hash.to_vec()
+        )
+        .fetch_optional(&mut tx)
+        .await?
+        {
+            (media.id, false)
+        } else {
+            let item_id = sqlx::query_file_scalar!(
+                "queries/owned_media/add_item.sql",
+                user_id,
+                perceptual_hash.filter(|hash| *hash != 0),
+                sha256_hash.to_vec()
+            )
+            .fetch_one(&mut tx)
+            .await?;
+
+            (item_id, true)
+        };
+
+        sqlx::query_file!(
+            "queries/owned_media/link_site_account.sql",
+            id,
             account_id,
             source_id.to_string(),
-            perceptual_hash.filter(|hash| *hash != 0),
-            sha256_hash.to_vec(),
             link,
             title,
             posted_at
         )
-        .fetch_one(conn)
+        .execute(&mut tx)
         .await?;
 
-        Ok(item)
+        tx.commit().await?;
+
+        Ok((id, is_new))
     }
 
     pub async fn update_media(
@@ -666,7 +777,7 @@ impl OwnedMediaItem {
     }
 
     pub fn alt_text(&self) -> String {
-        match (self.title.as_ref(), self.posted_at) {
+        match (self.best_title(), self.posted_most_recently()) {
             (Some(title), Some(posted_at)) => {
                 format!("{} posted {}", title, posted_at.to_rfc2822())
             }
@@ -731,6 +842,56 @@ impl OwnedMediaItem {
             .await?;
 
         Ok(())
+    }
+
+    pub async fn merge(
+        conn: &sqlx::PgPool,
+        s3: &rusoto_s3::S3Client,
+        config: &crate::Config,
+        user_id: Uuid,
+        media_ids: &[Uuid],
+    ) -> Result<Uuid, Error> {
+        let mut media = futures::stream::iter(
+            media_ids
+                .iter()
+                .copied()
+                .map(|id| Self::get_by_id(conn, id, user_id)),
+        )
+        .buffer_unordered(2)
+        .try_collect::<Vec<_>>()
+        .await?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+
+        media.sort_by_key(|media| media.last_modified);
+
+        let merge_into = media.remove(0);
+
+        let mut tx = conn.begin().await?;
+
+        for item in media {
+            futures::try_join!(
+                delete_prefixed_object(s3, config, item.content_url.as_deref()),
+                delete_prefixed_object(s3, config, item.thumb_url.as_deref())
+            )?;
+
+            sqlx::query_file!(
+                "queries/owned_media/update_account.sql",
+                item.id,
+                merge_into.id
+            )
+            .execute(&mut tx)
+            .await?;
+
+            sqlx::query_file!("queries/owned_media/remove.sql", user_id, item.id)
+                .execute(&mut tx)
+                .await?;
+        }
+
+        tx.commit().await?;
+
+        Ok(merge_into.id)
     }
 
     pub async fn media_page(
@@ -1075,13 +1236,6 @@ impl LinkedAccount {
 
     pub async fn remove(conn: &sqlx::PgPool, user_id: Uuid, account_id: Uuid) -> Result<(), Error> {
         let mut tx = conn.begin().await?;
-
-        sqlx::query_file!(
-            "queries/linked_account/move_media_to_delete.sql",
-            account_id
-        )
-        .execute(&mut tx)
-        .await?;
 
         sqlx::query_file!("queries/linked_account/remove.sql", user_id, account_id)
             .fetch_one(&mut tx)

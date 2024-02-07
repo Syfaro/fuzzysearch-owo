@@ -274,7 +274,7 @@ async fn process_submission(
         .try_into()
         .expect("sha256 hash was wrong length");
 
-    let item_id = models::OwnedMediaItem::add_item(
+    let (item_id, is_new) = models::OwnedMediaItem::add_item(
         &ctx.conn,
         user_id,
         account_id,
@@ -287,18 +287,20 @@ async fn process_submission(
     )
     .await?;
 
-    let im = image::load_from_memory(&sub.file.ok_or(Error::Missing)?)?;
-    models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im).await?;
+    if is_new {
+        let im = image::load_from_memory(&sub.file.ok_or(Error::Missing)?)?;
+        models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im).await?;
 
-    ctx.producer
-        .enqueue_job(
-            SearchExistingSubmissionsJob {
-                user_id,
-                media_id: item_id,
-            }
-            .initiated_by(JobInitiator::user(user_id)),
-        )
-        .await?;
+        ctx.producer
+            .enqueue_job(
+                SearchExistingSubmissionsJob {
+                    user_id,
+                    media_id: item_id,
+                }
+                .initiated_by(JobInitiator::user(user_id)),
+            )
+            .await?;
+    }
 
     Ok(())
 }

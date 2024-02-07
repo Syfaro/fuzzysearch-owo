@@ -317,10 +317,7 @@ async fn hash_image(ctx: JobContext, _job: FaktoryJob, id: i32) -> Result<(), Er
 
     let mut sha256 = sha2::Sha256::new();
     sha256.update(&bytes);
-    let sha256: [u8; 32] = sha256
-        .finalize()
-        .try_into()
-        .expect("sha256 was wrong length");
+    let sha256: [u8; 32] = sha256.finalize().into();
     let size = bytes.len();
 
     let perceptual_hash = tokio::task::spawn_blocking(move || -> Option<i64> {

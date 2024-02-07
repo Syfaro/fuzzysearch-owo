@@ -137,6 +137,11 @@ pub struct Config {
     #[clap(long, env("REDIS_DSN"))]
     pub redis_dsn: String,
 
+    #[clap(long, env("UNLEASH_API_URL"))]
+    pub unleash_api_url: String,
+    #[clap(long, env("UNLEASH_SECRET"))]
+    pub unleash_secret: String,
+
     /// FuzzySearch API host.
     #[clap(
         long,
@@ -342,6 +347,14 @@ impl<'de> Deserialize<'de> for UrlUuid {
         Ok(Self(Uuid::from_bytes(data)))
     }
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, enum_map::Enum)]
+enum Features {
+    #[serde(rename = "fuzzysearch_owo_merge_media")]
+    MergeMedia,
+}
+
+type Unleash = foxlib::flags::Unleash<Features>;
 
 #[derive(Template)]
 #[template(path = "base.html")]
@@ -610,6 +623,14 @@ async fn main() {
         .await
         .expect("could not connect to faktory");
 
+    let unleash = foxlib::flags::client::<Features>(
+        env!("CARGO_PKG_NAME"),
+        &config.unleash_api_url,
+        config.unleash_secret.clone(),
+    )
+    .await
+    .expect("could not create unleash client");
+
     let _guard = config.sentry_dsn.as_deref().map(|dsn| {
         sentry::init((
             dsn,
@@ -713,6 +734,7 @@ async fn main() {
                     .app_data(web::Data::new(config.clone()))
                     .app_data(web::Data::new(telegram_login.clone()))
                     .app_data(web::Data::new(producer.clone()))
+                    .app_data(web::Data::new(unleash.clone()))
                     .service(auth::service())
                     .service(user::service())
                     .service(api::service())

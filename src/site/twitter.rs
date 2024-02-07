@@ -471,10 +471,7 @@ async fn add_submission_twitter(
 
         let mut sha256 = sha2::Sha256::new();
         sha256.update(&image_data);
-        let sha256: [u8; 32] = sha256
-            .finalize()
-            .try_into()
-            .expect("sha256 was wrong length");
+        let sha256: [u8; 32] = sha256.finalize().into();
 
         let (im, perceptual_hash) = if let Ok(im) = image::load_from_memory(&image_data) {
             let hasher = fuzzysearch_common::get_hasher();
@@ -490,7 +487,7 @@ async fn add_submission_twitter(
             (None, None)
         };
 
-        let item_id = models::OwnedMediaItem::add_item(
+        let (item_id, is_new) = models::OwnedMediaItem::add_item(
             &ctx.conn,
             user_id,
             account_id,
@@ -506,19 +503,21 @@ async fn add_submission_twitter(
         )
         .await?;
 
-        if let Some(im) = im {
-            models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im)
-                .await?;
+        if is_new {
+            if let Some(im) = im {
+                models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im)
+                    .await?;
 
-            ctx.producer
-                .enqueue_job(
-                    SearchExistingSubmissionsJob {
-                        user_id,
-                        media_id: item_id,
-                    }
-                    .initiated_by(JobInitiator::user(user_id)),
-                )
-                .await?;
+                ctx.producer
+                    .enqueue_job(
+                        SearchExistingSubmissionsJob {
+                            user_id,
+                            media_id: item_id,
+                        }
+                        .initiated_by(JobInitiator::user(user_id)),
+                    )
+                    .await?;
+            }
         }
     }
 
@@ -931,7 +930,7 @@ async fn add_tweet(
         return Ok(media.id);
     }
 
-    let item_id = models::OwnedMediaItem::add_item(
+    let (item_id, is_new) = models::OwnedMediaItem::add_item(
         &ctx.conn,
         user_id,
         account_id,
@@ -947,20 +946,22 @@ async fn add_tweet(
     )
     .await?;
 
-    if let Some(im) = tweet.im {
-        models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im)
-            .await
-            .unwrap();
+    if is_new {
+        if let Some(im) = tweet.im {
+            models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im)
+                .await
+                .unwrap();
 
-        ctx.producer
-            .enqueue_job(
-                SearchExistingSubmissionsJob {
-                    user_id,
-                    media_id: item_id,
-                }
-                .initiated_by(JobInitiator::user(user_id)),
-            )
-            .await?;
+            ctx.producer
+                .enqueue_job(
+                    SearchExistingSubmissionsJob {
+                        user_id,
+                        media_id: item_id,
+                    }
+                    .initiated_by(JobInitiator::user(user_id)),
+                )
+                .await?;
+        }
     }
 
     Ok(item_id)
@@ -1036,10 +1037,7 @@ fn process_tweet<R: std::io::Read + std::io::Seek>(
 
     let mut sha256 = sha2::Sha256::new();
     sha256.update(&image_data);
-    let sha256: [u8; 32] = sha256
-        .finalize()
-        .try_into()
-        .expect("sha256 was wrong length");
+    let sha256: [u8; 32] = sha256.finalize().into();
 
     let (im, perceptual_hash) = if let Ok(im) = image::load_from_memory(&image_data) {
         let hasher = fuzzysearch_common::get_hasher();

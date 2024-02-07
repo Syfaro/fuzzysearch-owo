@@ -1,25 +1,32 @@
 SELECT
-    id,
-    owner_id,
-    account_id,
-    source_id,
+    id "id!",
+    owner_id "owner_id!",
     perceptual_hash,
-    sha256_hash "sha256_hash: Sha256Hash",
-    link,
-    title,
-    posted_at,
-    last_modified,
+    sha256_hash "sha256_hash!: Sha256Hash",
+    last_modified "last_modified!",
     content_url,
     content_size,
     thumb_url,
-    event_count,
-    last_event
+    event_count "event_count!",
+    last_event,
+    accounts "accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>"
 FROM
-    owned_media_item
+    owned_media_item_accounts
 WHERE
     owner_id = $1
     AND thumb_url IS NOT NULL
-    AND $2::uuid IS NULL OR account_id = $2
+    AND (
+        $2::uuid IS NULL
+        OR exists(
+            SELECT
+                1
+            FROM
+                owned_media_item_account
+            WHERE
+                owned_media_item_account.owned_media_item_id = owned_media_item_accounts.id
+                AND account_id = $2
+        )
+    )
 ORDER BY
     last_modified DESC
 LIMIT

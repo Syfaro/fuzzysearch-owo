@@ -136,10 +136,7 @@ async fn import_submission(
 
         let mut sha256 = sha2::Sha256::new();
         sha256.update(&image_data);
-        let sha256: [u8; 32] = sha256
-            .finalize()
-            .try_into()
-            .expect("sha256 was wrong length");
+        let sha256: [u8; 32] = sha256.finalize().into();
 
         let (im, perceptual_hash) = if let Ok(im) = image::load_from_memory(&image_data) {
             let hasher = fuzzysearch_common::get_hasher();
@@ -155,7 +152,7 @@ async fn import_submission(
             (None, None)
         };
 
-        let item_id = models::OwnedMediaItem::add_item(
+        let (item_id, is_new) = models::OwnedMediaItem::add_item(
             &ctx.conn,
             user_id,
             account_id,
@@ -171,19 +168,21 @@ async fn import_submission(
         )
         .await?;
 
-        if let Some(im) = im {
-            models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im)
-                .await?;
+        if is_new {
+            if let Some(im) = im {
+                models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im)
+                    .await?;
 
-            ctx.producer
-                .enqueue_job(
-                    SearchExistingSubmissionsJob {
-                        user_id,
-                        media_id: item_id,
-                    }
-                    .initiated_by(JobInitiator::user(user_id)),
-                )
-                .await?;
+                ctx.producer
+                    .enqueue_job(
+                        SearchExistingSubmissionsJob {
+                            user_id,
+                            media_id: item_id,
+                        }
+                        .initiated_by(JobInitiator::user(user_id)),
+                    )
+                    .await?;
+            }
         }
     }
 

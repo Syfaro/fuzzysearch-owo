@@ -421,6 +421,31 @@ impl Job for ToggleSiteAccounts {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+struct MigrateOwnedMediaAccounts;
+
+impl Job for MigrateOwnedMediaAccounts {
+    const NAME: &'static str = "migrate_owned_media_accounts";
+    type Data = ();
+    type Queue = Queue;
+
+    fn queue(&self) -> Self::Queue {
+        Queue::Core
+    }
+
+    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
+        Ok(None)
+    }
+
+    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+        Ok(vec![])
+    }
+
+    fn deserialize(_args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum JobInitiator {
@@ -877,8 +902,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                 .flat_map(|(media_id, event)| media.get(&media_id).map(|media| (media, event)))
                 .map(|(media, event)| SimilarItem {
                     source_link: media
-                        .link
-                        .as_deref()
+                        .best_link()
                         .unwrap_or_else(|| media.content_url.as_deref().unwrap_or("unknown"))
                         .to_owned(),
                     site_name: event.site.to_string(),
@@ -1088,6 +1112,14 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
             Ok(())
         },
     );
+
+    MigrateOwnedMediaAccounts::register(&mut forge, |cx, _job, _args| async move {
+        sqlx::query_file!("queries/admin/migrate_owned_media_account.sql")
+            .execute(&cx.conn)
+            .await?;
+
+        Ok(())
+    });
 
     let mut client = forge.finalize();
 

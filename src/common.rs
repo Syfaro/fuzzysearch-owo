@@ -324,8 +324,7 @@ async fn notify_email(
     let body = SimilarEmailTemplate {
         username: user.display_name(),
         source_link: owned_item
-            .link
-            .as_deref()
+            .best_link()
             .unwrap_or_else(|| owned_item.content_url.as_deref().unwrap_or("unknown")),
         site_name: &sub.site.to_string(),
         poster_name: sub.posted_by.as_deref().unwrap_or("unknown"),
@@ -375,8 +374,7 @@ async fn notify_telegram(
     let body = SimilarTelegramTemplate {
         username: user.display_name(),
         source_link: owned_item
-            .link
-            .as_deref()
+            .best_link()
             .unwrap_or_else(|| owned_item.content_url.as_deref().unwrap_or("unknown")),
         site_name: &sub.site.to_string(),
         poster_name: sub.posted_by.as_deref().unwrap_or("unknown"),
@@ -438,7 +436,7 @@ async fn import_add(
 
     let sha256_hash = sub.sha256.ok_or(Error::Missing)?;
 
-    let item = models::OwnedMediaItem::add_item(
+    let (media_id, is_new) = models::OwnedMediaItem::add_item(
         &ctx.conn,
         user_id,
         account_id,
@@ -451,11 +449,21 @@ async fn import_add(
     )
     .await?;
 
-    match download_image(ctx, &sub.content_url).await {
-        Ok(im) => {
-            models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item, im).await?
+    if is_new {
+        match download_image(ctx, &sub.content_url).await {
+            Ok(im) => {
+                models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, media_id, im)
+                    .await?;
+            }
+            Err(err) => tracing::warn!("could not attach image: {}", err),
         }
-        Err(err) => tracing::warn!("could not attach image: {}", err),
+
+        ctx.producer
+            .enqueue_job(
+                jobs::SearchExistingSubmissionsJob { user_id, media_id }
+                    .initiated_by(jobs::JobInitiator::user(user_id)),
+            )
+            .await?;
     }
 
     Ok(())
@@ -498,12 +506,6 @@ pub async fn handle_multipart_upload(
             continue;
         }
 
-        let title = field
-            .headers()
-            .get("x-image-title")
-            .map(|val| String::from_utf8_lossy(val.as_bytes()))
-            .map(|title| title.to_string());
-
         let mut file = tokio::task::spawn_blocking(move || -> Result<_, String> {
             let file = tempfile::tempfile().map_err(|err| err.to_string())?;
             Ok(tokio::fs::File::from_std(file))
@@ -529,10 +531,7 @@ pub async fn handle_multipart_upload(
             continue;
         }
 
-        let sha256_hash: [u8; 32] = hasher
-            .finalize()
-            .try_into()
-            .expect("sha256 hash was wrong size");
+        let sha256_hash: [u8; 32] = hasher.finalize().into();
         let hash_str = hex::encode(sha256_hash);
 
         tracing::info!(size, hash = ?hash_str, "received complete file from client");
@@ -559,30 +558,31 @@ pub async fn handle_multipart_upload(
         .await
         .map_err(|_err| Error::unknown_message("join error"))??;
 
-        let id = models::OwnedMediaItem::add_manual_item(
+        let (id, is_new) = models::OwnedMediaItem::add_manual_item(
             pool,
             user.id,
             i64::from_be_bytes(perceptual_hash),
             sha256_hash,
-            title.as_deref(),
         )
         .await?;
-
-        models::OwnedMediaItem::update_media(pool, s3, config, id, im).await?;
 
         models::UserEvent::notify(pool, redis, user.id, "Uploaded image.").await?;
 
         ids.push(id);
 
-        faktory
-            .enqueue_job(
-                jobs::SearchExistingSubmissionsJob {
-                    user_id: user.id,
-                    media_id: id,
-                }
-                .initiated_by(jobs::JobInitiator::user(user.id)),
-            )
-            .await?;
+        if is_new {
+            models::OwnedMediaItem::update_media(pool, s3, config, id, im).await?;
+
+            faktory
+                .enqueue_job(
+                    jobs::SearchExistingSubmissionsJob {
+                        user_id: user.id,
+                        media_id: id,
+                    }
+                    .initiated_by(jobs::JobInitiator::user(user.id)),
+                )
+                .await?;
+        }
     }
 
     Ok(ids)

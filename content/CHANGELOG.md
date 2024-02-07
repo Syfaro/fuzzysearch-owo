@@ -1,6 +1,17 @@
 # Changelog
 
-## v0.17.2 — Noveber 12th, 2023
+## v0.18.0 — February 7th, 2024
+
+* Added ability to merge multiple images into one entry.
+* Added beta feature opt-in ability.
+* Improved media addition by automatically grouping identical files.
+* Improved automatic imports to also search for previous uploads.
+* Improved how dates are displayed.
+* Improved UI with iconography.
+* Fixed an issue that could cause Bluesky posts to stop processing.
+* Internal updates.
+
+## v0.17.2 — November 12th, 2023
 
 * Improved Bluesky support with direct federated server access.
 * Fixed an issue where background tasks could reduce site responsiveness.

@@ -40,6 +40,19 @@
                   value="{{ user.display_name() }}" id="profile-name" required>
               </div>
             </div>
+          </div>
+
+          <div class="block">
+            <h2 class="subtitle is-4">Notifications</h2>
+
+            <h3 class="subtitle is-5">
+              <span class="icon-text">
+                <span class="icon">
+                  <i class="bi bi-mailbox2-flag"></i>
+                </span>
+                <span>Email</span>
+              </span>
+            </h3>
 
             <div class="field">
               <label class="label" for="profile-email">Email address</label>
@@ -52,10 +65,6 @@
               <p class="help">A link was sent to your email address, please follow it to verify your account.</p>
               {% endif %}
             </div>
-          </div>
-
-          <div class="block">
-            <h2 class="subtitle is-4">Notifications</h2>
 
             <div class="field">
               <label class="label" for="email-frequency">Email frequency</label>
@@ -81,12 +90,19 @@
               {% endif %}
             </div>
 
-            <div class="field">
-              <h3 class="subtitle is-5">Telegram notifications</h3>
+            <h3 class="subtitle is-5">
+              <span class="icon-text">
+                <span class="icon">
+                  <i class="bi bi-telegram"></i>
+                </span>
+                <span>Telegram</span>
+              </span>
+            </h3>
 
+            <div class="field">
               <label class="checkbox" for="telegram-notifications">
-                <input type="checkbox" id="telegram-notifications" name="telegram-notifications" {% if user.telegram_id.is_none() %} disabled {%
-                  else if telegram_notifications.0 %} checked {% endif %}>
+                <input type="checkbox" id="telegram-notifications" name="telegram-notifications"
+                  {% if user.telegram_id.is_none() %} disabled {% else if telegram_notifications.0 %} checked {% endif %}>
                 Send Telegram messages
               </label>
 
@@ -124,26 +140,73 @@
             </div>
           </div>
 
+          <div class="block">
+            <h2 class="subtitle is-4">Others</h2>
+
+            <div class="field">
+              <label class="checkbox" for="is-tester">
+                <input type="checkbox" id="is-tester" name="is-tester" {% if user.is_tester %} checked {% endif %}>
+                <span class="icon-text">
+                  <span class="icon has-text-info">
+                    <i class="bi bi-lightning-charge-fill"></i>
+                  </span>
+                  <span>
+                    Opt into early-access features
+                  </span>
+                </span>
+              </label>
+
+              <p class="help">
+                Get access to features that might not be complete yet.
+              </p>
+            </div>
+          </div>
+
           <div class="field">
             <div class="control">
-              <button class="button is-primary is-fullwidth">Save Settings</button>
+              <button class="button is-primary is-fullwidth">
+                <span class="icon-text">
+                  <span class="icon">
+                    <i class="bi bi-floppy-fill"></i>
+                  </span>
+                  <span>Save Settings</span>
+                </span>
+              </button>
             </div>
           </div>
 
           <div class="block mt-6">
             <h2 class="subtitle is-4">Security</h2>
 
-            <a class="button is-link is-outlined" href="/auth/sessions">Active Sessions</a>
+            <a class="button is-link is-outlined" href="/auth/sessions">
+              <span class="icon-text">
+                <span class="icon">
+                  <i class="bi bi-person-fill-lock"></i>
+                </span>
+                <span>Active Sessions</span>
+              </span>
+            </a>
+
+            <p class="help mt-3">
+              You may reset your password after adding an email address by
+              completing the forgot password process.
+            </p>
           </div>
 
           <div class="block mt-6">
             <h2 class="subtitle is-4">Integrations</h2>
 
             <div class="field">
-              <h3 class="subtitle is-5">RSS feed</h3>
+              <h3 class="subtitle is-5">RSS Feed</h3>
 
-              <a type="application/rss+xml" class="button"
-                href="/user/feed/rss?u={{ user.id.as_url() }}&t={{ user.rss_token.as_url() }}">Subscribe to RSS feed</a>
+              <a type="application/rss+xml" class="button" href="/user/feed/rss?u={{ user.id.as_url() }}&t={{ user.rss_token.as_url() }}">
+                <span class="icon-text">
+                  <span class="icon">
+                    <i class="bi bi-rss-fill"></i>
+                  </span>
+                  <span>Subscribe to RSS feed</span>
+                </span>
+              </a>
             </div>
 
             <div class="field mt-5">
@@ -151,29 +214,33 @@
 
               <label class="label" for="api-username">Username</label>
               <div class="control">
-                <input type="text" class="input" value="{{ user.id.as_url() }}" id="api-username" readonly>
+                <input type="text" class="input click-copy" value="{{ user.id.as_url() }}" id="api-username" readonly>
               </div>
 
               <label class="label" for="api-password">Password</label>
-              <div class="control">
-                <input type="text" class="input" value="{{ user.api_token.as_url() }}" id="api-password" readonly>
-              </div>
+              <p class="control has-icons-right">
+                <input type="password" class="input click-copy hover-reveal" value="{{ user.api_token.as_url() }}" id="api-password" readonly>
+              </p>
 
               <p class="help">
                 You may use this username and password for basic auth to upload
                 new images by sending a POST request to <code>/api/upload</code>.
                 Use a multipart form, putting images in a field named
-                <code>image</code>. You may specify the header
-                <code>x-image-title</code> on the multipart field to set the title
-                for that image.
+                <code>image</code>.
               </p>
             </div>
           </div>
 
           <div class="field mt-6">
             <div class="control">
-              <button id="delete-account" class="button is-danger is-outlined"
-                formaction="/user/delete">Delete Account</button>
+              <button id="delete-account" class="button is-danger is-outlined" formaction="/user/delete">
+                <span class="icon-text">
+                  <span class="icon">
+                    <i class="bi bi-trash-fill"></i>
+                  </span>
+                  <span>Delete Account</span>
+                </span>
+              </button>
             </div>
           </div>
         </form>
@@ -189,6 +256,27 @@
     if (!wasIntentional) {
       ev.preventDefault();
     }
+  });
+
+  [...document.querySelectorAll('.click-copy')].forEach((elem) => {
+    elem.addEventListener('click', () => {
+      navigator.clipboard.writeText(elem.value);
+
+      bulmaToast.toast({
+        message: 'Copied value.',
+        type: 'is-info'
+      });
+    });
+  });
+
+  [...document.querySelectorAll('.hover-reveal')].forEach((elem) => {
+    elem.addEventListener('mouseover', () => {
+      elem.type = 'text';
+    });
+
+    elem.addEventListener('mouseleave', () => {
+      elem.type = 'password';
+    });
   });
 </script>
 {% endblock %}

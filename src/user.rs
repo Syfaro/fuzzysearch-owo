@@ -5,7 +5,7 @@ use actix_web::{get, post, services, web, HttpResponse, Scope};
 use askama::Template;
 use base64::Engine;
 use foxlib::jobs::FaktoryProducer;
-use futures::TryStreamExt;
+use futures::{FutureExt, TryFutureExt, TryStreamExt};
 use rand::Rng;
 use serde::Deserialize;
 use serde_with::{serde_as, NoneAsEmptyString};
@@ -17,7 +17,7 @@ use crate::{
     common,
     jobs::{self, JobInitiatorExt},
     models::{self, setting, Site, UserSettingItem},
-    AddFlash, AsUrl, ClientIpAddr, Error, FlashStyle, UrlUuid, WrappedTemplate,
+    AddFlash, AsUrl, ClientIpAddr, Error, Features, FlashStyle, UrlUuid, WrappedTemplate,
 };
 
 #[derive(Template)]
@@ -159,11 +159,18 @@ async fn settings_post(
         _ => None,
     };
 
+    let tester = form_fields
+        .get("is-tester")
+        .and_then(|value| value.first())
+        .map(|value| value == "on")
+        .unwrap_or_default();
+
     futures::try_join!(
         models::UserSetting::set(&conn, user.id, &email_frequency),
         models::UserSetting::set(&conn, user.id, &telegram_notifications),
         models::UserSetting::set(&conn, user.id, &skipped_sites),
         models::User::update_display_name(&conn, user.id, display_name),
+        models::User::update_tester(&conn, user.id, tester),
     )?;
 
     let email_address = match form_fields.get("email").and_then(|value| value.first()) {
@@ -390,15 +397,22 @@ async fn check_post(
         )
         .await?
         .into_iter()
-        .filter_map(|media| {
-            let account = accounts.get(&media.account_id?)?;
+        .flat_map(|media| {
+            media
+                .accounts
+                .map(|accounts| accounts.0)
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|item_account| {
+                    let account = accounts.get(&item_account.account_id)?;
 
-            Some(CheckLink {
-                url: media.link?,
-                site: account.source_site,
-                username: account.username.clone(),
-                posted_at: media.posted_at,
-            })
+                    Some(CheckLink {
+                        url: item_account.link,
+                        site: account.source_site,
+                        username: account.username.clone(),
+                        posted_at: item_account.posted_at,
+                    })
+                })
         })
         .collect();
 
@@ -518,10 +532,7 @@ async fn account_remove(
 ) -> Result<HttpResponse, Error> {
     models::LinkedAccount::remove(&conn, user.id, form.account_id).await?;
 
-    session.add_flash(
-        FlashStyle::Success,
-        "Removed account and associated submissions.",
-    );
+    session.add_flash(FlashStyle::Success, "Removed account link.");
 
     Ok(HttpResponse::Found()
         .insert_header(("Location", request.url_for_static("user_home")?.as_str()))
@@ -618,12 +629,15 @@ struct MediaView<'a> {
     similar_image_events: &'a [(chrono::DateTime<chrono::Utc>, models::SimilarImage)],
     other_events: &'a [models::UserEvent],
     allowlisted_users: HashMap<(Site, String), Uuid>,
+    merge_enabled: bool,
+    similar_media: Vec<models::OwnedMediaItem>,
 }
 
 #[get("/view/{media_id}", name = "media_view")]
 async fn media_view(
     request: actix_web::HttpRequest,
     conn: web::Data<sqlx::PgPool>,
+    unleash: web::Data<crate::Unleash>,
     path: web::Path<(UrlUuid,)>,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
@@ -631,8 +645,21 @@ async fn media_view(
         .await?
         .ok_or(Error::Missing)?;
 
-    let recent_events =
-        models::UserEvent::recent_events_for_media(&conn, user.id, media.id).await?;
+    let similar_media_fut = if let Some(perceptual_hash) = media.perceptual_hash {
+        models::OwnedMediaItem::find_similar_with_owner(&conn, user.id, perceptual_hash)
+            .map_ok(|mut similar| {
+                similar.retain(|item| item.id != media.id);
+                similar
+            })
+            .boxed_local()
+    } else {
+        futures::future::ready(Ok(vec![])).boxed_local()
+    };
+
+    let (recent_events, similar_media) = tokio::try_join!(
+        models::UserEvent::recent_events_for_media(&conn, user.id, media.id),
+        similar_media_fut
+    )?;
 
     let (similar_events, other_events): (Vec<_>, Vec<_>) = recent_events
         .into_iter()
@@ -662,11 +689,70 @@ async fn media_view(
         similar_image_events: &similar_events,
         other_events: &other_events,
         allowlisted_users,
+        merge_enabled: unleash.is_enabled(Features::MergeMedia, Some(&user.context()), false),
+        similar_media,
     }
     .wrap(&request, Some(&user))
     .await
     .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[post("/merge")]
+#[allow(clippy::too_many_arguments)]
+async fn media_merge(
+    conn: web::Data<sqlx::PgPool>,
+    s3: web::Data<rusoto_s3::S3Client>,
+    unleash: web::Data<crate::Unleash>,
+    config: web::Data<crate::Config>,
+    request: actix_web::HttpRequest,
+    session: actix_session::Session,
+    user: models::User,
+    form: web::Form<Vec<(String, String)>>,
+) -> Result<HttpResponse, Error> {
+    if !unleash.is_enabled(Features::MergeMedia, Some(&user.context()), false) {
+        return Ok(HttpResponse::Found()
+            .insert_header(("Location", request.url_for_static("user_home")?.as_str()))
+            .finish());
+    }
+
+    let mut kvs: HashMap<String, Vec<Uuid>> = HashMap::new();
+    for (name, value) in form.0 {
+        if let Ok(value_id) = value.parse() {
+            kvs.entry(name).or_default().push(value_id)
+        }
+    }
+
+    let merge_ids = kvs.remove("merge_ids").unwrap_or_default();
+
+    if merge_ids.len() <= 1 {
+        let first_id = merge_ids.first().ok_or(Error::Missing)?;
+
+        session.add_flash(
+            FlashStyle::Warning,
+            "At least one item must be selected to perform merge.",
+        );
+
+        return Ok(HttpResponse::Found()
+            .insert_header((
+                "Location",
+                request.url_for("media_view", [first_id.as_url()])?.as_str(),
+            ))
+            .finish());
+    }
+
+    let merged_id = models::OwnedMediaItem::merge(&conn, &s3, &config, user.id, &merge_ids).await?;
+
+    session.add_flash(FlashStyle::Success, "Merged media.");
+
+    Ok(HttpResponse::Found()
+        .insert_header((
+            "Location",
+            request
+                .url_for("media_view", [merged_id.as_url()])?
+                .as_str(),
+        ))
+        .finish())
 }
 
 #[derive(Deserialize)]
@@ -1227,26 +1313,26 @@ async fn rss_feed(
         .ok()?;
 
         let item = rss::ItemBuilder::default()
-            .guid(
+            .guid(Some(
                 rss::GuidBuilder::default()
                     .value(entry.event.id.to_string())
                     .permalink(false)
                     .build(),
-            )
-            .pub_date(entry.event.last_updated.to_rfc2822())
-            .title("Image match found".to_string())
-            .description(entry.event.display())
-            .content(content)
-            .link(media_url.to_string())
+            ))
+            .pub_date(Some(entry.event.last_updated.to_rfc2822()))
+            .title(Some("Image match found".to_string()))
+            .description(Some(entry.event.display()))
+            .content(Some(content))
+            .link(Some(media_url.to_string()))
             .build();
 
         Some(item)
     });
 
     let channel = rss::ChannelBuilder::default()
-        .title("FuzzySearch OwO Feed")
+        .title("FuzzySearch OwO Feed".to_string())
         .link(config.host_url.clone())
-        .description("Image upload event feed.")
+        .description("Image upload event feed.".to_string())
         .items(items.collect::<Vec<_>>())
         .build();
 
@@ -1278,7 +1364,12 @@ pub fn service() -> Scope {
             account_view,
             account_verify,
         ]))
-        .service(web::scope("/media").service(services![media_list, media_view, media_remove]))
+        .service(web::scope("/media").service(services![
+            media_list,
+            media_view,
+            media_merge,
+            media_remove
+        ]))
         .service(web::scope("/email").service(services![
             email_add,
             email_add_post,
@@ -1286,4 +1377,19 @@ pub fn service() -> Scope {
             verify_email_post
         ]))
         .service(web::scope("/allowlist").service(services![allowlist_add, allowlist_remove]))
+}
+
+mod filters {
+    pub fn clean_link<T: std::fmt::Display>(link: T) -> askama::Result<String> {
+        let cleaned_link = link
+            .to_string()
+            .replace("https://", "")
+            .replace("http://", "")
+            .replace("www.", "");
+
+        Ok(cleaned_link
+            .strip_suffix('/')
+            .unwrap_or(&cleaned_link)
+            .to_string())
+    }
 }

@@ -1,29 +1,19 @@
-{% block header %}
-<style>
-  .relative-time {
-    white-space: nowrap;
-  }
-
-  .match-link {
-    text-overflow: ellipsis;
-  }
-</style>
-{% endblock %}
-
 <section class="section" data-media-id="{{ media.id }}">
   <div class="container">
     <div class="columns is-centered">
       <div class="column is-one-third">
-        {% match media.title %}
+        {% match media.best_title() %}
         {% when Some with (title) %}
         <h1 class="title has-text-centered">{{ title }}</h1>
         {% else %}
         <h1 class="title has-text-centered">Media Item</h1>
         {% endmatch %}
 
-        {% match media.posted_at %}
+        {% match media.posted_most_recently() %}
         {% when Some with (posted_at) %}
-          <h3 class="subtitle has-text-centered">{{ posted_at }}</h3>
+          <h3 class="subtitle has-text-centered absolute-time" data-timestamp="{{ posted_at.timestamp() }}">
+            {{ posted_at }}
+          </h3>
         {% else %}
         {% endmatch %}
 
@@ -37,11 +27,63 @@
           <p>No image found.</p>
           {% endmatch %}
         </div>
-
-        {% if !similar_image_events.is_empty() %}
       </div>
     </div>
 
+    {% if merge_enabled && !similar_media.is_empty() %}
+    <div class="columns is-centered">
+      <div class="column is-one-third">
+        <div class="notification is-info">
+          There are other uploads that appear to be very similar to this one. Would you like to merge them?
+        </div>
+
+        <form method="post" action="/user/media/merge">
+          <input type="hidden" name="merge_ids" value="{{ media.id }}">
+
+          <div>
+            {% for media in similar_media %}
+            <div class="columns">
+              <div class="column is-narrow">
+                <a href="/user/media/view/{{ media.id.as_url() }}">
+                  {% match media.thumb_url %}
+                  {% when Some with (thumb_url) %}
+                  <figure class="image is-128x128 is-inline-block" style="overflow: hidden;">
+                    <img src="{{ thumb_url }}" alt="{{ media.alt_text() }}">
+                  </figure>
+                  {% else %}
+                  <span>No image found.</span>
+                  {% endmatch %}
+                </a>
+              </div>
+
+              <div class="column">
+                <label class="checkbox">
+                  <input type="checkbox" name="merge_ids" value="{{ media.id }}">
+                  Include in merge
+                </label>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+
+          <div>
+            <div class="control is-flex-grow-1">
+              <button class="button is-fullwidth is-info">
+                <span class="icon-text">
+                  <span class="icon">
+                    <i class="bi bi-lightning-charge-fill"></i>
+                  </span>
+                  <span>Merge</span>
+                </span>
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if !similar_image_events.is_empty() %}
     <div class="columns is-centered">
       <div class="column">
         <h2 class="subtitle has-text-centered">Matched Images</h2>
@@ -54,7 +96,7 @@
                 <th>Posted By</th>
                 <th>Found</th>
                 <th>Link</th>
-                <th>Actions</th>
+                <th class="has-text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -78,10 +120,10 @@
                 </td>
                 <td>
                   <span class="match-link">
-                    <a href="{{ image.best_link() }}" target="_blank">{{ image.best_link() }}</a>
+                    <a href="{{ image.best_link() }}" target="_blank">{{ image.best_link()|clean_link }}</a>
                   </span>
                 </td>
-                <td class="has-text-centered">
+                <td class="has-text-right">
                   <form method="POST">
                     <input type="hidden" name="redirect_url" value="{{ url }}">
                     <input type="hidden" name="site" value="{{ image.site.to_string() }}">
@@ -89,9 +131,23 @@
                     {% match image.poster_pair() %}
                     {% when Some with (poster_pair) %}
                     {% if allowlisted_users.contains_key(poster_pair) %}
-                    <button formaction="/user/allowlist/remove" class="button has-tooltip-left" data-tooltip="Receive notifications when this account posts on this site">Un-allowlist Poster</a>
+                    <button formaction="/user/allowlist/remove" class="button has-tooltip-left" data-tooltip="Receive notifications when this account posts on this site">
+                      <span class="icon-text">
+                        <span class="icon">
+                          <i class="bi bi-clipboard-x-fill"></i>
+                        </span>
+                        <span>Un-Allowlist Poster</span>
+                      </span>
+                    </button>
                     {% else %}
-                    <button formaction="/user/allowlist/add" class="button has-tooltip-left" data-tooltip="Skip sending notifications when this account posts on this site">Allowlist Poster</a>
+                    <button formaction="/user/allowlist/add" class="button has-tooltip-left" data-tooltip="Skip sending notifications when this account posts on this site">
+                      <span class="icon-text">
+                        <span class="icon">
+                          <i class="bi bi-clipboard-plus"></i>
+                        </span>
+                        <span>Allowlist Poster</span>
+                      </span>
+                    </button>
                     {% endif %}
                     {% else %}
                     <button class="button is-text" disabled>No Actions Available</button>
@@ -105,14 +161,11 @@
         </div>
       </div>
     </div>
+    {% endif %}
 
+    {% if !other_events.is_empty() %}
     <div class="columns is-centered">
       <div class="column is-one-third">
-        {% endif %}
-
-        {% if !other_events.is_empty() %}
-        <hr>
-
         <h2 class="subtitle has-text-centered">Other Events</h2>
 
         <ul>
@@ -126,24 +179,73 @@
             </li>
           {% endfor %}
         </ul>
-        {% endif %}
+      </div>
+    </div>
+    {% endif %}
 
-        <hr>
+    {% if !media.accounts().is_empty() %}
+    <div class="columns is-centered">
+      <div class="column">
+        <div class="block">
+          <h2 class="subtitle has-text-centered">My Uploads</h2>
 
+          <div class="table-container">
+            <table class="table is-fullwidth">
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Uploaded</th>
+                  <th>Link</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for account in media.accounts() %}
+                <tr>
+                  <td>
+                    {% match account.title %}
+                    {% when Some with (title) %}
+                    {{ title }}
+                    {% else %}
+                    <span class="has-text-grey">Untitled</span>
+                    {% endmatch %}
+                  </td>
+                  <td>
+                    {% match account.posted_at %}
+                    {% when Some with (posted_at) %}
+                      <span class="relative-time"
+                        data-timestamp="{{ posted_at.timestamp() }}"
+                        title="{{ posted_at.to_rfc2822() }}">
+                        {{ posted_at }}
+                      </span>
+                    {% else %}
+                      <span class="has-text-grey">Unknown</span>
+                    {% endmatch %}
+                  </td>
+                  <td><a href="{{ account.link }}">{{ account.link|clean_link }}</a></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="columns is-centered">
+      <div class="column is-one-third">
         <div class="block">
           <form method="POST" action="/user/media/remove">
             <input type="hidden" name="media_id" value="{{ media.id }}">
-            <div class="field is-grouped">
-              {% match media.link %}
-              {% when Some with (link) %}
-              <div class="control is-flex-grow-1">
-                <a href="{{ link }}" target="_blank" class="button is-fullwidth is-primary">View</a>
-              </div>
-              {% else %}
-              {% endmatch %}
-              <div class="control is-flex-grow-1">
-                <button class="button is-fullwidth is-danger">Remove Media</button>
-              </div>
+            <div class="control is-flex-grow-1">
+              <button class="button is-fullwidth is-danger">
+                <span class="icon-text">
+                  <span class="icon">
+                    <i class="bi bi-trash-fill"></i>
+                  </span>
+                  <span>Remove Media</span>
+                </span>
+              </button>
             </div>
           </form>
         </div>

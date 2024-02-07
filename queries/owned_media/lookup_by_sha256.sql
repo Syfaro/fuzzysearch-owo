@@ -13,5 +13,5 @@ SELECT
 FROM
     owned_media_item_accounts
 WHERE
-    id = $1
-    AND owner_id = $2;
+    owner_id = $1
+    AND sha256_hash = $2;

@@ -351,10 +351,7 @@ pub async fn limited_image_download(
         return Err(Error::unknown_message("content too short to check type"));
     }
 
-    Ok((
-        sha.finalize().try_into().expect("sha256 was wrong length"),
-        buf.freeze(),
-    ))
+    Ok((sha.finalize().into(), buf.freeze()))
 }
 
 pub mod types {

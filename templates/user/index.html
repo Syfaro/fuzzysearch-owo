@@ -27,7 +27,14 @@
 
           {% if user.has_verified_account() %}
           {% if monitored_accounts.is_empty() %}
-          <a href="/user/account/link" class="button is-primary is-large">Link First Account</a>
+          <a href="/user/account/link" class="button is-primary is-large">
+            <span class="icon-text">
+              <span class="icon">
+                <i class="bi bi-link-45deg"></i>
+              </span>
+              <span>Link Account</span>
+            </span>
+          </a>
           {% else %}
           <div class="block">
             <ul>
@@ -42,7 +49,14 @@
           </div>
 
           <div class="block">
-            <a href="/user/account/link" class="button is-info is-outlined">Link Another Account</a>
+            <a href="/user/account/link" class="button is-info is-outlined">
+              <span class="icon-text">
+                <span class="icon">
+                  <i class="bi bi-link-45deg"></i>
+                </span>
+                <span>Link Another Account</span>
+              </span>
+            </a>
           </div>
           {% endif %}
           {% else if user.has_unverified_email() %}
@@ -66,7 +80,14 @@
                   <input class="file-input" type="file" name="image" accept="image/png, image/jpeg"
                     data-file-name-label="#upload-single-label" data-upload-button="#single-upload-button" multiple>
                   <span class="file-cta">
-                    <span class="file-label">Select Photo</span>
+                    <span class="file-label">
+                      <span class="icon-text">
+                        <span class="icon">
+                          <i class="bi bi-card-image"></i>
+                        </span>
+                        <span>Select Photo</span>
+                      </span>
+                    </span>
                   </span>
                   <span class="file-name" id="upload-single-label">No File Selected</span>
                 </label>
@@ -78,7 +99,14 @@
             </div>
 
             <div class="control">
-              <button id="single-upload-button" class="button is-link is-fullwidth is-outlined" disabled>Upload</button>
+              <button id="single-upload-button" class="button is-link is-fullwidth is-outlined" disabled>
+                <span class="icon-text">
+                  <span class="icon">
+                    <i class="bi bi-cloud-upload-fill"></i>
+                  </span>
+                  <span>Upload</span>
+                </span>
+              </button>
             </div>
           </form>
         </div>
@@ -95,12 +123,7 @@
         {% when Some with (thumb_url) %}
         <figure class="image is-128x128 is-inline-block" style="overflow: hidden;">
           <a href="/user/media/view/{{ item.id.as_url() }}">
-            {% match item.content_url %}
-            {% when Some with (content_url) %}
             <img src="{{ thumb_url }}" alt="{{ item.alt_text() }}">
-            {% else %}
-            <img src="{{ thumb_url }}" alt="{{ item.alt_text() }}">
-            {% endmatch %}
           </a>
         </figure>
         {% else %}
