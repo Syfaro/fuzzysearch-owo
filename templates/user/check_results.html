@@ -22,9 +22,7 @@
                 <a href="{{ link.url }}">{{ link.site }} &mdash; {{ link.username }}</a>
                 {% match link.posted_at %}
                 {% when Some(posted_at) %}
-                <span class="ml-2 relative-time"
-                  data-timestamp="{{ posted_at.timestamp() }}"
-                  title="{{ posted_at.to_rfc2822() }}">
+                <span class="ml-2 relative-time" data-timestamp="{{ posted_at.timestamp() }}">
                   {{ posted_at }}
                 </span>
                 {% else %}

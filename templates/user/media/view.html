@@ -112,9 +112,7 @@
                   {% endmatch %}
                 </td>
                 <td>
-                  <span class="relative-time"
-                    data-timestamp="{{ created_at.timestamp() }}"
-                    title="{{ created_at.to_rfc2822() }}">
+                  <span class="relative-time" data-timestamp="{{ created_at.timestamp() }}">
                     {{ created_at }}
                   </span>
                 </td>
@@ -171,9 +169,7 @@
         <ul>
           {% for event in other_events %}
             <li>{{ event.display() }}
-              <span class="pl-3 has-text-weight-light has-text-grey relative-time"
-                data-timestamp="{{ event.created_at.timestamp() }}"
-                title="{{ event.created_at.to_rfc2822() }}">
+              <span class="pl-3 has-text-weight-light has-text-grey relative-time" data-timestamp="{{ event.created_at.timestamp() }}">
                 {{ event.created_at }}
               </span>
             </li>
@@ -212,9 +208,7 @@
                   <td>
                     {% match account.posted_at %}
                     {% when Some with (posted_at) %}
-                      <span class="relative-time"
-                        data-timestamp="{{ posted_at.timestamp() }}"
-                        title="{{ posted_at.to_rfc2822() }}">
+                      <span class="relative-time" data-timestamp="{{ posted_at.timestamp() }}">
                         {{ posted_at }}
                       </span>
                     {% else %}

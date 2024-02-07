@@ -6,7 +6,7 @@
   {% when Some with (previous_page) %}
   <a class="pagination-previous" href="{{ data.url(previous_page) }}">Previous</a>
   {% else %}
-  <a class="pagination-previous is-disabled" href="{{ data.url(0) }}" title="This is the first page" disabled>
+  <a class="pagination-previous is-disabled" href="{{ data.url(0) }}" data-tooltip="This is the first page" disabled>
     Previous
   </a>
   {% endmatch %}
@@ -15,7 +15,7 @@
   {% when Some with (next_page) %}
   <a class="pagination-next" href="{{ data.url(next_page) }}">Next page</a>
   {% else %}
-  <a class="pagination-next is-disabled" href="{{ data.url(last_page) }}" title="This is the last page" disabled>
+  <a class="pagination-next is-disabled" href="{{ data.url(last_page) }}" data-tooltip="This is the last page" disabled>
     Next page
   </a>
   {% endmatch %}
@@ -30,7 +30,7 @@
   {% when Some with (previous_page) %}
   <a class="pagination-previous" href="{{ data.url(previous_page) }}">Previous</a>
   {% else %}
-  <a class="pagination-previous is-disabled" href="{{ data.url(0) }}" title="This is the first page" disabled>
+  <a class="pagination-previous is-disabled" href="{{ data.url(0) }}" data-tooltip="This is the first page" disabled>
     Previous
   </a>
   {% endmatch %}
@@ -39,7 +39,7 @@
   {% when Some with (next_page) %}
   <a class="pagination-next" href="{{ data.url(next_page) }}">Next page</a>
   {% else %}
-  <a class="pagination-next is-disabled" href="{{ data.url(last_page) }}" title="This is the last page" disabled>
+  <a class="pagination-next is-disabled" href="{{ data.url(last_page) }}" data-tooltip="This is the last page" disabled>
     Next page
   </a>
   {% endmatch %}
