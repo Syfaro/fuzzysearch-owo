@@ -62,7 +62,7 @@ pub enum EventMessage {
     ResolvedDid {
         did: String,
         result: ResolvedDidResult,
-    }
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -74,7 +74,7 @@ pub enum ResolvedDidResult {
     },
     Error {
         message: String,
-    }
+    },
 }
 
 struct UnauthorizedWsEventSession;
