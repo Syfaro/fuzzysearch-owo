@@ -626,7 +626,18 @@ impl OwnedMediaItem {
         user_id: Uuid,
         perceptual_hash: i64,
         sha256_hash: [u8; 32],
-    ) -> Result<Uuid, Error> {
+    ) -> Result<(Uuid, bool), Error> {
+        if let Some(media) = sqlx::query_file!(
+            "queries/owned_media/lookup_by_sha256.sql",
+            user_id,
+            sha256_hash.to_vec()
+        )
+        .fetch_optional(conn)
+        .await?
+        {
+            return Ok((media.id, false));
+        }
+
         let item_id = sqlx::query_file_scalar!(
             "queries/owned_media/add_manual_item.sql",
             user_id,
@@ -640,7 +651,7 @@ impl OwnedMediaItem {
         .fetch_one(conn)
         .await?;
 
-        Ok(item_id)
+        Ok((item_id, true))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -654,21 +665,34 @@ impl OwnedMediaItem {
         link: Option<String>,
         title: Option<String>,
         posted_at: Option<chrono::DateTime<chrono::Utc>>,
-    ) -> Result<Uuid, Error> {
+    ) -> Result<(Uuid, bool), Error> {
         let mut tx = conn.begin().await?;
 
-        let item_id = sqlx::query_file_scalar!(
-            "queries/owned_media/add_item.sql",
+        let (id, is_new) = if let Some(media) = sqlx::query_file!(
+            "queries/owned_media/lookup_by_sha256.sql",
             user_id,
-            perceptual_hash.filter(|hash| *hash != 0),
             sha256_hash.to_vec()
         )
-        .fetch_one(&mut tx)
-        .await?;
+        .fetch_optional(&mut tx)
+        .await?
+        {
+            (media.id, false)
+        } else {
+            let item_id = sqlx::query_file_scalar!(
+                "queries/owned_media/add_item.sql",
+                user_id,
+                perceptual_hash.filter(|hash| *hash != 0),
+                sha256_hash.to_vec()
+            )
+            .fetch_one(&mut tx)
+            .await?;
+
+            (item_id, true)
+        };
 
         sqlx::query_file!(
             "queries/owned_media/link_site_account.sql",
-            item_id,
+            id,
             account_id,
             source_id.to_string(),
             link,
@@ -680,7 +704,7 @@ impl OwnedMediaItem {
 
         tx.commit().await?;
 
-        Ok(item_id)
+        Ok((id, is_new))
     }
 
     pub async fn update_media(

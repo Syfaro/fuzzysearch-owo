@@ -525,10 +525,7 @@ async fn account_remove(
 ) -> Result<HttpResponse, Error> {
     models::LinkedAccount::remove(&conn, user.id, form.account_id).await?;
 
-    session.add_flash(
-        FlashStyle::Success,
-        "Removed account link.",
-    );
+    session.add_flash(FlashStyle::Success, "Removed account link.");
 
     Ok(HttpResponse::Found()
         .insert_header(("Location", request.url_for_static("user_home")?.as_str()))

@@ -320,7 +320,7 @@ async fn add_submission_deviantart(
         (None, None)
     };
 
-    let item_id = models::OwnedMediaItem::add_item(
+    let (item_id, is_new) = models::OwnedMediaItem::add_item(
         &ctx.conn,
         user_id,
         account_id,
@@ -333,18 +333,21 @@ async fn add_submission_deviantart(
     )
     .await?;
 
-    if let Some(im) = im {
-        models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im).await?;
+    if is_new {
+        if let Some(im) = im {
+            models::OwnedMediaItem::update_media(&ctx.conn, &ctx.s3, &ctx.config, item_id, im)
+                .await?;
 
-        ctx.producer
-            .enqueue_job(
-                SearchExistingSubmissionsJob {
-                    user_id,
-                    media_id: item_id,
-                }
-                .initiated_by(JobInitiator::user(user_id)),
-            )
-            .await?;
+            ctx.producer
+                .enqueue_job(
+                    SearchExistingSubmissionsJob {
+                        user_id,
+                        media_id: item_id,
+                    }
+                    .initiated_by(JobInitiator::user(user_id)),
+                )
+                .await?;
+        }
     }
 
     if was_import {
