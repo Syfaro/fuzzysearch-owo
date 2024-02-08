@@ -15,6 +15,7 @@ use futures::TryStreamExt;
 use rusoto_s3::S3;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::{
@@ -287,6 +288,79 @@ async fn events(
     }
 }
 
+#[get("/ingest/stats")]
+async fn ingest_stats(
+    user: models::User,
+    nats: web::Data<async_nats::Client>,
+) -> impl actix_web::Responder {
+    if !user.is_admin {
+        return Err(Error::Unauthorized);
+    }
+
+    let (tx, rx) = tokio::sync::mpsc::channel::<Result<_, Error>>(10);
+
+    tokio::task::spawn_local(
+        async move {
+            let mut counts = std::collections::HashMap::<_, usize>::new();
+            let mut ticker = tokio::time::interval(std::time::Duration::from_secs(1));
+
+            loop {
+                let mut sub = match nats.subscribe("fuzzysearch.ingest.>").await {
+                    Ok(sub) => sub,
+                    Err(err) => {
+                        if let Err(err) = tx.send(Err(Error::from_displayable(err))).await {
+                            tracing::error!("could not send error: {err}");
+                        }
+                        return;
+                    }
+                };
+
+                tokio::select! {
+                    msg = sub.next() => {
+                        let msg = match msg {
+                            Some(msg) => msg,
+                            None => {
+                                tracing::info!("subscriber ended");
+                                return;
+                            }
+                        };
+
+                        let subject = msg.subject.strip_prefix("fuzzysearch.ingest.").expect("got wrong subject").to_string();
+                        *counts.entry(subject).or_default() += 1;
+                    }
+                    _ = ticker.tick() => {
+                        match actix_web_lab::sse::Data::new_json(serde_json::json!({
+                            "timestamp": chrono::Utc::now().timestamp(),
+                            "counts": counts,
+                        })) {
+                            Ok(data) => {
+                                if let Err(err) = tx.send(Ok(actix_web_lab::sse::Event::Data(data))).await {
+                                    tracing::error!("could not send stats: {err}");
+                                    return;
+                                }
+                            },
+                            Err(err) => {
+                                tracing::error!("could not serialize data: {err}");
+                                if let Err(err) = tx.send(Err(err.into())).await {
+                                    tracing::error!("could not send error: {err}");
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                    _ = tx.closed() => {
+                        tracing::info!("channel closed");
+                        return;
+                    }
+                }
+            }
+        }
+        .in_current_span(),
+    );
+
+    Ok(actix_web_lab::sse::Sse::from_receiver(rx))
+}
+
 #[post("/upload")]
 async fn upload(
     pool: web::Data<PgPool>,
@@ -417,7 +491,7 @@ async fn flist_lookup(
 
 pub fn service() -> Scope {
     web::scope("/api")
-        .service(services![events, upload, flist_lookup])
+        .service(services![events, ingest_stats, upload, flist_lookup])
         .service(web::scope("/service").service(services![fuzzysearch]))
         .service(web::scope("/chunk").service(services![chunk_add]))
 }

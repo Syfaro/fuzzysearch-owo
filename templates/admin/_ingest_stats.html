@@ -1,0 +1,74 @@
+<div id="ingest-stats" style="height: 400px;"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"
+  integrity="sha256-EVZCmhajjLhgTcxlGMGUBtQiYULZCPjt0uNTFEPFTRk=" crossorigin="anonymous"></script>
+
+<script>
+  let pointDates = [];
+  let series = {};
+  let previousValues = {};
+  let addedPoints = -1;
+
+  const chart = echarts.init(document.getElementById('ingest-stats'));
+
+  const opts = {
+    title: {
+      left: 'center',
+      text: 'Ingested Media',
+    },
+    tooltip: {
+      trigger: 'axis',
+    },
+    toolbox: {
+      feature: {
+        dataZoom: {
+          yAxisIndex: 'none',
+        },
+        restore: {},
+        saveAsImage: {},
+      },
+    },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: pointDates,
+    },
+    yAxis: {
+      name: 'Additions',
+      type: 'value',
+      boundaryGap: [0, '100%'],
+    },
+    series: [],
+  };
+
+  chart.setOption(opts);
+
+  const evtSource = new EventSource('/api/ingest/stats');
+
+  evtSource.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+
+    for (let [key, value] of Object.entries(data['counts'])) {
+      if (series[key] === undefined) {
+        series[key] = {
+          name: key,
+          type: 'line',
+          data: Array(addedPoints + 1).fill(0),
+        };
+      }
+
+      series[key]['data'].push(value - (previousValues[key] || 0));
+      previousValues[key] = value;
+    }
+
+    pointDates.push(new Date(data['timestamp'] * 1000));
+    addedPoints += 1;
+
+    chart.setOption({
+      xAxis: {
+        data: pointDates,
+      },
+      series: Object.values(series),
+    });
+  };
+</script>

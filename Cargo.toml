@@ -23,6 +23,7 @@ actix-session = { version = "0.9", features = ["cookie-session"] }
 actix-web = { version = "4.2.1", default-features = false, features = ["macros", "cookies", "compress-brotli", "compress-gzip", "compress-zstd"] }
 actix-web-actors = "4"
 actix-web-httpauth = "0.8"
+actix-web-lab = "0.20.2"
 anyhow = "1"
 argonautica = "0.2"
 askama = { version = "0.12.1" , features = ["serde-json", "humansize", "markdown"] }
