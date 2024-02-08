@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.18.1 — February 8th, 2024
+
+* Fixed an issue where disabled accounts would not appear in check results.
+* Fixed superfluous titles on certain dates.
+* Internal refactoring of frontend code.
+
 ## v0.18.0 — February 7th, 2024
 
 * Added ability to merge multiple images into one entry.
