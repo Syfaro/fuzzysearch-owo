@@ -1,0 +1,7 @@
+{
+    "compilerOptions": {
+        "isolatedModules": true,
+        "strict": true,
+        "lib": ["DOM", "ES2020", "ESNext"]
+    }
+}

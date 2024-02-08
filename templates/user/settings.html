@@ -7,14 +7,6 @@
   </option>
 {% endmacro %}
 
-{% block header %}
-  <style>
-    code {
-      white-space: nowrap;
-    }
-  </style>
-{% endblock %}
-
 <section class="section">
   <div class="container">
     <div class="columns is-centered">
@@ -248,35 +240,3 @@
     </div>
   </div>
 </section>
-
-{% block footer %}
-<script>
-  document.getElementById('delete-account').addEventListener('click', (ev) => {
-    const wasIntentional = confirm('Are you sure you want to delete your account?');
-    if (!wasIntentional) {
-      ev.preventDefault();
-    }
-  });
-
-  [...document.querySelectorAll('.click-copy')].forEach((elem) => {
-    elem.addEventListener('click', () => {
-      navigator.clipboard.writeText(elem.value);
-
-      bulmaToast.toast({
-        message: 'Copied value.',
-        type: 'is-info'
-      });
-    });
-  });
-
-  [...document.querySelectorAll('.hover-reveal')].forEach((elem) => {
-    elem.addEventListener('mouseover', () => {
-      elem.type = 'text';
-    });
-
-    elem.addEventListener('mouseleave', () => {
-      elem.type = 'password';
-    });
-  });
-</script>
-{% endblock %}

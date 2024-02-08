@@ -20,7 +20,7 @@ actix-http = "3"
 actix-multipart = "0.6"
 actix-router = "0.5"
 actix-session = { version = "0.9", features = ["cookie-session"] }
-actix-web = { version = "4.2.1", default-features = false, features = ["macros", "cookies"] }
+actix-web = { version = "4.2.1", default-features = false, features = ["macros", "cookies", "compress-brotli", "compress-gzip", "compress-zstd"] }
 actix-web-actors = "4"
 actix-web-httpauth = "0.8"
 anyhow = "1"

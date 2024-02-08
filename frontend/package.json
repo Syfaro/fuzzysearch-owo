@@ -1,0 +1,18 @@
+{
+  "devDependencies": {
+    "@creativebulma/bulma-tooltip": "^1.2.0",
+    "@sentry/browser": "^7.100.1",
+    "@sentry/esbuild-plugin": "^2.14.0",
+    "bootstrap-icons": "^1.11.3",
+    "bulma": "^0.9.4",
+    "bulma-toast": "^2.4.3",
+    "dotenv": "^16.4.1",
+    "esbuild": "^0.20.0",
+    "esbuild-plugin-copy": "^2.1.1",
+    "esbuild-sass-plugin": "^3.0.0",
+    "mitt": "^3.0.1"
+  },
+  "scripts": {
+    "build": "node ./esbuild.mjs"
+  }
+}
