@@ -31,11 +31,5 @@
 </section>
 
 {% block footer %}
-<script>
-  document.getElementById('inject-job').addEventListener('click', (ev) => {
-    if (!confirm('Are you sure you want to inject this job?')) {
-      ev.preventDefault();
-    }
-  });
-</script>
+  <script src="/static/admin.js?v{{ env!("CARGO_PKG_VERSION") }}"></script>
 {% endblock %}

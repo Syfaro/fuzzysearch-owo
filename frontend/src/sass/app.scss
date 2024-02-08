@@ -1,0 +1,21 @@
+@import "bulma/bulma.sass";
+@import "@creativebulma/bulma-tooltip/src/sass/index.sass";
+
+$bootstrap-icons-font-dir: "bootstrap-icons/font/fonts";
+@import "bootstrap-icons/font/bootstrap-icons.scss";
+
+.relative-time {
+  white-space: nowrap;
+}
+
+.match-link {
+  text-overflow: ellipsis;
+}
+
+.content h1 {
+  text-align: center;
+}
+
+code {
+  white-space: nowrap;
+}

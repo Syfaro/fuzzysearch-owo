@@ -40,30 +40,3 @@
     </div>
   </div>
 </section>
-
-{% block footer %}
-<script>
-  const noFormSites = [
-    'Bluesky',
-    'DeviantArt',
-    'Patreon',
-    'Twitter',
-  ];
-
-  const siteSelect = document.getElementById('site-select');
-  const usernameInput = document.getElementById('username-input');
-
-  function update(value) {
-    if (noFormSites.includes(value)) {
-      usernameInput.style.display = 'none';
-    } else {
-      usernameInput.style.display = 'block';
-    }
-  }
-
-  update(siteSelect.value);
-  siteSelect.addEventListener('change', (ev) => {
-    update(ev.target.value);
-  });
-</script>
-{% endblock %}

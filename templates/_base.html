@@ -1,39 +1,17 @@
 <!doctype html>
 <html lang="en">
 
-<head>
+<head data-app-version="{{ env!("CARGO_PKG_VERSION") }}">
   <meta charset="utf-8">
-  <title>FuzzySearch OwO</title>
-
   <meta name="viewport" content="width=device-width">
 
-  <link rel="stylesheet" href="/static/css/bulma.min.css?v0.9.3">
-  <link rel="stylesheet" href="/static/css/bulma-tooltip.min.css?v1.2.0">
-  <link rel="stylesheet" href="/static/css/bootstrap-icons.min.css?v1.11.3">
+  <title>FuzzySearch OwO</title>
 
+  <link rel="stylesheet" href="/static/main.css?v{{ env!("CARGO_PKG_VERSION") }}">
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
 
-  <script src="https://js.sentry-cdn.com/909283dca3224eba86ff5185341a1c2e.min.js" crossorigin="anonymous"></script>
-  <script>
-    Sentry.onLoad(() => {
-      Sentry.init({
-        release: 'fuzzysearch-owo-web@{{ env!("CARGO_PKG_VERSION") }}'
-      });
-    });
-  </script>
-
   <script async defer data-website-id="41fafea0-34e2-4cb2-a4b8-50068ef34dec" data-host-url="https://u.syfaro.com"
-    data-domains="owo.fuzzysearch.net" src="/static/js/event.js?v1"></script>
-
-  <style>
-    .relative-time {
-      white-space: nowrap;
-    }
-
-    .match-link {
-      text-overflow: ellipsis;
-    }
-  </style>
+    data-domains="owo.fuzzysearch.net" src="https://u.syfaro.com/umami.js"></script>
 
   {% block header %}{% endblock %}
 </head>
@@ -67,8 +45,7 @@
     </div>
   </footer>
 
-  <script src="/static/js/bulma-toast.min.js?v2.4.1"></script>
-  <script src="/static/js/app.js?v{{ env!("CARGO_PKG_VERSION") }}"></script>
+  <script src="/static/main.js?v{{ env!("CARGO_PKG_VERSION") }}"></script>
 
   {% block footer %}{% endblock %}
 </body>

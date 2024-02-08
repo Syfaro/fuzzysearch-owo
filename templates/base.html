@@ -1,5 +1,13 @@
 {% extends "_base.html" %}
 
+{% block header %}
+  {% match user %}
+  {% when Some with (user) %}
+  <meta name="user-id" content="{{ user.id }}">
+  {% else %}
+  {% endmatch %}
+{% endblock %}
+
 {% macro naventry(class, name, path) %}
 <a class="{{ class }} {% if uri.path() == path %} is-active {% endif %}" href="{{ path }}">
   {{ name }}

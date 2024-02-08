@@ -727,6 +727,7 @@ async fn main() {
                     .wrap(tracing_actix_web::TracingLogger::default())
                     .wrap(sentry_actix::Sentry::new())
                     .wrap(session)
+                    .wrap(actix_web::middleware::Compress::default())
                     .app_data(web::Data::new(pool.clone()))
                     .app_data(web::Data::new(s3.clone()))
                     .app_data(web::Data::new(redis_client.clone()))
