@@ -6,7 +6,9 @@ import "../sass/app.scss";
 const appVersion = document.head.dataset.appVersion;
 
 Sentry.onLoad(() => {
-  const userID = <HTMLMetaElement | null>document.querySelector('meta[name="user-id"]');
+  const userID = <HTMLMetaElement | null>(
+    document.querySelector('meta[name="user-id"]')
+  );
   const initialScope = {
     user: { id: userID?.content || undefined },
   };
@@ -20,3 +22,4 @@ Sentry.onLoad(() => {
 });
 
 import "../ts/pages";
+import "../ts/utilities";
