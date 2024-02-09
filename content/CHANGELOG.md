@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.18.2 — February 8th, 2024
+
+* Internal updates.
+
 ## v0.18.1 — February 8th, 2024
 
 * Fixed an issue where disabled accounts would not appear in check results.
