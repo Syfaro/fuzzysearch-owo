@@ -9,6 +9,7 @@
     "bulma": "^0.9.4",
     "bulma-toast": "^2.4.3",
     "dotenv": "^16.4.1",
+    "echarts": "^5.4.3",
     "esbuild": "^0.20.0",
     "esbuild-plugin-copy": "^2.1.1",
     "esbuild-sass-plugin": "^3.0.0",
