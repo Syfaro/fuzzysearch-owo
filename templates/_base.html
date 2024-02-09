@@ -10,8 +10,8 @@
   <link rel="stylesheet" href="/static/main.css?v{{ env!("CARGO_PKG_VERSION") }}">
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
 
-  <script async defer data-website-id="41fafea0-34e2-4cb2-a4b8-50068ef34dec" data-host-url="https://u.syfaro.com"
-    data-domains="owo.fuzzysearch.net" src="https://u.syfaro.com/umami.js"></script>
+  <script async defer data-website-id="41fafea0-34e2-4cb2-a4b8-50068ef34dec"
+    data-domains="owo.fuzzysearch.net" src="https://u.syfaro.com/script.js"></script>
 
   {% block header %}{% endblock %}
 </head>
@@ -27,7 +27,7 @@
       </p>
 
       <p>
-        <a href="https://owo-feedback.fuzzysearch.net" class="umami--click--feedback-footer">
+        <a href="https://owo-feedback.fuzzysearch.net" data-umami-event="Feedback footer">
           View and Share Suggestions
         </a>
       </p>
