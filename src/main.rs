@@ -350,7 +350,7 @@ impl<'de> Deserialize<'de> for UrlUuid {
 
 #[derive(Clone, Debug, Serialize, Deserialize, enum_map::Enum)]
 enum Features {
-    #[serde(rename = "fuzzysearch_owo_merge_media")]
+    #[serde(rename = "fuzzysearch.owo.merge-media")]
     MergeMedia,
 }
 
