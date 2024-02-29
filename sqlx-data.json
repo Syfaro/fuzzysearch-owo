@@ -2594,6 +2594,32 @@
     },
     "query": "SELECT\n    exists(\n        SELECT\n            1\n        FROM\n            user_account\n        WHERE\n            lower(username) = lower($1)\n    ) \"exists!\";\n"
   },
+  "a055c9f77021d142e36ffb8f0827814c4d1ec5b41338065ea3582078d60fd0a1": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "credential",
+          "ordinal": 1,
+          "type_info": "Jsonb"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Bytea"
+        ]
+      }
+    },
+    "query": "SELECT\n    user_account.id,\n    webauthn_credential.credential\nFROM\n    user_account\n    JOIN webauthn_credential ON webauthn_credential.owner_id = user_account.id\nWHERE\n    webauthn_credential.credential_id = $1;\n"
+  },
   "a6286b43713fdd80b9f3d00acccad8e51a561ae939b4ea5d8cbffa05be19b81f": {
     "describe": {
       "columns": [],
@@ -2916,6 +2942,32 @@
     },
     "query": "DELETE FROM\n    flist_import_run\nWHERE\n    id = $1;\n"
   },
+  "bdbabe5b3f6202b23485b703f29064a38e1efef95c102345329a5b39a57dc9c2": {
+    "describe": {
+      "columns": [
+        {
+          "name": "created_at",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "credential_id",
+          "ordinal": 1,
+          "type_info": "Bytea"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT\n    created_at,\n    credential_id\nFROM\n    webauthn_credential\nWHERE\n    owner_id = $1;\n"
+  },
   "c151a7a2cf44ff302d8c3eae7ed695ce52e07c597059030c282b131eee95b64b": {
     "describe": {
       "columns": [
@@ -3121,6 +3173,28 @@
       }
     },
     "query": "INSERT INTO\n    reddit_subreddit (name)\nVALUES\n    (lower($1)) ON CONFLICT DO NOTHING;\n"
+  },
+  "d0bc5e25ad86c1d91c391a237d296863f2a8f6b20b40314adf449edec52ba6d4": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Bytea",
+          "Jsonb"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    webauthn_credential (owner_id, credential_id, credential)\nVALUES\n    ($1, $2, $3) RETURNING id;\n"
   },
   "d323b8bbcee14a2712722f63fe7d5fbdcd9ee5589640eb1679779e8eeecd70ea": {
     "describe": {
