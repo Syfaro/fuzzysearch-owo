@@ -729,7 +729,10 @@ async fn main() {
                     .cookie_http_only(true)
                     .session_lifecycle(SessionLifecycle::PersistentSession(
                         PersistentSession::default()
-                            .session_ttl(actix_web::cookie::time::Duration::days(365)),
+                            .session_ttl(actix_web::cookie::time::Duration::days(30))
+                            .session_ttl_extension_policy(
+                                actix_session::config::TtlExtensionPolicy::OnEveryRequest,
+                            ),
                     ))
                     .build();
 

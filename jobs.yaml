@@ -40,3 +40,9 @@ jobs:
     queue: fuzzysearch_owo_core
     custom:
       initiator: schedule
+  - name: remove expired sessions
+    every: "30 * * * *"
+    job_type: remove_expired_sessions
+    queue: fuzzysearch_owo_core
+    custom:
+      initiator: schedule
