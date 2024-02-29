@@ -6,6 +6,16 @@
       </div>
     </div>
 
+    {% if ingest_rate_graph %}
+    <div class="columns is-centered is-desktop">
+      <div class="column">
+        <div class="block">
+          <div id="ingest-stats" style="height: 400px;"></div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
     <div class="columns is-centered is-desktop">
       <div class="column is-one-third-desktop">
         <div class="block">

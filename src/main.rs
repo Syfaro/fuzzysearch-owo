@@ -68,18 +68,6 @@ pub struct WorkerConfig {
     /// Queues to fetch jobs from.
     #[clap(long, env("FAKTORY_QUEUES"), value_enum, use_value_delimiter = true)]
     pub faktory_queues: Vec<jobs::Queue>,
-
-    /// NATS hosts.
-    #[clap(
-        long,
-        env("NATS_HOST"),
-        use_value_delimiter = true,
-        value_delimiter = ','
-    )]
-    pub nats_host: Vec<ServerAddr>,
-    /// NATS NKEY, may be omitted if authentication is not needed.
-    #[clap(long, env("NATS_NKEY"))]
-    pub nats_nkey: Option<String>,
 }
 
 #[derive(Clone, clap::Subcommand)]
@@ -136,6 +124,18 @@ pub struct Config {
     /// Redis DSN, in the format `redis://host/`.
     #[clap(long, env("REDIS_DSN"))]
     pub redis_dsn: String,
+
+    /// NATS hosts.
+    #[clap(
+        long,
+        env("NATS_HOST"),
+        use_value_delimiter = true,
+        value_delimiter = ','
+    )]
+    pub nats_host: Vec<ServerAddr>,
+    /// NATS NKEY, may be omitted if authentication is not needed.
+    #[clap(long, env("NATS_NKEY"))]
+    pub nats_nkey: Option<String>,
 
     #[clap(long, env("UNLEASH_API_URL"))]
     pub unleash_api_url: String,
@@ -354,6 +354,8 @@ enum Features {
     MergeMedia,
     #[serde(rename = "fuzzysearch.owo.webauthn")]
     Webauthn,
+    #[serde(rename = "fuzzysearch.owo.admin-ingest-rate")]
+    AdminIngestRate,
 }
 
 type Unleash = foxlib::flags::Unleash<Features>;
@@ -625,6 +627,17 @@ async fn main() {
         .await
         .expect("could not connect to faktory");
 
+    let nats_opts = if let Some(nats_nkey) = &config.nats_nkey {
+        async_nats::ConnectOptions::with_nkey(nats_nkey.clone())
+    } else {
+        async_nats::ConnectOptions::default()
+    };
+
+    let nats = nats_opts
+        .connect(&config.nats_host)
+        .await
+        .expect("could not connect to nats");
+
     let unleash = foxlib::flags::client::<Features>(
         env!("CARGO_PKG_NAME"),
         &config.unleash_api_url,
@@ -659,17 +672,6 @@ async fn main() {
                     .build();
 
             let telegram = Arc::new(tgbotapi::Telegram::new(config.telegram_bot_token.clone()));
-
-            let nats_opts = if let Some(nats_nkey) = &worker_config.nats_nkey {
-                async_nats::ConnectOptions::with_nkey(nats_nkey.clone())
-            } else {
-                async_nats::ConnectOptions::default()
-            };
-
-            let nats = nats_opts
-                .connect(&worker_config.nats_host)
-                .await
-                .expect("could not connect to nats");
 
             let ctx = jobs::JobContext {
                 producer,
@@ -752,6 +754,7 @@ async fn main() {
                     .app_data(web::Data::new(telegram_login.clone()))
                     .app_data(web::Data::new(producer.clone()))
                     .app_data(web::Data::new(unleash.clone()))
+                    .app_data(web::Data::new(nats.clone()))
                     .app_data(web::Data::new(webauthn.clone()))
                     .service(auth::service())
                     .service(user::service())
