@@ -354,6 +354,8 @@ enum Features {
     MergeMedia,
     #[serde(rename = "fuzzysearch.owo.webauthn")]
     Webauthn,
+    #[serde(rename = "fuzzysearch.owo.admin-ingest-rate")]
+    AdminIngestRate,
 }
 
 type Unleash = foxlib::flags::Unleash<Features>;

@@ -28,10 +28,13 @@ pub fn service() -> Scope {
 struct Admin {
     subreddits: Vec<models::RedditSubreddit>,
     recent_flist_runs: Vec<models::FListImportRun>,
+
+    ingest_rate_graph: bool,
 }
 
 #[get("/tools", name = "admin_tools")]
 async fn admin(
+    unleash: web::Data<crate::Unleash>,
     request: actix_web::HttpRequest,
     conn: web::Data<sqlx::PgPool>,
     user: models::User,
@@ -48,6 +51,12 @@ async fn admin(
     let body = Admin {
         subreddits,
         recent_flist_runs,
+
+        ingest_rate_graph: unleash.is_enabled(
+            crate::Features::AdminIngestRate,
+            Some(&user.context()),
+            false,
+        ),
     }
     .wrap(&request, Some(&user))
     .await
