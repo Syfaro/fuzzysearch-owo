@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.18.3 — February 29th, 2024
+
+* Added ability to use Passkeys for passwordless sign in.
+* Fixed an issue where expired sessions could persist in the database.
+
 ## v0.18.2 — February 8th, 2024
 
 * Internal updates.
