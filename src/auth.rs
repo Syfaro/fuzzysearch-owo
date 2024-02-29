@@ -715,6 +715,10 @@ async fn verify_registration(
         .and_then(|name| name.to_str().ok())
         .ok_or(Error::Missing)?;
 
+    if passkey_name.is_empty() || passkey_name.len() > 128 {
+        return Err(Error::user_error("Passkey name is empty or too long."));
+    }
+
     let reg_state = session
         .remove_as("reg_state")
         .ok_or(Error::Missing)?
