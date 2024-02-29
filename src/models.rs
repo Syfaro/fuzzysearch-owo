@@ -379,6 +379,7 @@ pub struct WebauthnCredential {
     pub credential_id: Vec<u8>,
     pub name: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
+    pub last_used: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl WebauthnCredential {
@@ -424,6 +425,18 @@ impl WebauthnCredential {
 
     pub async fn mark_used(conn: &sqlx::PgPool, credential_id: &[u8]) -> Result<(), Error> {
         sqlx::query_file!("queries/webauthn/mark_used.sql", credential_id)
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn remove(
+        conn: &sqlx::PgPool,
+        user_id: Uuid,
+        credential_id: &[u8],
+    ) -> Result<(), Error> {
+        sqlx::query_file!("queries/webauthn/remove.sql", user_id, credential_id)
             .execute(conn)
             .await?;
 

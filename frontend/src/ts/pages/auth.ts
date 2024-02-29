@@ -53,7 +53,7 @@ async function performRegistration() {
 
   try {
     await verifyRegistration(name, attestation);
-    alert("Passkey registered!");
+    window.location.reload();
   } catch {
     alert("Could not register Passkey, please try again later.");
   }

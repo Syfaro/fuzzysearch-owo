@@ -558,6 +558,19 @@
     },
     "query": "SELECT\n    exists(\n        SELECT\n            1\n        FROM\n            user_allowlist\n        WHERE\n            owner_id = $1\n            AND site = $2\n            AND lower(site_username) = lower($3)\n    );\n"
   },
+  "15dbf0ed63bb87970896f5fa5da48dd5fbfc2ffd8550a81cf39664469816d631": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Bytea"
+        ]
+      }
+    },
+    "query": "DELETE FROM\n    webauthn_credential\nWHERE\n    owner_id = $1\n    AND credential_id = $2;\n"
+  },
   "16f7262fba553df30055709a9a51f4eb353dce7aa3ec8c361ce0b61e70ef63eb": {
     "describe": {
       "columns": [
@@ -2300,6 +2313,44 @@
     },
     "query": "SELECT id, url FROM pending_deletion LIMIT 100"
   },
+  "8ba140c9d1a66054dd19dce1d92e0855d6d91d3e1e38de411fe14f16e6310eef": {
+    "describe": {
+      "columns": [
+        {
+          "name": "created_at",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "last_used",
+          "ordinal": 1,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "name",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "credential_id",
+          "ordinal": 3,
+          "type_info": "Bytea"
+        }
+      ],
+      "nullable": [
+        false,
+        true,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT\n    created_at,\n    last_used,\n    name,\n    credential_id\nFROM\n    webauthn_credential\nWHERE\n    owner_id = $1\nORDER BY\n    last_used DESC;\n"
+  },
   "8bc6979ea098c101a062b14542bb9b0f5ddfe871649c6144b23c4832d9ddf1cc": {
     "describe": {
       "columns": [
@@ -2952,38 +3003,6 @@
       }
     },
     "query": "SELECT\n    *\nFROM\n    user_account\nWHERE\n    telegram_id = $1;\n"
-  },
-  "b5dd8cc3db095aab02212c88575cf47b22aab72f1afb6ea48a9c08fba8097259": {
-    "describe": {
-      "columns": [
-        {
-          "name": "created_at",
-          "ordinal": 0,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "name",
-          "ordinal": 1,
-          "type_info": "Text"
-        },
-        {
-          "name": "credential_id",
-          "ordinal": 2,
-          "type_info": "Bytea"
-        }
-      ],
-      "nullable": [
-        false,
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid"
-        ]
-      }
-    },
-    "query": "SELECT\n    created_at,\n    name,\n    credential_id\nFROM\n    webauthn_credential\nWHERE\n    owner_id = $1\nORDER BY\n    last_used DESC;\n"
   },
   "b8946dfef01780773713136e31594b2347be98536da6e066ed49378f88b11e13": {
     "describe": {

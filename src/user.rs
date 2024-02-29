@@ -72,9 +72,10 @@ struct Settings<'a> {
     skipped_sites: setting::SkippedSites,
 
     passkeys_enabled: bool,
+    passkeys: Vec<models::WebauthnCredential>,
 }
 
-#[get("/settings")]
+#[get("/settings", name = "user_settings")]
 async fn settings_get(
     unleash: web::Data<crate::Unleash>,
     telegram_login: web::Data<auth::TelegramLoginConfig>,
@@ -96,6 +97,12 @@ async fn settings_get(
 
     let passkeys_enabled = unleash.is_enabled(Features::Webauthn, Some(&user.context()), false);
 
+    let passkeys = if passkeys_enabled {
+        models::WebauthnCredential::user_credentials(&conn, user.id).await?
+    } else {
+        vec![]
+    };
+
     let body = Settings {
         telegram_login: &telegram_login,
 
@@ -107,6 +114,7 @@ async fn settings_get(
         skipped_sites,
 
         passkeys_enabled,
+        passkeys,
     }
     .wrap(&request, Some(&user))
     .await
@@ -230,6 +238,12 @@ async fn settings_post(
 
     let passkeys_enabled = unleash.is_enabled(Features::Webauthn, Some(&user.context()), false);
 
+    let passkeys = if passkeys_enabled {
+        models::WebauthnCredential::user_credentials(&conn, user.id).await?
+    } else {
+        vec![]
+    };
+
     let body = Settings {
         telegram_login: &telegram_login,
 
@@ -241,6 +255,7 @@ async fn settings_post(
         skipped_sites,
 
         passkeys_enabled,
+        passkeys,
     }
     .wrap(&request, Some(&user))
     .await

@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::{collections::HashMap, future::Future};
 
 use actix_session::Session;
+use actix_web::web::Form;
 use actix_web::{
     get, post, services,
     web::{self, Json},
@@ -16,6 +17,7 @@ use hmac::Hmac;
 use hmac::Mac;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 use zxcvbn::zxcvbn;
@@ -738,7 +740,39 @@ async fn verify_registration(
     )
     .await?;
 
+    session.add_flash(
+        crate::FlashStyle::Success,
+        format!("Passkey {passkey_name} registered."),
+    );
+
     Ok(HttpResponse::NoContent().finish())
+}
+
+#[serde_as]
+#[derive(Deserialize)]
+struct RemoveCredentialForm {
+    #[serde_as(as = "serde_with::hex::Hex")]
+    credential_id: Vec<u8>,
+}
+
+#[post("/remove")]
+async fn remove_credential(
+    conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
+    session: Session,
+    user: models::User,
+    Form(form): Form<RemoveCredentialForm>,
+) -> Result<HttpResponse, Error> {
+    models::WebauthnCredential::remove(&conn, user.id, &form.credential_id).await?;
+
+    session.add_flash(crate::FlashStyle::Success, "Passkey was removed.");
+
+    Ok(HttpResponse::Found()
+        .insert_header((
+            "Location",
+            request.url_for_static("user_settings")?.as_str(),
+        ))
+        .finish())
 }
 
 pub fn service() -> Scope {
@@ -762,6 +796,7 @@ pub fn service() -> Scope {
             verify_authentication,
             generate_registration_options,
             verify_registration,
+            remove_credential,
         ]))
 }
 

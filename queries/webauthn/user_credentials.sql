@@ -1,5 +1,6 @@
 SELECT
     created_at,
+    last_used,
     name,
     credential_id
 FROM
