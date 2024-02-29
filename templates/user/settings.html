@@ -175,23 +175,6 @@
               completing the forgot password process.
             </p>
 
-            <div class="field mt-5">
-              <h3 class="subtitle is-5">
-                <span class="icon-text">
-                  <span class="icon">
-                    <i class="bi bi-person-fill-lock"></i>
-                  </span>
-                  <span>Sessions</span>
-                </span>
-              </h3>
-
-              <div class="control">
-                <a class="button is-link is-outlined" href="/auth/sessions">
-                  Active Sessions
-                </a>
-              </div>
-            </div>
-
             {% if passkeys_enabled %}
             <div class="field mt-5">
               <h3 class="subtitle is-5 mt-3">
@@ -257,6 +240,23 @@
               {% endif %}
             </div>
             {% endif %}
+
+            <div class="field mt-5">
+              <h3 class="subtitle is-5">
+                <span class="icon-text">
+                  <span class="icon">
+                    <i class="bi bi-person-fill-lock"></i>
+                  </span>
+                  <span>Sessions</span>
+                </span>
+              </h3>
+
+              <div class="control">
+                <a class="button is-link is-outlined" href="/auth/sessions">
+                  Active Sessions
+                </a>
+              </div>
+            </div>
           </div>
 
           <div class="block mt-6">

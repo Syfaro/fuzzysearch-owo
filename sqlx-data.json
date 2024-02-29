@@ -1632,6 +1632,16 @@
     },
     "query": "SELECT\n    id \"id!\",\n    owner_id \"owner_id!\",\n    perceptual_hash,\n    sha256_hash \"sha256_hash!: Sha256Hash\",\n    last_modified \"last_modified!\",\n    content_url,\n    content_size,\n    thumb_url,\n    event_count \"event_count!\",\n    last_event,\n    accounts \"accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>\"\nFROM\n    owned_media_item_accounts\nWHERE\n    id = $1\n    AND owner_id = $2;\n"
   },
+  "5f95ec95ced2426b886d630e012a1b1699b360e226ed2a0d6a2314b3bd2a9472": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "DELETE FROM\n    user_session\nWHERE\n    last_used < current_timestamp - interval '30 days';\n"
+  },
   "61379e0464f4576a6958754033b3997dc844d8e3932f7f2c0d83fb6d7c45a913": {
     "describe": {
       "columns": [

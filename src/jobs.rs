@@ -421,11 +421,34 @@ impl Job for ToggleSiteAccounts {
     }
 }
 
-#[derive(Serialize, Deserialize)]
 struct MigrateOwnedMediaAccounts;
 
 impl Job for MigrateOwnedMediaAccounts {
     const NAME: &'static str = "migrate_owned_media_accounts";
+    type Data = ();
+    type Queue = Queue;
+
+    fn queue(&self) -> Self::Queue {
+        Queue::Core
+    }
+
+    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
+        Ok(None)
+    }
+
+    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+        Ok(vec![])
+    }
+
+    fn deserialize(_args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
+        Ok(())
+    }
+}
+
+struct RemoveExpiredSessions;
+
+impl Job for RemoveExpiredSessions {
+    const NAME: &'static str = "remove_expired_sessions";
     type Data = ();
     type Queue = Queue;
 
@@ -1115,6 +1138,14 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
 
     MigrateOwnedMediaAccounts::register(&mut forge, |cx, _job, _args| async move {
         sqlx::query_file!("queries/admin/migrate_owned_media_account.sql")
+            .execute(&cx.conn)
+            .await?;
+
+        Ok(())
+    });
+
+    RemoveExpiredSessions::register(&mut forge, |cx, _job, _args| async move {
+        sqlx::query_file!("queries/user_session/remove_expired.sql")
             .execute(&cx.conn)
             .await?;
 
