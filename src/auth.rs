@@ -619,11 +619,8 @@ async fn verify_authentication(
         .ok_or(Error::Missing)?
         .map_err(Error::from_displayable)?;
 
-    let (user_id, credential) = models::WebauthnCredential::lookup_by_credential_id(
-        &conn,
-        reg.get_credential_id().to_vec(),
-    )
-    .await?;
+    let (user_id, credential) =
+        models::WebauthnCredential::lookup_by_credential_id(&conn, reg.get_credential_id()).await?;
 
     webauthn
         .finish_discoverable_authentication(&reg, discoverable_auth, &[(&credential).into()])
@@ -640,11 +637,13 @@ async fn verify_authentication(
     let session_id = models::UserSession::create(
         &conn,
         user.id,
-        models::UserSessionSource::Webauthn(reg.raw_id),
+        models::UserSessionSource::Webauthn(reg.raw_id.clone()),
         client_ip.ip_addr.as_deref(),
     )
     .await?;
     session.set_session_token(user.id, session_id)?;
+
+    let _ = models::WebauthnCredential::mark_used(&conn, reg.get_credential_id()).await;
 
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "redirect_url": request.url_for_static("user_home")?.as_str(),
@@ -701,6 +700,7 @@ async fn verify_registration(
     unleash: web::Data<crate::Unleash>,
     webauthn: web::Data<Arc<webauthn_rs::Webauthn>>,
     conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
     session: Session,
     user: models::User,
     Json(reg): Json<webauthn_rs::prelude::RegisterPublicKeyCredential>,
@@ -708,6 +708,12 @@ async fn verify_registration(
     if !unleash.is_enabled(Features::Webauthn, Some(&user.context()), false) {
         return Err(Error::Unauthorized);
     }
+
+    let passkey_name = request
+        .headers()
+        .get("x-passkey-name")
+        .and_then(|name| name.to_str().ok())
+        .ok_or(Error::Missing)?;
 
     let reg_state = session
         .remove_as("reg_state")
@@ -719,7 +725,14 @@ async fn verify_registration(
 
     let credential_id = passkey.cred_id().0.to_owned();
 
-    models::WebauthnCredential::insert_credential(&conn, user.id, credential_id, passkey).await?;
+    models::WebauthnCredential::insert_credential(
+        &conn,
+        user.id,
+        credential_id,
+        passkey_name,
+        passkey,
+    )
+    .await?;
 
     Ok(HttpResponse::NoContent().finish())
 }

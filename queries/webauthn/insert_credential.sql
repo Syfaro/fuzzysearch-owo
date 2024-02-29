@@ -1,4 +1,4 @@
 INSERT INTO
-    webauthn_credential (owner_id, credential_id, credential)
+    webauthn_credential (owner_id, credential_id, name, credential)
 VALUES
-    ($1, $2, $3) RETURNING id;
+    ($1, $2, $3, $4) RETURNING id;

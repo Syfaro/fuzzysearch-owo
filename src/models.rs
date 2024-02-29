@@ -377,6 +377,7 @@ impl User {
 
 pub struct WebauthnCredential {
     pub credential_id: Vec<u8>,
+    pub name: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -392,12 +393,14 @@ impl WebauthnCredential {
         conn: &sqlx::PgPool,
         user_id: Uuid,
         credential_id: Vec<u8>,
+        name: &str,
         passkey: webauthn_rs::prelude::Passkey,
     ) -> Result<Uuid, Error> {
         sqlx::query_file_scalar!(
             "queries/webauthn/insert_credential.sql",
             user_id,
             credential_id,
+            name,
             serde_json::to_value(passkey)?,
         )
         .fetch_one(conn)
@@ -407,7 +410,7 @@ impl WebauthnCredential {
 
     pub async fn lookup_by_credential_id(
         conn: &sqlx::PgPool,
-        credential_id: Vec<u8>,
+        credential_id: &[u8],
     ) -> Result<(Uuid, webauthn_rs::prelude::Passkey), Error> {
         let user = sqlx::query_file!("queries/webauthn/lookup_by_credential.sql", credential_id)
             .map(|row| {
@@ -417,6 +420,14 @@ impl WebauthnCredential {
             .await??;
 
         Ok(user)
+    }
+
+    pub async fn mark_used(conn: &sqlx::PgPool, credential_id: &[u8]) -> Result<(), Error> {
+        sqlx::query_file!("queries/webauthn/mark_used.sql", credential_id)
+            .execute(conn)
+            .await?;
+
+        Ok(())
     }
 }
 

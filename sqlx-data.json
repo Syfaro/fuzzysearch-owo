@@ -1799,6 +1799,29 @@
     },
     "query": "SELECT\n    id \"id!\",\n    owner_id \"owner_id!\",\n    perceptual_hash,\n    sha256_hash \"sha256_hash!: Sha256Hash\",\n    last_modified \"last_modified!\",\n    content_url,\n    content_size,\n    thumb_url,\n    event_count \"event_count!\",\n    last_event,\n    accounts \"accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>\"\nFROM\n    owned_media_item_accounts\nWHERE\n    owner_id = $1\n    AND (\n        $4::uuid IS NULL\n        OR exists(\n            SELECT\n                1\n            FROM\n                owned_media_item_account\n            WHERE\n                owned_media_item_account.owned_media_item_id = owned_media_item_accounts.id\n                AND account_id = $4\n        )\n    )\nORDER BY\n    last_modified DESC\nLIMIT\n    $2 OFFSET ($3::integer * $2::integer);\n"
   },
+  "6ab4dbcded5cd1b92a51a6b55e3e81487aab2f893de339818e9a7a681ef721da": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Bytea",
+          "Text",
+          "Jsonb"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    webauthn_credential (owner_id, credential_id, name, credential)\nVALUES\n    ($1, $2, $3, $4) RETURNING id;\n"
+  },
   "6c0689be25c41e688a85dbc8e1365e83eec74ce2842665faf67c2ffcb970644d": {
     "describe": {
       "columns": [
@@ -2930,6 +2953,38 @@
     },
     "query": "SELECT\n    *\nFROM\n    user_account\nWHERE\n    telegram_id = $1;\n"
   },
+  "b5dd8cc3db095aab02212c88575cf47b22aab72f1afb6ea48a9c08fba8097259": {
+    "describe": {
+      "columns": [
+        {
+          "name": "created_at",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "name",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "credential_id",
+          "ordinal": 2,
+          "type_info": "Bytea"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT\n    created_at,\n    name,\n    credential_id\nFROM\n    webauthn_credential\nWHERE\n    owner_id = $1\nORDER BY\n    last_used DESC;\n"
+  },
   "b8946dfef01780773713136e31594b2347be98536da6e066ed49378f88b11e13": {
     "describe": {
       "columns": [],
@@ -2941,32 +2996,6 @@
       }
     },
     "query": "DELETE FROM\n    flist_import_run\nWHERE\n    id = $1;\n"
-  },
-  "bdbabe5b3f6202b23485b703f29064a38e1efef95c102345329a5b39a57dc9c2": {
-    "describe": {
-      "columns": [
-        {
-          "name": "created_at",
-          "ordinal": 0,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "credential_id",
-          "ordinal": 1,
-          "type_info": "Bytea"
-        }
-      ],
-      "nullable": [
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid"
-        ]
-      }
-    },
-    "query": "SELECT\n    created_at,\n    credential_id\nFROM\n    webauthn_credential\nWHERE\n    owner_id = $1;\n"
   },
   "c151a7a2cf44ff302d8c3eae7ed695ce52e07c597059030c282b131eee95b64b": {
     "describe": {
@@ -3173,28 +3202,6 @@
       }
     },
     "query": "INSERT INTO\n    reddit_subreddit (name)\nVALUES\n    (lower($1)) ON CONFLICT DO NOTHING;\n"
-  },
-  "d0bc5e25ad86c1d91c391a237d296863f2a8f6b20b40314adf449edec52ba6d4": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Uuid"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Bytea",
-          "Jsonb"
-        ]
-      }
-    },
-    "query": "INSERT INTO\n    webauthn_credential (owner_id, credential_id, credential)\nVALUES\n    ($1, $2, $3) RETURNING id;\n"
   },
   "d323b8bbcee14a2712722f63fe7d5fbdcd9ee5589640eb1679779e8eeecd70ea": {
     "describe": {
@@ -3785,6 +3792,18 @@
       }
     },
     "query": "SELECT\n    *\nFROM\n    flist_file\nWHERE\n    perceptual_hash <@ ($1, $2);\n"
+  },
+  "f7ddc89d2ca938be3e0a96c89edc5c5f0887a47c8e73cf7f8973b6c37ace1383": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Bytea"
+        ]
+      }
+    },
+    "query": "UPDATE\n    webauthn_credential\nSET\n    last_used = current_timestamp\nWHERE\n    credential_id = $1;\n"
   },
   "f9ed81bc48afca376d8bab5df361fd73b27228ac81a79fffd82de26a47c1afc8": {
     "describe": {

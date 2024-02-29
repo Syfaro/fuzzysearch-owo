@@ -45,11 +45,14 @@ async function performPasswordlessLogin() {
 }
 
 async function performRegistration() {
+  const name = prompt("Please enter a name for this Passkey.");
+  if (!name) return;
+
   const opts = await generateRegistrationOptions();
   let attestation = await startRegistration(opts);
 
   try {
-    await verifyRegistration(attestation);
+    await verifyRegistration(name, attestation);
     alert("Passkey registered!");
   } catch {
     alert("Could not register Passkey, please try again later.");
@@ -63,11 +66,15 @@ async function generateRegistrationOptions(): Promise<
   return await resp.json();
 }
 
-async function verifyRegistration(response: RegistrationResponseJSON) {
+async function verifyRegistration(
+  name: string,
+  response: RegistrationResponseJSON,
+) {
   const resp = await fetch("/auth/webauthn/verify-registration", {
     method: "POST",
     headers: {
       "content-type": "application/json",
+      "x-passkey-name": name,
     },
     body: JSON.stringify(response),
   });
