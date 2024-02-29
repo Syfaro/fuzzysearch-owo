@@ -1,9 +1,15 @@
 use std::borrow::Cow;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::{collections::HashMap, future::Future};
 
 use actix_session::Session;
-use actix_web::{get, post, services, web, FromRequest, HttpResponse, Scope};
+use actix_web::web::Form;
+use actix_web::{
+    get, post, services,
+    web::{self, Json},
+    FromRequest, HttpResponse, Scope,
+};
 use askama::Template;
 use chrono::TimeZone;
 use foxlib::jobs::FaktoryProducer;
@@ -11,12 +17,15 @@ use hmac::Hmac;
 use hmac::Mac;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 use zxcvbn::zxcvbn;
 
-use crate::jobs::JobInitiatorExt;
-use crate::{jobs, models, AddFlash, ClientIpAddr, Error, UrlUuid, WrappedTemplate};
+use crate::{
+    jobs::{self, JobInitiatorExt},
+    models, AddFlash, ClientIpAddr, Error, Features, UrlUuid, WrappedTemplate,
+};
 
 pub trait FuzzySearchSessionToken {
     const TOKEN_NAME: &'static str;
@@ -580,21 +589,215 @@ async fn forgot_email_post(
         .finish())
 }
 
+#[get("/generate-authentication-options")]
+async fn generate_authentication_options(
+    webauthn: web::Data<Arc<webauthn_rs::Webauthn>>,
+    session: Session,
+) -> Result<HttpResponse, Error> {
+    let (mut rcr, discoverable_auth) = webauthn
+        .start_discoverable_authentication()
+        .map_err(Error::from_displayable)?;
+    rcr.public_key.user_verification = webauthn_rs_proto::UserVerificationPolicy::Required;
+
+    session
+        .insert("discoverable_auth", discoverable_auth)
+        .map_err(Error::from_displayable)?;
+
+    Ok(HttpResponse::Ok().json(rcr.public_key))
+}
+
+#[post("/verify-authentication")]
+async fn verify_authentication(
+    unleash: web::Data<crate::Unleash>,
+    webauthn: web::Data<Arc<webauthn_rs::Webauthn>>,
+    conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
+    client_ip: ClientIpAddr,
+    session: Session,
+    Json(reg): Json<webauthn_rs::prelude::PublicKeyCredential>,
+) -> Result<HttpResponse, Error> {
+    let discoverable_auth = session
+        .remove_as("discoverable_auth")
+        .ok_or(Error::Missing)?
+        .map_err(Error::from_displayable)?;
+
+    let (user_id, credential) =
+        models::WebauthnCredential::lookup_by_credential_id(&conn, reg.get_credential_id()).await?;
+
+    webauthn
+        .finish_discoverable_authentication(&reg, discoverable_auth, &[(&credential).into()])
+        .map_err(Error::from_displayable)?;
+
+    let user = models::User::lookup_by_id(&conn, user_id)
+        .await?
+        .ok_or(Error::Missing)?;
+
+    if !unleash.is_enabled(Features::Webauthn, Some(&user.context()), false) {
+        return Err(Error::Unauthorized);
+    }
+
+    let session_id = models::UserSession::create(
+        &conn,
+        user.id,
+        models::UserSessionSource::Webauthn(reg.raw_id.clone()),
+        client_ip.ip_addr.as_deref(),
+    )
+    .await?;
+    session.set_session_token(user.id, session_id)?;
+
+    let _ = models::WebauthnCredential::mark_used(&conn, reg.get_credential_id()).await;
+
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "redirect_url": request.url_for_static("user_home")?.as_str(),
+    })))
+}
+
+#[get("/generate-registration-options")]
+async fn generate_registration_options(
+    unleash: web::Data<crate::Unleash>,
+    webauthn: web::Data<Arc<webauthn_rs::Webauthn>>,
+    conn: web::Data<sqlx::PgPool>,
+    session: Session,
+    user: models::User,
+) -> Result<HttpResponse, Error> {
+    use webauthn_rs::prelude::*;
+    use webauthn_rs_proto::{AuthenticatorSelectionCriteria, UserVerificationPolicy};
+
+    if !unleash.is_enabled(Features::Webauthn, Some(&user.context()), false) {
+        return Err(Error::Unauthorized);
+    }
+
+    let credentials = models::WebauthnCredential::user_credentials(&conn, user.id)
+        .await?
+        .into_iter()
+        .map(|credential| CredentialID::from(credential.credential_id))
+        .collect();
+
+    let (mut ccr, reg_state) = webauthn
+        .start_passkey_registration(
+            user.id,
+            user.username
+                .as_deref()
+                .unwrap_or_else(|| user.display_name()),
+            user.display_name(),
+            Some(credentials),
+        )
+        .map_err(Error::from_displayable)?;
+    ccr.public_key.authenticator_selection = Some(AuthenticatorSelectionCriteria {
+        authenticator_attachment: Some(AuthenticatorAttachment::Platform),
+        resident_key: None,
+        require_resident_key: false,
+        user_verification: UserVerificationPolicy::Required,
+    });
+
+    session
+        .insert("reg_state", reg_state)
+        .map_err(Error::from_displayable)?;
+
+    Ok(HttpResponse::Ok().json(ccr.public_key))
+}
+
+#[post("/verify-registration")]
+async fn verify_registration(
+    unleash: web::Data<crate::Unleash>,
+    webauthn: web::Data<Arc<webauthn_rs::Webauthn>>,
+    conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
+    session: Session,
+    user: models::User,
+    Json(reg): Json<webauthn_rs::prelude::RegisterPublicKeyCredential>,
+) -> Result<HttpResponse, Error> {
+    if !unleash.is_enabled(Features::Webauthn, Some(&user.context()), false) {
+        return Err(Error::Unauthorized);
+    }
+
+    let passkey_name = request
+        .headers()
+        .get("x-passkey-name")
+        .and_then(|name| name.to_str().ok())
+        .ok_or(Error::Missing)?;
+
+    if passkey_name.is_empty() || passkey_name.len() > 128 {
+        return Err(Error::user_error("Passkey name is empty or too long."));
+    }
+
+    let reg_state = session
+        .remove_as("reg_state")
+        .ok_or(Error::Missing)?
+        .map_err(Error::from_displayable)?;
+    let passkey = webauthn
+        .finish_passkey_registration(&reg, &reg_state)
+        .map_err(Error::from_displayable)?;
+
+    let credential_id = passkey.cred_id().0.to_owned();
+
+    models::WebauthnCredential::insert_credential(
+        &conn,
+        user.id,
+        credential_id,
+        passkey_name,
+        passkey,
+    )
+    .await?;
+
+    session.add_flash(
+        crate::FlashStyle::Success,
+        format!("Passkey {passkey_name} registered."),
+    );
+
+    Ok(HttpResponse::NoContent().finish())
+}
+
+#[serde_as]
+#[derive(Deserialize)]
+struct RemoveCredentialForm {
+    #[serde_as(as = "serde_with::hex::Hex")]
+    credential_id: Vec<u8>,
+}
+
+#[post("/remove")]
+async fn remove_credential(
+    conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
+    session: Session,
+    user: models::User,
+    Form(form): Form<RemoveCredentialForm>,
+) -> Result<HttpResponse, Error> {
+    models::WebauthnCredential::remove(&conn, user.id, &form.credential_id).await?;
+
+    session.add_flash(crate::FlashStyle::Success, "Passkey was removed.");
+
+    Ok(HttpResponse::Found()
+        .insert_header((
+            "Location",
+            request.url_for_static("user_settings")?.as_str(),
+        ))
+        .finish())
+}
+
 pub fn service() -> Scope {
-    web::scope("/auth").service(services![
-        register_get,
-        register_post,
-        login_get,
-        login_post,
-        telegram,
-        logout,
-        sessions,
-        sessions_remove,
-        forgot_form,
-        forgot_post,
-        forgot_email_form,
-        forgot_email_post,
-    ])
+    web::scope("/auth")
+        .service(services![
+            register_get,
+            register_post,
+            login_get,
+            login_post,
+            telegram,
+            logout,
+            sessions,
+            sessions_remove,
+            forgot_form,
+            forgot_post,
+            forgot_email_form,
+            forgot_email_post,
+        ])
+        .service(web::scope("/webauthn").service(services![
+            generate_authentication_options,
+            verify_authentication,
+            generate_registration_options,
+            verify_registration,
+            remove_credential,
+        ]))
 }
 
 #[derive(Serialize, Deserialize)]

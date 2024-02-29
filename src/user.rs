@@ -70,12 +70,16 @@ struct Settings<'a> {
     email_frequency: String,
     telegram_notifications: setting::TelegramNotifications,
     skipped_sites: setting::SkippedSites,
+
+    passkeys_enabled: bool,
+    passkeys: Vec<models::WebauthnCredential>,
 }
 
-#[get("/settings")]
+#[get("/settings", name = "user_settings")]
 async fn settings_get(
-    request: actix_web::HttpRequest,
+    unleash: web::Data<crate::Unleash>,
     telegram_login: web::Data<auth::TelegramLoginConfig>,
+    request: actix_web::HttpRequest,
     conn: web::Data<sqlx::PgPool>,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
@@ -91,6 +95,14 @@ async fn settings_get(
         .await?
         .unwrap_or_default();
 
+    let passkeys_enabled = unleash.is_enabled(Features::Webauthn, Some(&user.context()), false);
+
+    let passkeys = if passkeys_enabled {
+        models::WebauthnCredential::user_credentials(&conn, user.id).await?
+    } else {
+        vec![]
+    };
+
     let body = Settings {
         telegram_login: &telegram_login,
 
@@ -100,6 +112,9 @@ async fn settings_get(
         email_frequency: serde_plain::to_string(&email_frequency.0)?,
         telegram_notifications,
         skipped_sites,
+
+        passkeys_enabled,
+        passkeys,
     }
     .wrap(&request, Some(&user))
     .await
@@ -110,8 +125,9 @@ async fn settings_get(
 
 #[post("/settings")]
 async fn settings_post(
-    request: actix_web::HttpRequest,
+    unleash: web::Data<crate::Unleash>,
     telegram_login: web::Data<auth::TelegramLoginConfig>,
+    request: actix_web::HttpRequest,
     conn: web::Data<sqlx::PgPool>,
     faktory: web::Data<FaktoryProducer>,
     user: models::User,
@@ -220,6 +236,14 @@ async fn settings_post(
         (true, "Your settings were saved.")
     };
 
+    let passkeys_enabled = unleash.is_enabled(Features::Webauthn, Some(&user.context()), false);
+
+    let passkeys = if passkeys_enabled {
+        models::WebauthnCredential::user_credentials(&conn, user.id).await?
+    } else {
+        vec![]
+    };
+
     let body = Settings {
         telegram_login: &telegram_login,
 
@@ -229,6 +253,9 @@ async fn settings_post(
         email_frequency: serde_plain::to_string(&email_frequency.0)?,
         telegram_notifications,
         skipped_sites,
+
+        passkeys_enabled,
+        passkeys,
     }
     .wrap(&request, Some(&user))
     .await

@@ -192,15 +192,6 @@ async function performChunkedUpload(
   return collectionId;
 }
 
-document.getElementById("delete-account")?.addEventListener("click", (ev) => {
-  const wasIntentional = confirm(
-    "Are you sure you want to delete your account?"
-  );
-  if (!wasIntentional) {
-    ev.preventDefault();
-  }
-});
-
 document.querySelectorAll<HTMLInputElement>(".click-copy").forEach((elem) => {
   elem.addEventListener("click", () => {
     navigator.clipboard.writeText(elem.value);

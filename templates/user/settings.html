@@ -170,19 +170,93 @@
           <div class="block mt-6">
             <h2 class="subtitle is-4">Security</h2>
 
-            <a class="button is-link is-outlined" href="/auth/sessions">
-              <span class="icon-text">
-                <span class="icon">
-                  <i class="bi bi-person-fill-lock"></i>
-                </span>
-                <span>Active Sessions</span>
-              </span>
-            </a>
-
             <p class="help mt-3">
               You may reset your password after adding an email address by
               completing the forgot password process.
             </p>
+
+            <div class="field mt-5">
+              <h3 class="subtitle is-5">
+                <span class="icon-text">
+                  <span class="icon">
+                    <i class="bi bi-person-fill-lock"></i>
+                  </span>
+                  <span>Sessions</span>
+                </span>
+              </h3>
+
+              <div class="control">
+                <a class="button is-link is-outlined" href="/auth/sessions">
+                  Active Sessions
+                </a>
+              </div>
+            </div>
+
+            {% if passkeys_enabled %}
+            <div class="field mt-5">
+              <h3 class="subtitle is-5 mt-3">
+                <span class="icon-text">
+                  <span class="icon">
+                    <i class="bi bi-lightning-charge-fill"></i>
+                  </span>
+                  <span>Passkeys</span>
+                </span>
+              </h3>
+
+              <div class="control">
+                <button class="button is-info" id="passkey-add">
+                  <span class="icon-text">
+                    <span class="icon">
+                      <i class="bi bi-plus"></i>
+                    </span>
+                    <span>Add Passkey</span>
+                  </span>
+                </button>
+              </div>
+
+              {% if !passkeys.is_empty() %}
+              <div class="control mt-3">
+                <label class="label" for="registered-passkeys">Registered Passkeys</label>
+
+                <div class="table-container">
+                  <table class="table is-narrow is-fullwidth" id="registered-passkeys">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Last Used</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for passkey in passkeys %}
+                      <tr>
+                        <th>{{ passkey.name }}</th>
+
+                        <td>
+                          {% match passkey.last_used %}
+                          {% when Some with (last_used) %}
+                          <span class="relative-time" data-timestamp="{{ last_used.timestamp() }}">
+                            {{ last_used }}
+                          </span>
+                          {% else %}
+                          <span class="has-text-grey">Unused</span>
+                          {% endmatch %}
+                        </td>
+
+                        <td class="has-text-right">
+                          <button class="button is-small is-danger is-light" name="credential_id"
+                            value="{{ hex::encode(passkey.credential_id) }}"
+                            formaction="/auth/webauthn/remove">Remove</button>
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              {% endif %}
+            </div>
+            {% endif %}
           </div>
 
           <div class="block mt-6">

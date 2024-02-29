@@ -78,6 +78,8 @@ tracing-actix-web = { version = "0.7", features = ["opentelemetry_0_21"] }
 tracing-opentelemetry = "0.22"
 url = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
+webauthn-rs = { version = "0.5.0-dev", features = ["resident-key-support", "danger-allow-state-serialisation", "preview-features"] }
+webauthn-rs-proto = "0.5.0-dev"
 zip = "0.6"
 zxcvbn = "2"
 

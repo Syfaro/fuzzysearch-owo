@@ -11,6 +11,23 @@ const define = {
 };
 
 function buildOpts(entryPoints) {
+  let plugins = [
+    sassPlugin(),
+    copy({
+      assets: {
+        from: ["./assets/img/*"],
+        to: ["./img"],
+      },
+      watch: true,
+    }),
+  ];
+
+  if (IS_PROD) {
+    plugins.push(sentryEsbuildPlugin({
+      telemetry: false,
+    }));
+  }
+
   return {
     entryPoints,
     bundle: true,
@@ -19,19 +36,7 @@ function buildOpts(entryPoints) {
     sourcemap: true,
     drop: IS_PROD ? ["console"] : [],
     target: ["es2020"],
-    plugins: [
-      sassPlugin(),
-      copy({
-        assets: {
-          from: ["./assets/img/*"],
-          to: ["./img"],
-        },
-        watch: true,
-      }),
-      sentryEsbuildPlugin({
-        telemetry: false,
-      }),
-    ],
+    plugins,
     loader: {
       ".woff": "file",
       ".woff2": "file",

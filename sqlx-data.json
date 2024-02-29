@@ -558,6 +558,19 @@
     },
     "query": "SELECT\n    exists(\n        SELECT\n            1\n        FROM\n            user_allowlist\n        WHERE\n            owner_id = $1\n            AND site = $2\n            AND lower(site_username) = lower($3)\n    );\n"
   },
+  "15dbf0ed63bb87970896f5fa5da48dd5fbfc2ffd8550a81cf39664469816d631": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Bytea"
+        ]
+      }
+    },
+    "query": "DELETE FROM\n    webauthn_credential\nWHERE\n    owner_id = $1\n    AND credential_id = $2;\n"
+  },
   "16f7262fba553df30055709a9a51f4eb353dce7aa3ec8c361ce0b61e70ef63eb": {
     "describe": {
       "columns": [
@@ -1690,6 +1703,32 @@
     },
     "query": "UPDATE owned_media_item SET content_url = $2, thumb_url = $3 WHERE id = $1"
   },
+  "63cb3678f7eafe9477c2cb473a4629fd6e127e7ffaf191836f793a63a99f56b6": {
+    "describe": {
+      "columns": [
+        {
+          "name": "owner_id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "credential",
+          "ordinal": 1,
+          "type_info": "Jsonb"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Bytea"
+        ]
+      }
+    },
+    "query": "SELECT\n    owner_id,\n    credential\nFROM\n    webauthn_credential\nWHERE\n    webauthn_credential.credential_id = $1;\n"
+  },
   "64112d8607c0a2b4011640b051c49ddab688735839bcb3ee7b2859b687ead853": {
     "describe": {
       "columns": [
@@ -1772,6 +1811,29 @@
       }
     },
     "query": "SELECT\n    id \"id!\",\n    owner_id \"owner_id!\",\n    perceptual_hash,\n    sha256_hash \"sha256_hash!: Sha256Hash\",\n    last_modified \"last_modified!\",\n    content_url,\n    content_size,\n    thumb_url,\n    event_count \"event_count!\",\n    last_event,\n    accounts \"accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>\"\nFROM\n    owned_media_item_accounts\nWHERE\n    owner_id = $1\n    AND (\n        $4::uuid IS NULL\n        OR exists(\n            SELECT\n                1\n            FROM\n                owned_media_item_account\n            WHERE\n                owned_media_item_account.owned_media_item_id = owned_media_item_accounts.id\n                AND account_id = $4\n        )\n    )\nORDER BY\n    last_modified DESC\nLIMIT\n    $2 OFFSET ($3::integer * $2::integer);\n"
+  },
+  "6ab4dbcded5cd1b92a51a6b55e3e81487aab2f893de339818e9a7a681ef721da": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Bytea",
+          "Text",
+          "Jsonb"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    webauthn_credential (owner_id, credential_id, name, credential)\nVALUES\n    ($1, $2, $3, $4) RETURNING id;\n"
   },
   "6c0689be25c41e688a85dbc8e1365e83eec74ce2842665faf67c2ffcb970644d": {
     "describe": {
@@ -2250,6 +2312,44 @@
       }
     },
     "query": "SELECT id, url FROM pending_deletion LIMIT 100"
+  },
+  "8ba140c9d1a66054dd19dce1d92e0855d6d91d3e1e38de411fe14f16e6310eef": {
+    "describe": {
+      "columns": [
+        {
+          "name": "created_at",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "last_used",
+          "ordinal": 1,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "name",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "credential_id",
+          "ordinal": 3,
+          "type_info": "Bytea"
+        }
+      ],
+      "nullable": [
+        false,
+        true,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT\n    created_at,\n    last_used,\n    name,\n    credential_id\nFROM\n    webauthn_credential\nWHERE\n    owner_id = $1\nORDER BY\n    last_used DESC;\n"
   },
   "8bc6979ea098c101a062b14542bb9b0f5ddfe871649c6144b23c4832d9ddf1cc": {
     "describe": {
@@ -3711,6 +3811,18 @@
       }
     },
     "query": "SELECT\n    *\nFROM\n    flist_file\nWHERE\n    perceptual_hash <@ ($1, $2);\n"
+  },
+  "f7ddc89d2ca938be3e0a96c89edc5c5f0887a47c8e73cf7f8973b6c37ace1383": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Bytea"
+        ]
+      }
+    },
+    "query": "UPDATE\n    webauthn_credential\nSET\n    last_used = current_timestamp\nWHERE\n    credential_id = $1;\n"
   },
   "f9ed81bc48afca376d8bab5df361fd73b27228ac81a79fffd82de26a47c1afc8": {
     "describe": {
