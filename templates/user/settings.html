@@ -170,14 +170,33 @@
           <div class="block mt-6">
             <h2 class="subtitle is-4">Security</h2>
 
-            <a class="button is-link is-outlined" href="/auth/sessions">
-              <span class="icon-text">
-                <span class="icon">
-                  <i class="bi bi-person-fill-lock"></i>
-                </span>
-                <span>Active Sessions</span>
-              </span>
-            </a>
+            <div class="field">
+              <div class="control">
+                <a class="button is-link is-outlined" href="/auth/sessions">
+                  <span class="icon-text">
+                    <span class="icon">
+                      <i class="bi bi-person-fill-lock"></i>
+                    </span>
+                    <span>Active Sessions</span>
+                  </span>
+                </a>
+              </div>
+            </div>
+
+            {% if passkeys_enabled %}
+            <div class="field">
+              <div class="control">
+                <button class="button is-info" id="passkey-add">
+                  <span class="icon-text">
+                    <span class="icon">
+                      <i class="bi bi-lightning-charge-fill"></i>
+                    </span>
+                    <span>Add Passkey</span>
+                  </span>
+                </button>
+              </div>
+            </div>
+            {% endif %}
 
             <p class="help mt-3">
               You may reset your password after adding an email address by

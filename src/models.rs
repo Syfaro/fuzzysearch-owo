@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 use sqlx::types::Json;
 use uuid::Uuid;
+use webauthn_rs_proto::CredentialID;
 
 use crate::site::SiteFromConfig;
 use crate::{api, site, Error};
@@ -126,6 +127,20 @@ impl User {
         let user = sqlx::query_file_as!(User, "queries/user/lookup_email.sql", email)
             .fetch_optional(conn)
             .await?;
+
+        Ok(user)
+    }
+
+    pub async fn lookup_by_credential_id(
+        conn: &sqlx::PgPool,
+        credential_id: Vec<u8>,
+    ) -> Result<(Uuid, webauthn_rs::prelude::Passkey), Error> {
+        let user = sqlx::query_file!("queries/user/lookup_by_credential.sql", credential_id)
+            .map(|row| {
+                serde_json::from_value(row.credential).map(|credential| (row.id, credential))
+            })
+            .fetch_one(conn)
+            .await??;
 
         Ok(user)
     }
@@ -374,6 +389,37 @@ impl User {
     }
 }
 
+pub struct WebauthnCredential {
+    pub credential_id: Vec<u8>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl WebauthnCredential {
+    pub async fn lookup_by_owner(conn: &sqlx::PgPool, user_id: Uuid) -> Result<Vec<Self>, Error> {
+        sqlx::query_file_as!(Self, "queries/user/webauthn_credentials.sql", user_id)
+            .fetch_all(conn)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn insert_credential(
+        conn: &sqlx::PgPool,
+        user_id: Uuid,
+        credential_id: Vec<u8>,
+        passkey: webauthn_rs::prelude::Passkey,
+    ) -> Result<Uuid, Error> {
+        sqlx::query_file_scalar!(
+            "queries/user/webauthn_add_credential.sql",
+            user_id,
+            credential_id,
+            serde_json::to_value(passkey)?,
+        )
+        .fetch_one(conn)
+        .await
+        .map_err(Into::into)
+    }
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", tag = "source", content = "source_data")]
 pub enum UserSessionSource {
@@ -382,6 +428,7 @@ pub enum UserSessionSource {
     Login,
     EmailVerification,
     Telegram,
+    Webauthn(CredentialID),
 }
 
 impl UserSessionSource {
@@ -392,6 +439,7 @@ impl UserSessionSource {
             Self::Login => "login",
             Self::EmailVerification => "email verification",
             Self::Telegram => "Telegram",
+            Self::Webauthn(_) => "Passkey",
         }
     }
 }

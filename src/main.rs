@@ -352,6 +352,8 @@ impl<'de> Deserialize<'de> for UrlUuid {
 enum Features {
     #[serde(rename = "fuzzysearch.owo.merge-media")]
     MergeMedia,
+    #[serde(rename = "fuzzysearch.owo.webauthn")]
+    Webauthn,
 }
 
 type Unleash = foxlib::flags::Unleash<Features>;
@@ -704,6 +706,17 @@ async fn main() {
                 token: config.telegram_bot_token.clone(),
             };
 
+            let url = url::Url::parse(&config.host_url).expect("host url was not url");
+            let webauthn = Arc::new(
+                webauthn_rs::WebauthnBuilder::new(
+                    url.host_str().expect("host url did not have host"),
+                    &url,
+                )
+                .expect("could not create webauthn context")
+                .build()
+                .expect("invalid webauthn configuration"),
+            );
+
             let (http_host, http_workers) = (web_config.http_host.clone(), web_config.http_workers);
             tracing::info!("starting fuzzysearch-owo on http://{}", http_host);
 
@@ -736,6 +749,7 @@ async fn main() {
                     .app_data(web::Data::new(telegram_login.clone()))
                     .app_data(web::Data::new(producer.clone()))
                     .app_data(web::Data::new(unleash.clone()))
+                    .app_data(web::Data::new(webauthn.clone()))
                     .service(auth::service())
                     .service(user::service())
                     .service(api::service())
