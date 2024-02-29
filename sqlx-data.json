@@ -1690,6 +1690,32 @@
     },
     "query": "UPDATE owned_media_item SET content_url = $2, thumb_url = $3 WHERE id = $1"
   },
+  "63cb3678f7eafe9477c2cb473a4629fd6e127e7ffaf191836f793a63a99f56b6": {
+    "describe": {
+      "columns": [
+        {
+          "name": "owner_id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "credential",
+          "ordinal": 1,
+          "type_info": "Jsonb"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Bytea"
+        ]
+      }
+    },
+    "query": "SELECT\n    owner_id,\n    credential\nFROM\n    webauthn_credential\nWHERE\n    webauthn_credential.credential_id = $1;\n"
+  },
   "64112d8607c0a2b4011640b051c49ddab688735839bcb3ee7b2859b687ead853": {
     "describe": {
       "columns": [
@@ -2593,32 +2619,6 @@
       }
     },
     "query": "SELECT\n    exists(\n        SELECT\n            1\n        FROM\n            user_account\n        WHERE\n            lower(username) = lower($1)\n    ) \"exists!\";\n"
-  },
-  "a055c9f77021d142e36ffb8f0827814c4d1ec5b41338065ea3582078d60fd0a1": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "credential",
-          "ordinal": 1,
-          "type_info": "Jsonb"
-        }
-      ],
-      "nullable": [
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Bytea"
-        ]
-      }
-    },
-    "query": "SELECT\n    user_account.id,\n    webauthn_credential.credential\nFROM\n    user_account\n    JOIN webauthn_credential ON webauthn_credential.owner_id = user_account.id\nWHERE\n    webauthn_credential.credential_id = $1;\n"
   },
   "a6286b43713fdd80b9f3d00acccad8e51a561ae939b4ea5d8cbffa05be19b81f": {
     "describe": {

@@ -131,20 +131,6 @@ impl User {
         Ok(user)
     }
 
-    pub async fn lookup_by_credential_id(
-        conn: &sqlx::PgPool,
-        credential_id: Vec<u8>,
-    ) -> Result<(Uuid, webauthn_rs::prelude::Passkey), Error> {
-        let user = sqlx::query_file!("queries/user/lookup_by_credential.sql", credential_id)
-            .map(|row| {
-                serde_json::from_value(row.credential).map(|credential| (row.id, credential))
-            })
-            .fetch_one(conn)
-            .await??;
-
-        Ok(user)
-    }
-
     pub async fn lookup_by_telegram_id(
         conn: &sqlx::PgPool,
         telegram_id: i64,
@@ -395,8 +381,8 @@ pub struct WebauthnCredential {
 }
 
 impl WebauthnCredential {
-    pub async fn lookup_by_owner(conn: &sqlx::PgPool, user_id: Uuid) -> Result<Vec<Self>, Error> {
-        sqlx::query_file_as!(Self, "queries/user/webauthn_credentials.sql", user_id)
+    pub async fn user_credentials(conn: &sqlx::PgPool, user_id: Uuid) -> Result<Vec<Self>, Error> {
+        sqlx::query_file_as!(Self, "queries/webauthn/user_credentials.sql", user_id)
             .fetch_all(conn)
             .await
             .map_err(Into::into)
@@ -409,7 +395,7 @@ impl WebauthnCredential {
         passkey: webauthn_rs::prelude::Passkey,
     ) -> Result<Uuid, Error> {
         sqlx::query_file_scalar!(
-            "queries/user/webauthn_add_credential.sql",
+            "queries/webauthn/insert_credential.sql",
             user_id,
             credential_id,
             serde_json::to_value(passkey)?,
@@ -417,6 +403,20 @@ impl WebauthnCredential {
         .fetch_one(conn)
         .await
         .map_err(Into::into)
+    }
+
+    pub async fn lookup_by_credential_id(
+        conn: &sqlx::PgPool,
+        credential_id: Vec<u8>,
+    ) -> Result<(Uuid, webauthn_rs::prelude::Passkey), Error> {
+        let user = sqlx::query_file!("queries/webauthn/lookup_by_credential.sql", credential_id)
+            .map(|row| {
+                serde_json::from_value(row.credential).map(|credential| (row.owner_id, credential))
+            })
+            .fetch_one(conn)
+            .await??;
+
+        Ok(user)
     }
 }
 

@@ -606,6 +606,7 @@ async fn generate_authentication_options(
 
 #[post("/verify-authentication")]
 async fn verify_authentication(
+    unleash: web::Data<crate::Unleash>,
     webauthn: web::Data<Arc<webauthn_rs::Webauthn>>,
     conn: web::Data<sqlx::PgPool>,
     request: actix_web::HttpRequest,
@@ -618,21 +619,32 @@ async fn verify_authentication(
         .ok_or(Error::Missing)?
         .map_err(Error::from_displayable)?;
 
-    let (user_id, credential) =
-        models::User::lookup_by_credential_id(&conn, reg.get_credential_id().to_vec()).await?;
+    let (user_id, credential) = models::WebauthnCredential::lookup_by_credential_id(
+        &conn,
+        reg.get_credential_id().to_vec(),
+    )
+    .await?;
 
     webauthn
         .finish_discoverable_authentication(&reg, discoverable_auth, &[(&credential).into()])
         .map_err(Error::from_displayable)?;
 
+    let user = models::User::lookup_by_id(&conn, user_id)
+        .await?
+        .ok_or(Error::Missing)?;
+
+    if !unleash.is_enabled(Features::Webauthn, Some(&user.context()), false) {
+        return Err(Error::Unauthorized);
+    }
+
     let session_id = models::UserSession::create(
         &conn,
-        user_id,
+        user.id,
         models::UserSessionSource::Webauthn(reg.raw_id),
         client_ip.ip_addr.as_deref(),
     )
     .await?;
-    session.set_session_token(user_id, session_id)?;
+    session.set_session_token(user.id, session_id)?;
 
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "redirect_url": request.url_for_static("user_home")?.as_str(),
@@ -654,7 +666,7 @@ async fn generate_registration_options(
         return Err(Error::Unauthorized);
     }
 
-    let credentials = models::WebauthnCredential::lookup_by_owner(&conn, user.id)
+    let credentials = models::WebauthnCredential::user_credentials(&conn, user.id)
         .await?
         .into_iter()
         .map(|credential| CredentialID::from(credential.credential_id))
