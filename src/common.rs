@@ -87,7 +87,7 @@ fn flist_to_similar(file: models::FListFile) -> SimilarAndPosted {
                 file.id, file.ext
             ),
         },
-        None,
+        file.discovered_at,
     )
 }
 
