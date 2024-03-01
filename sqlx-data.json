@@ -1213,6 +1213,48 @@
     },
     "query": "SELECT\n    *\nFROM\n    linked_account\nWHERE\n    owner_id = $1\n    AND source_site = $2\n    AND data->>'site_id' = $3;\n"
   },
+  "405ff9629e95c33561fabb7a43cd511da40e8c2ad6e2ea157bfa349684ae91ff": {
+    "describe": {
+      "columns": [
+        {
+          "name": "total_users!",
+          "ordinal": 0,
+          "type_info": "Int8"
+        },
+        {
+          "name": "linked_accounts!",
+          "ordinal": 1,
+          "type_info": "Int8"
+        },
+        {
+          "name": "recent_users!",
+          "ordinal": 2,
+          "type_info": "Int8"
+        },
+        {
+          "name": "total_filesize!",
+          "ordinal": 3,
+          "type_info": "Int8"
+        },
+        {
+          "name": "recent_media!",
+          "ordinal": 4,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "SELECT\n    COALESCE(\n        (\n            SELECT\n                count(*)\n            FROM\n                user_account\n        ),\n        0\n    ) \"total_users!\",\n    COALESCE(\n        (\n            SELECT\n                count(*)\n            FROM\n                linked_account\n        ),\n        0\n    ) \"linked_accounts!\",\n    COALESCE(\n        (\n            SELECT\n                count(DISTINCT user_id)\n            FROM\n                user_session\n            WHERE\n                last_used > current_timestamp - interval '24 hours'\n        ),\n        0\n    ) \"recent_users!\",\n    COALESCE(\n        (\n            SELECT\n                sum(content_size)::bigint\n            FROM\n                owned_media_item\n        ),\n        0\n    ) \"total_filesize!\",\n    COALESCE(\n        (\n            SELECT\n                count(*)\n            FROM\n                owned_media_item\n            WHERE\n                last_modified > current_timestamp - interval '24 hours'\n        ),\n        0\n    ) \"recent_media!\";\n"
+  },
   "432653c3dd8926da7a9565c36ec6db289917d56fe19df29900b7440e9588581a": {
     "describe": {
       "columns": [],

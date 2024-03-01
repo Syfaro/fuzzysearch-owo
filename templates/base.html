@@ -9,7 +9,7 @@
 {% endblock %}
 
 {% macro naventry(class, name, path) %}
-<a class="{{ class }} {% if uri.path() == path %} is-active {% endif %}" href="{{ path }}">
+<a class="{{ class }} {% if uri.path().starts_with(path) %} is-active {% endif %}" href="{{ path }}">
   {{ name }}
 </a>
 {% endmacro %}
@@ -50,7 +50,7 @@
         {% match user %}
         {% when Some with (user) %}
         {% if user.is_admin %}
-        {% call navitem("Admin Tools", "/admin/tools") %}
+        {% call navitem("Admin", "/admin") %}
         {% endif %}
 
         <div class="navbar-item has-dropdown is-hoverable">

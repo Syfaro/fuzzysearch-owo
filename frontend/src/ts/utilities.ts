@@ -22,7 +22,7 @@ function getRelativeTime(toDate: Date, fromDate = new Date()): string {
     if (Math.abs(elapsed) > units[unit] || unit === "second") {
       return rtf.format(
         Math.round(elapsed / units[unit]),
-        unit as Intl.RelativeTimeFormatUnit
+        unit as Intl.RelativeTimeFormatUnit,
       );
     }
   }
@@ -79,10 +79,9 @@ document
       const fileName = document.querySelector(input.dataset.fileNameLabel);
 
       if (fileName) {
-        const displayedName =
-          input.files?.length === 1
-            ? input.files[0].name
-            : `${input.files?.length} Files Selected`;
+        const displayedName = input.files?.length === 1
+          ? input.files[0].name
+          : `${input.files?.length} Files Selected`;
         fileName.textContent = displayedName;
       }
 
@@ -109,7 +108,7 @@ document
         return "Archive is uploading";
       };
 
-      const fileInput = <HTMLInputElement>(
+      const fileInput = <HTMLInputElement> (
         chunkUploader.querySelector('input[type="file"]')
       );
       if (!fileInput) return;
@@ -129,7 +128,7 @@ document
           window.onbeforeunload = null;
           console.log(`Completed uploading chunks to ${collectionId}`);
 
-          let collectionIDElement = <HTMLInputElement>(
+          let collectionIDElement = <HTMLInputElement> (
             chunkUploader.querySelector('input[name="collection_id"]')
           );
           if (collectionIDElement) {
@@ -152,7 +151,7 @@ document
 
 async function performChunkedUpload(
   file: File,
-  progressBar: HTMLProgressElement | null
+  progressBar: HTMLProgressElement | null,
 ) {
   const CHUNK_SIZE = 1024 * 1024 * 10;
 
@@ -211,4 +210,13 @@ document.querySelectorAll<HTMLInputElement>(".hover-reveal").forEach((elem) => {
   elem.addEventListener("mouseleave", () => {
     elem.type = "password";
   });
+});
+
+const numberFormatter = new Intl.NumberFormat(undefined, {
+  style: "decimal",
+});
+
+document.querySelectorAll(".human-number").forEach((elem) => {
+  const value = parseInt(elem.textContent?.trim() || "0", 10);
+  elem.textContent = numberFormatter.format(value);
 });

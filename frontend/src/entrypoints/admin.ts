@@ -22,10 +22,6 @@ function ingestStatsGraph(elem: HTMLElement) {
   const chart = echarts.init(elem);
 
   const opts = {
-    title: {
-      left: "center",
-      text: "Ingested Media",
-    },
     tooltip: {
       trigger: "axis",
     },

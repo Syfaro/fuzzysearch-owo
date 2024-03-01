@@ -367,7 +367,7 @@ pub struct BaseTemplate<'a, T: std::fmt::Display + askama::Template> {
     pub uri: &'a actix_web::http::Uri,
     pub flashes: Option<Vec<FlashMessage>>,
 
-    pub content: &'a T,
+    pub content: T,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -412,7 +412,7 @@ impl AddFlash for actix_session::Session {
 #[async_trait(?Send)]
 pub trait WrappedTemplate: Sized + std::fmt::Display + askama::Template {
     async fn wrap<'a>(
-        &'a self,
+        self,
         request: &'a actix_web::HttpRequest,
         user: Option<&'a models::User>,
     ) -> BaseTemplate<'a, Self>;
@@ -421,7 +421,7 @@ pub trait WrappedTemplate: Sized + std::fmt::Display + askama::Template {
 #[async_trait(?Send)]
 impl<T: Sized + std::fmt::Display + askama::Template> WrappedTemplate for T {
     async fn wrap<'a>(
-        &'a self,
+        self,
         request: &'a actix_web::HttpRequest,
         user: Option<&'a models::User>,
     ) -> BaseTemplate<'a, Self> {

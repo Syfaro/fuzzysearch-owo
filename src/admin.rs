@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use actix_web::{get, post, services, web, HttpResponse, Scope};
 use askama::Template;
+use async_trait::async_trait;
 use foxlib::jobs::{FaktoryProducer, JobQueue};
 use rand::Rng;
 use serde::Deserialize;
@@ -14,7 +15,10 @@ use crate::{
 
 pub fn service() -> Scope {
     web::scope("/admin").service(services![
-        admin,
+        admin_overview,
+        admin_inject,
+        admin_sites_reddit,
+        admin_sites_flist,
         inject_post,
         job_manual,
         subreddit_add,
@@ -24,43 +28,149 @@ pub fn service() -> Scope {
 }
 
 #[derive(Template)]
-#[template(path = "admin/index.html")]
-struct Admin {
-    subreddits: Vec<models::RedditSubreddit>,
-    recent_flist_runs: Vec<models::FListImportRun>,
+#[template(path = "admin/_layout.html")]
+pub struct AdminTemplate<'a, T: std::fmt::Display + askama::Template> {
+    pub uri: &'a actix_web::http::Uri,
+    pub content: T,
+}
+
+#[async_trait(?Send)]
+trait AdminWrappedTemplate: Sized + std::fmt::Display + askama::Template {
+    async fn wrap_admin<'a>(
+        self,
+        request: &'a actix_web::HttpRequest,
+        user: &'a models::User,
+    ) -> crate::BaseTemplate<'a, AdminTemplate<'a, Self>>;
+}
+
+#[async_trait(?Send)]
+impl<T: Sized + std::fmt::Display + askama::Template> AdminWrappedTemplate for T {
+    async fn wrap_admin<'a>(
+        self,
+        request: &'a actix_web::HttpRequest,
+        user: &'a models::User,
+    ) -> crate::BaseTemplate<'a, AdminTemplate<'a, Self>> {
+        AdminTemplate {
+            uri: request.uri(),
+            content: self,
+        }
+        .wrap(request, Some(user))
+        .await
+    }
+}
+
+#[derive(Template)]
+#[template(path = "admin/overview.html")]
+struct AdminOverview {
+    total_users: i64,
+    recent_users: i64,
+    linked_accounts: i64,
+    total_filesize: i64,
+    recent_media: i64,
 
     ingest_rate_graph: bool,
 }
 
-#[get("/tools", name = "admin_tools")]
-async fn admin(
+#[get("", name = "admin_overview")]
+async fn admin_overview(
     unleash: web::Data<crate::Unleash>,
-    request: actix_web::HttpRequest,
     conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
     if !user.is_admin {
         return Err(actix_web::error::ErrorUnauthorized("Unauthorized").into());
     }
 
-    let subreddits = models::RedditSubreddit::subreddits(&conn);
-    let recent_flist_runs = models::FListImportRun::recent_runs(&conn);
+    let stats = sqlx::query_file!("queries/admin/overview.sql")
+        .fetch_one(&**conn)
+        .await?;
 
-    let (subreddits, recent_flist_runs) = futures::try_join!(subreddits, recent_flist_runs)?;
-
-    let body = Admin {
-        subreddits,
-        recent_flist_runs,
-
+    let body = AdminOverview {
+        total_users: stats.total_users,
+        recent_users: stats.recent_users,
+        linked_accounts: stats.linked_accounts,
+        total_filesize: stats.total_filesize,
+        recent_media: stats.recent_media,
         ingest_rate_graph: unleash.is_enabled(
             crate::Features::AdminIngestRate,
             Some(&user.context()),
             false,
         ),
     }
-    .wrap(&request, Some(&user))
+    .wrap_admin(&request, &user)
     .await
     .render()?;
+
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[derive(Template)]
+#[template(path = "admin/inject.html")]
+struct AdminInject;
+
+#[get("/inject", name = "admin_inject")]
+async fn admin_inject(
+    request: actix_web::HttpRequest,
+    user: models::User,
+) -> Result<HttpResponse, Error> {
+    if !user.is_admin {
+        return Err(actix_web::error::ErrorUnauthorized("Unauthorized").into());
+    }
+
+    let body = AdminInject.wrap_admin(&request, &user).await.render()?;
+
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[derive(Template)]
+#[template(path = "admin/sites/reddit.html")]
+struct AdminReddit {
+    subreddits: Vec<models::RedditSubreddit>,
+}
+
+#[get("/sites/reddit", name = "admin_sites_reddit")]
+async fn admin_sites_reddit(
+    conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
+    user: models::User,
+) -> Result<HttpResponse, Error> {
+    if !user.is_admin {
+        return Err(actix_web::error::ErrorUnauthorized("Unauthorized").into());
+    }
+
+    let subreddits = models::RedditSubreddit::subreddits(&conn).await?;
+
+    let body = AdminReddit { subreddits }
+        .wrap_admin(&request, &user)
+        .await
+        .render()?;
+
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[derive(Template)]
+#[template(path = "admin/sites/flist.html")]
+struct AdminFlist {
+    recent_flist_runs: Vec<models::FListImportRun>,
+}
+
+#[get("/sites/flist", name = "admin_sites_flist")]
+async fn admin_sites_flist(
+    conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
+    user: models::User,
+) -> Result<HttpResponse, Error> {
+    if !user.is_admin {
+        return Err(actix_web::error::ErrorUnauthorized("Unauthorized").into());
+    }
+
+    let recent_flist_runs = models::FListImportRun::recent_runs(&conn).await?;
+
+    let body = AdminFlist { recent_flist_runs }
+        .wrap_admin(&request, &user)
+        .await
+        .render()?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -124,7 +234,7 @@ async fn inject_post(
         .await?;
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", request.url_for_static("admin_tools")?.as_str()))
+        .insert_header(("Location", request.url_for_static("admin_inject")?.as_str()))
         .finish())
 }
 
@@ -133,7 +243,7 @@ struct SubredditForm {
     subreddit_name: String,
 }
 
-#[post("/subreddit/add")]
+#[post("/sites/reddit/add")]
 async fn subreddit_add(
     conn: web::Data<sqlx::PgPool>,
     request: actix_web::HttpRequest,
@@ -147,11 +257,14 @@ async fn subreddit_add(
     models::RedditSubreddit::add(&conn, &form.subreddit_name).await?;
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", request.url_for_static("admin_tools")?.as_str()))
+        .insert_header((
+            "Location",
+            request.url_for_static("admin_sites_reddit")?.as_str(),
+        ))
         .finish())
 }
 
-#[post("/subreddit/state")]
+#[post("/sites/reddit/state")]
 async fn subreddit_state(
     conn: web::Data<sqlx::PgPool>,
     request: actix_web::HttpRequest,
@@ -172,7 +285,10 @@ async fn subreddit_state(
     models::RedditSubreddit::update_state(&conn, &form.subreddit_name, new_state).await?;
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", request.url_for_static("admin_tools")?.as_str()))
+        .insert_header((
+            "Location",
+            request.url_for_static("admin_sites_reddit")?.as_str(),
+        ))
         .finish())
 }
 
@@ -181,7 +297,7 @@ struct FListImportRunForm {
     import_run_id: uuid::Uuid,
 }
 
-#[post("/flist/abort")]
+#[post("/sites/flist/abort")]
 async fn flist_abort(
     conn: web::Data<sqlx::PgPool>,
     request: actix_web::HttpRequest,
@@ -195,7 +311,10 @@ async fn flist_abort(
     models::FListImportRun::abort_run(&conn, form.import_run_id).await?;
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", request.url_for_static("admin_tools")?.as_str()))
+        .insert_header((
+            "Location",
+            request.url_for_static("admin_sites_flist")?.as_str(),
+        ))
         .finish())
 }
 
@@ -214,7 +333,7 @@ struct ManualJobForm {
     data: String,
 }
 
-#[post("/job/manual", name = "admin_job_manual")]
+#[post("/jobs/manual", name = "admin_job_manual")]
 async fn job_manual(
     conn: web::Data<sqlx::PgPool>,
     faktory: web::Data<FaktoryProducer>,
@@ -296,6 +415,6 @@ async fn job_manual(
     }
 
     Ok(HttpResponse::Found()
-        .insert_header(("Location", request.url_for_static("admin_tools")?.as_str()))
+        .insert_header(("Location", request.url_for_static("admin_inject")?.as_str()))
         .finish())
 }
