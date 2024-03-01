@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.18.4 — Feburary 29th, 2024
+
+* Improved F-list timestamps for newly posted images.
+* Internal updates.
+
 ## v0.18.3 — February 29th, 2024
 
 * Added ability to use Passkeys for passwordless sign in.
