@@ -3080,24 +3080,6 @@
     },
     "query": "SELECT\n    *\nFROM\n    user_account\nWHERE\n    telegram_id = $1;\n"
   },
-  "b7554449d0a2aa49a51187e25d42f14fd9f684cb49937247338db7b95dd38642": {
-    "describe": {
-      "columns": [
-        {
-          "name": "recent_posts!",
-          "ordinal": 0,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "SELECT\n    COALESCE(\n        (\n            SELECT\n                count(*)\n            FROM\n                flist_file\n            WHERE\n                discovered_at > current_timestamp - interval '24 hours'\n        ),\n        0\n    ) \"recent_posts!\";\n"
-  },
   "b8946dfef01780773713136e31594b2347be98536da6e066ed49378f88b11e13": {
     "describe": {
       "columns": [],
@@ -3553,6 +3535,24 @@
       }
     },
     "query": "SELECT\n    pending_notification.id,\n    pending_notification.owner_id,\n    pending_notification.created_at,\n    pending_notification.user_event_id\nFROM\n    pending_notification\n    JOIN user_setting ON (\n        user_setting.owner_id = pending_notification.owner_id\n        AND user_setting.setting = 'email-frequency'\n    )\nWHERE\n    user_setting.value = $1;\n"
+  },
+  "e2e770dbc366523ba7b6aa1600a84f91f06c38852643f39152df7fc199e8dd98": {
+    "describe": {
+      "columns": [
+        {
+          "name": "recent_posts!",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "SELECT\n    COALESCE(\n        (\n            SELECT\n                count(*)\n            FROM\n                flist_file\n            WHERE\n                discovered_at IS NOT NULL\n                AND discovered_at > current_timestamp - interval '24 hours'\n        ),\n        0\n    ) \"recent_posts!\";\n"
   },
   "e4ba6660324c40698210560458108197c41d93558a1abd85453479a26ca347e4": {
     "describe": {

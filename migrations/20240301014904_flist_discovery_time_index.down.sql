@@ -1,0 +1,1 @@
+DROP INDEX flist_file_discovery_time_idx;
