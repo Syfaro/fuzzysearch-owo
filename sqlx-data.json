@@ -1128,6 +1128,24 @@
     },
     "query": "SELECT\n    id \"id!\",\n    owner_id \"owner_id!\",\n    perceptual_hash,\n    sha256_hash \"sha256_hash!: Sha256Hash\",\n    last_modified \"last_modified!\",\n    content_url,\n    content_size,\n    thumb_url,\n    event_count \"event_count!\",\n    last_event,\n    accounts \"accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>\"\nFROM\n    owned_media_item_accounts\nWHERE\n    owner_id = $1\n    AND (\n        $4::uuid IS NULL\n        OR exists(\n            SELECT\n                1\n            FROM\n                owned_media_item_account\n            WHERE\n                owned_media_item_account.owned_media_item_id = owned_media_item_accounts.id\n                AND account_id = $4\n        )\n    )\nORDER BY\n    event_count DESC,\n    last_modified DESC\nLIMIT\n    $2 OFFSET ($3::integer * $2::integer);\n"
   },
+  "3e28bd747546206ba02f572b3f145a24096d29e247137a2f4b72579f57839239": {
+    "describe": {
+      "columns": [
+        {
+          "name": "recent_posts!",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "SELECT\n    COALESCE(\n        (\n            SELECT\n                count(*)\n            FROM\n                reddit_post\n            WHERE\n                posted_at > current_timestamp - interval '24 hours'\n        ),\n        0\n    ) \"recent_posts!\";\n"
+  },
   "3f091fdddbee429487163837c17f18b8139e3c2bee1d43168d936018169d868f": {
     "describe": {
       "columns": [
@@ -3061,6 +3079,24 @@
       }
     },
     "query": "SELECT\n    *\nFROM\n    user_account\nWHERE\n    telegram_id = $1;\n"
+  },
+  "b7554449d0a2aa49a51187e25d42f14fd9f684cb49937247338db7b95dd38642": {
+    "describe": {
+      "columns": [
+        {
+          "name": "recent_posts!",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "SELECT\n    COALESCE(\n        (\n            SELECT\n                count(*)\n            FROM\n                flist_file\n            WHERE\n                discovered_at > current_timestamp - interval '24 hours'\n        ),\n        0\n    ) \"recent_posts!\";\n"
   },
   "b8946dfef01780773713136e31594b2347be98536da6e066ed49378f88b11e13": {
     "describe": {

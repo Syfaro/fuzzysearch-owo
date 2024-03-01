@@ -4,6 +4,7 @@ use actix_web::{get, post, services, web, HttpResponse, Scope};
 use askama::Template;
 use async_trait::async_trait;
 use foxlib::jobs::{FaktoryProducer, JobQueue};
+use futures::TryFutureExt;
 use rand::Rng;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -126,6 +127,8 @@ async fn admin_inject(
 #[derive(Template)]
 #[template(path = "admin/sites/reddit.html")]
 struct AdminReddit {
+    active_subreddits: usize,
+    added_posts: i64,
     subreddits: Vec<models::RedditSubreddit>,
 }
 
@@ -139,12 +142,23 @@ async fn admin_sites_reddit(
         return Err(actix_web::error::ErrorUnauthorized("Unauthorized").into());
     }
 
-    let subreddits = models::RedditSubreddit::subreddits(&conn).await?;
+    let (subreddits, stats) = futures::try_join!(
+        models::RedditSubreddit::subreddits(&conn),
+        sqlx::query_file!("queries/admin/reddit_stats.sql")
+            .fetch_one(&**conn)
+            .map_err(Error::from)
+    )?;
 
-    let body = AdminReddit { subreddits }
-        .wrap_admin(&request, &user)
-        .await
-        .render()?;
+    let active_subreddits = subreddits.iter().filter(|s| !s.disabled).count();
+
+    let body = AdminReddit {
+        active_subreddits,
+        added_posts: stats.recent_posts,
+        subreddits,
+    }
+    .wrap_admin(&request, &user)
+    .await
+    .render()?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
@@ -152,6 +166,7 @@ async fn admin_sites_reddit(
 #[derive(Template)]
 #[template(path = "admin/sites/flist.html")]
 struct AdminFlist {
+    added_posts: i64,
     recent_flist_runs: Vec<models::FListImportRun>,
 }
 
@@ -165,12 +180,20 @@ async fn admin_sites_flist(
         return Err(actix_web::error::ErrorUnauthorized("Unauthorized").into());
     }
 
-    let recent_flist_runs = models::FListImportRun::recent_runs(&conn).await?;
+    let (recent_flist_runs, stats) = futures::try_join!(
+        models::FListImportRun::recent_runs(&conn),
+        sqlx::query_file!("queries/admin/flist_stats.sql")
+            .fetch_one(&**conn)
+            .map_err(Error::from)
+    )?;
 
-    let body = AdminFlist { recent_flist_runs }
-        .wrap_admin(&request, &user)
-        .await
-        .render()?;
+    let body = AdminFlist {
+        added_posts: stats.recent_posts,
+        recent_flist_runs,
+    }
+    .wrap_admin(&request, &user)
+    .await
+    .render()?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
