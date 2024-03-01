@@ -1,0 +1,92 @@
+<div class="block">
+  <div class="level has-text-centered">
+    <div class="level-item">
+      <div>
+        <p class="heading">Last Import</p>
+        {% match recent_flist_runs.first() %}
+        {% when Some with (import_run) %}
+        <p class="title relative-time" data-timestamp="{{ import_run.started_at.timestamp() }}">
+          {{ import_run.started_at }}
+        </p>
+        {% else %}
+        <p class="title">Never</p>
+        {% endmatch %}
+      </div>
+    </div>
+
+    <div class="level-item">
+      <div>
+        <p class="heading">24 hr Posts</p>
+        <p class="title human-number">{{ added_posts }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-container">
+    <table class="table is-fullwidth">
+      <thead>
+        <tr>
+          <th>Started At</th>
+          <th>Finished At</th>
+          <th>Starting ID</th>
+          <th>Ending ID</th>
+          <th>Added Files</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for import_run in recent_flist_runs %}
+          <tr>
+            <td>
+              <span class="relative-time" data-timestamp="{{ import_run.started_at.timestamp() }}">
+                {{ import_run.started_at }}
+              </span>
+            </td>
+            <td>
+              {% match import_run.finished_at %}
+              {% when Some with (finished_at) %}
+                <span class="relative-time" data-timestamp="{{ finished_at.timestamp() }}">
+                  {{ finished_at }}
+                </span>
+              {% else %}
+                <span class="has-text-grey">&ndash;</span>
+              {% endmatch %}
+            </td>
+            <td>
+              {{ import_run.starting_id }}
+            </td>
+            <td>
+              {% match import_run.max_id %}
+              {% when Some with (max_id) %}
+                {{ max_id }}
+              {% else %}
+                <span class="has-text-grey">&ndash;</span>
+              {% endmatch %}
+            </td>
+            <td>
+              {% match import_run.max_id %}
+              {% when Some with (max_id) %}
+                {{ max_id - import_run.starting_id }}
+              {% else %}
+                <span class="has-text-grey">&ndash;</span>
+              {% endmatch %}
+            </td>
+            <td>
+              <form method="POST">
+                <input type="hidden" name="import_run_id" value="{{ import_run.id }}">
+
+                <div class="buttons are-small is-justify-content-center">
+                  {% if import_run.finished_at.is_none() %}
+                    <button class="button is-danger" formaction="/admin/sites/flist/abort">
+                      Abort
+                    </button>
+                  {% endif %}
+                </div>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

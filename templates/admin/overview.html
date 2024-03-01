@@ -1,0 +1,48 @@
+<div class="block">
+  <div class="level has-text-centered">
+    <div class="level-item">
+      <div>
+        <p class="heading">Total Users</p>
+        <p class="title human-number">{{ total_users }}</p>
+      </div>
+    </div>
+
+    <div class="level-item">
+      <div>
+        <p class="heading">24 hr Sessions</p>
+        <p class="title human-number">{{ recent_users }}</p>
+      </div>
+    </div>
+
+    <div class="level-item">
+      <div>
+        <p class="heading">Linked Accounts</p>
+        <p class="title human-number">{{ linked_accounts }}</p>
+      </div>
+    </div>
+
+    <div class="level-item">
+      <div>
+        <p class="heading">Media Size</p>
+        <p class="title">{{ total_filesize|filesizeformat }}</p>
+      </div>
+    </div>
+
+    <div class="level-item">
+      <div>
+        <p class="heading">24 hr Media</p>
+        <p class="title human-number">{{ recent_media }}</p>
+      </div>
+    </div>
+  </div>
+
+  {% if ingest_rate_graph %}
+  <div class="columns is-centered is-desktop">
+    <div class="column">
+      <div class="block">
+        <div id="ingest-stats" style="height: 400px;"></div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>

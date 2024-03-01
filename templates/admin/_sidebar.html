@@ -1,0 +1,24 @@
+{% macro menuentry(class, name, path) %}
+<li>
+  <a class="{% if uri.path() == path %}is-active{% endif %}" href="{{ path }}">
+    {{ name }}
+  </a>
+</li>
+{% endmacro %}
+
+{% macro menuitem(name, path) %}
+{% call menuentry("navbar-item", name, path) %}
+{% endmacro %}
+
+<aside class="menu">
+  <p class="menu-label">General</p>
+  <ul class="menu-list">
+    {% call menuitem("Overview", "/admin") %}
+    {% call menuitem("Inject", "/admin/inject") %}
+  </ul>
+  <p class="menu-label">Sites</p>
+  <ul class="menu-list">
+    {% call menuitem("Reddit", "/admin/sites/reddit") %}
+    {% call menuitem("F-list", "/admin/sites/flist") %}
+  </ul>
+</aside>

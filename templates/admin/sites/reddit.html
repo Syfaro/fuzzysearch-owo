@@ -1,0 +1,89 @@
+
+<div class="block">
+  <div class="level has-text-centered">
+    <div class="level-item">
+      <div>
+        <p class="heading">Monitored Subreddits</p>
+        <p class="title human-number">{{ active_subreddits }}</p>
+      </div>
+    </div>
+
+    <div class="level-item">
+      <div>
+        <p class="heading">24 hr Posts</p>
+        <p class="title human-number">{{ added_posts }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-container">
+    <table class="table is-fullwidth">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Status</th>
+          <th>Last Updated</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for subreddit in subreddits %}
+        <tr>
+          <th>{{ subreddit.name }}</th>
+          <td>
+            {% if subreddit.disabled %}
+              Disabled
+            {% else %}
+              Enabled
+            {% endif %}
+          </td>
+          <td>
+            {% match subreddit.last_updated %}
+            {% when Some with (last_updated) %}
+            <span class="relative-time" data-timestamp="{{ last_updated.timestamp() }}">
+              {{ last_updated }}
+            </span>
+            {% else %}
+            <span class="has-text-grey">never</span>
+            {% endmatch %}
+          </td>
+          <td class="has-text-right">
+            <form method="POST">
+              <input type="hidden" name="subreddit_name" value="{{ subreddit.name }}">
+
+              <div class="buttons are-small is-justify-content-center">
+                <button class="button is-warning" formaction="/admin/sites/reddit/state">
+                  {% if subreddit.disabled %}
+                    Enable
+                  {% else %}
+                    Disable
+                  {% endif %}
+                </button>
+              </div>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="columns">
+    <div class="column is-one-third">
+      <form method="POST" action="/admin/sites/reddit/add">
+        <div class="field">
+          <label class="label" for="subreddit-name">Subreddit name</label>
+          <div class="control">
+            <input class="input" type="text" placeholder="Subreddit name" name="subreddit_name" id="subreddit-name" required>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="control">
+            <button class="button is-primary">Add</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,17 @@
+<section class="section">
+  <div class="container">
+    <div class="columns">
+      <div class="column is-one-fifth">
+        {% include "_sidebar.html" %}
+      </div>
+
+      <div class="column">
+        {{ content|safe }}
+      </div>
+    </div>
+  </div>
+</section>
+
+{% block footer %}
+  <script src="/static/admin.js?v{{ env!("CARGO_PKG_VERSION") }}"></script>
+{% endblock %}
