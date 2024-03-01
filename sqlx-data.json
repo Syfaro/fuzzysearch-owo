@@ -653,12 +653,18 @@
           "name": "perceptual_hash",
           "ordinal": 5,
           "type_info": "Int8"
+        },
+        {
+          "name": "discovered_at",
+          "ordinal": 6,
+          "type_info": "Timestamptz"
         }
       ],
       "nullable": [
         false,
         false,
         false,
+        true,
         true,
         true,
         true
@@ -3803,12 +3809,18 @@
           "name": "perceptual_hash",
           "ordinal": 5,
           "type_info": "Int8"
+        },
+        {
+          "name": "discovered_at",
+          "ordinal": 6,
+          "type_info": "Timestamptz"
         }
       ],
       "nullable": [
         false,
         false,
         false,
+        true,
         true,
         true,
         true

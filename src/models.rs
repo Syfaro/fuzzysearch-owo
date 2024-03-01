@@ -1838,6 +1838,7 @@ pub struct FListFile {
     pub size: Option<i32>,
     pub sha256: Option<Vec<u8>>,
     pub perceptual_hash: Option<i64>,
+    pub discovered_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl FListFile {
