@@ -493,7 +493,7 @@ async fn callback(
                 .map(|dur| {
                     chrono::Duration::from_std(dur).expect("invalid deviantart expires after")
                 })
-                .unwrap_or_else(|| chrono::Duration::seconds(3600)),
+                .unwrap_or_else(|| chrono::Duration::try_seconds(3600).unwrap()),
     })?;
 
     let account =

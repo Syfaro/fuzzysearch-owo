@@ -338,7 +338,7 @@ where
         + refresh
             .expires_in()
             .and_then(|dur| chrono::Duration::from_std(dur).ok())
-            .unwrap_or_else(|| chrono::Duration::seconds(3600));
+            .unwrap_or_else(|| chrono::Duration::try_seconds(3600).unwrap());
 
     update_fn(current_data, access_token, refresh_token, expires_at).await?;
     redlock.unlock(&lock).await;

@@ -283,7 +283,7 @@ async fn telegram(
         .map_err(actix_web::error::ErrorBadRequest)?;
 
     let auth_date = chrono::Utc.timestamp_opt(auth_date, 0).unwrap();
-    if auth_date + chrono::Duration::minutes(15) < chrono::Utc::now() {
+    if auth_date + chrono::Duration::try_minutes(15).unwrap() < chrono::Utc::now() {
         return Err(actix_web::error::ErrorBadRequest("data too old").into());
     }
 

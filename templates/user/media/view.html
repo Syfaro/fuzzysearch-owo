@@ -129,7 +129,7 @@
                     {% match image.poster_pair() %}
                     {% when Some with (poster_pair) %}
                     {% if allowlisted_users.contains_key(poster_pair) %}
-                    <button formaction="/user/allowlist/remove" class="button has-tooltip-left" data-tooltip="Receive notifications when this account posts on this site">
+                    <button formaction="/user/allowlist/remove" class="button">
                       <span class="icon-text">
                         <span class="icon">
                           <i class="bi bi-clipboard-x-fill"></i>
@@ -138,7 +138,7 @@
                       </span>
                     </button>
                     {% else %}
-                    <button formaction="/user/allowlist/add" class="button has-tooltip-left" data-tooltip="Skip sending notifications when this account posts on this site">
+                    <button formaction="/user/allowlist/add" class="button">
                       <span class="icon-text">
                         <span class="icon">
                           <i class="bi bi-clipboard-plus"></i>

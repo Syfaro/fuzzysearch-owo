@@ -228,7 +228,7 @@ async fn collect_gallery_images(ctx: JobContext, _job: FaktoryJob, _args: ()) ->
         Some(run)
             if run.finished_at.is_none()
                 && chrono::Utc::now().signed_duration_since(run.started_at)
-                    >= chrono::Duration::minutes(30) =>
+                    >= chrono::Duration::try_minutes(30).unwrap() =>
         {
             tracing::warn!("previous run never finished, restarting");
             (run.starting_id, Some(run.id))

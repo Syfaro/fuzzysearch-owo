@@ -27,9 +27,9 @@ actix-web-lab = "0.20.2"
 anyhow = "1"
 argonautica = "0.2"
 askama = { version = "0.12.1" , features = ["serde-json", "humansize", "markdown"] }
-async-nats = "0.33.0"
+async-nats = "0.34.0"
 async-trait = "0.1"
-base64 = "0.21"
+base64 = "0.22"
 bytes = "1"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive", "env", "cargo", "wrap_help"] }
@@ -63,7 +63,7 @@ rss = "2"
 rusoto_core = "0.48"
 rusoto_credential = "0.48"
 rusoto_s3 = "0.48"
-scraper = "0.18.1"
+scraper = "0.19.0"
 sentry = "0.32.2"
 sentry-actix = "0.32.2"
 serde = { version = "1", features = ["derive"] }

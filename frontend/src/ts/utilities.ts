@@ -40,7 +40,7 @@ function updateRelativeTimes() {
       const date = new Date(timestamp * 1000);
 
       if (!elem.dataset.replacedText) {
-        elem.dataset.tooltip = dtf.format(date);
+        elem.title = dtf.format(date);
         elem.dataset.replacedText = "true";
       }
 

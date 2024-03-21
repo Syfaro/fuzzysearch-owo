@@ -132,7 +132,7 @@ async fn update_subreddit(ctx: JobContext, _job: FaktoryJob, name: String) -> Re
         .await?
         .ok_or(Error::Missing)?;
 
-    if matches!(data.last_updated, Some(last_updated) if chrono::Utc::now() < last_updated + chrono::Duration::minutes(15))
+    if matches!(data.last_updated, Some(last_updated) if chrono::Utc::now() < last_updated + chrono::Duration::try_minutes(15).unwrap())
     {
         tracing::info!("updated within last 15 minutes, skipping");
 
