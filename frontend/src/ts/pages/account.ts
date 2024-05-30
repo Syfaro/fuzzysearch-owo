@@ -87,7 +87,7 @@ if (siteSelectInput && usernameInput) {
 const verifyAccountButton = document.getElementById("verify-account");
 if (verifyAccountButton) {
   const accountID = document.querySelector<HTMLElement>(
-    "setion[data-account-id]"
+    "section[data-account-id]"
   )?.dataset.accountId;
   if (accountID) {
     verifyAccountButton.addEventListener("click", (ev) => {
