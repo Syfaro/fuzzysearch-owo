@@ -27,7 +27,7 @@ actix-web-lab = "0.20.2"
 anyhow = "1"
 argonautica = "0.2"
 askama = { version = "0.12.1" , features = ["serde-json", "humansize", "markdown"] }
-async-nats = "0.34.0"
+async-nats = "0.35.1"
 async-trait = "0.1"
 base64 = "0.22"
 bytes = "1"
@@ -44,7 +44,7 @@ hmac = "0.12"
 image = "0.23"
 infer = "0.15"
 ipnetwork = "0.19"
-itertools = "0.12.1"
+itertools = "0.13.0"
 lazy_static = "1"
 lettre = { version = "0.11.4", features = ["tokio1-native-tls", "tracing", "serde"] }
 md-5 = "0.10"
@@ -54,7 +54,7 @@ percent-encoding = "2.2"
 prometheus = { version = "0.13", features = ["process"] }
 radix_fmt = "1"
 rand = "0.8"
-redis = { version = "0.24", features = ["tokio-comp", "aio", "connection-manager"] }
+redis = { version = "0.25.4", features = ["tokio-comp", "aio", "connection-manager"] }
 redlock = { git = "https://github.com/Syfaro/redlock-rs.git" }
 regex = "1"
 reqwest = { version = "0.11", features = ["json", "cookies"] }
@@ -64,8 +64,8 @@ rusoto_core = "0.48"
 rusoto_credential = "0.48"
 rusoto_s3 = "0.48"
 scraper = "0.19.0"
-sentry = "0.32.2"
-sentry-actix = "0.32.2"
+sentry = "0.33.0"
+sentry-actix = "0.33.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_plain = "1"
@@ -81,8 +81,8 @@ url = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 webauthn-rs = { version = "0.5.0-dev", features = ["resident-key-support", "danger-allow-state-serialisation", "preview-features"] }
 webauthn-rs-proto = "0.5.0-dev"
-zip = "0.6"
-zxcvbn = "2"
+zip = "2.1.1"
+zxcvbn = "3.0.1"
 
 furaffinity-rs = { git = "https://github.com/Syfaro/furaffinity-rs.git" }
 fuzzysearch = { git = "https://github.com/Syfaro/fuzzysearch-rs.git", features = ["trace", "local_hash"] }

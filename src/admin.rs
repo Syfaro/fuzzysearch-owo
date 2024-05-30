@@ -432,7 +432,7 @@ async fn job_manual(
 
         let mut job = foxlib::jobs::FaktoryJob::new(form.name.clone(), args);
         job.queue = crate::jobs::Queue::Core.queue_name().to_string();
-        job.custom = custom.clone();
+        job.custom.clone_from(&custom);
 
         faktory.enqueue_existing_job(job).await?;
     }

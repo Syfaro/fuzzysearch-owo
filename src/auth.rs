@@ -96,9 +96,9 @@ fn add_password_feedback(
     inputs: &[&str],
     error_messages: &mut Vec<Cow<'static, str>>,
 ) -> Result<(), Error> {
-    let estimate = zxcvbn(password, inputs).map_err(Error::from_displayable)?;
+    let estimate = zxcvbn(password, inputs);
 
-    if estimate.score() < 3 {
+    if estimate.score() < zxcvbn::Score::Three {
         match estimate.feedback() {
             Some(feedback)
                 if feedback.warning().is_some() || !feedback.suggestions().is_empty() =>
