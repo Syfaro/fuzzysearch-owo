@@ -1,11 +1,16 @@
 # Changelog
 
+## v0.19.1 — May 30th, 2024
+
+* Fixed an issue preventing account verification.
+* Internal updates.
+
 ## v0.19.0 — March 21st, 2024
 
 * Updated styling to support dark theme.
 * Internal updates.
 
-## v0.18.4 — Feburary 29th, 2024
+## v0.18.4 — February 29th, 2024
 
 * Improved F-list timestamps for newly posted images.
 * Internal updates.
