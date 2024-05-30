@@ -1147,6 +1147,8 @@ pub struct LinkedAccount {
     pub last_update: Option<chrono::DateTime<chrono::Utc>>,
     pub loading_state: Option<LoadingState>,
     pub data: Option<serde_json::Value>,
+    pub verification_key: Option<String>,
+    pub verified_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl LinkedAccount {
@@ -1156,13 +1158,18 @@ impl LinkedAccount {
         source_site: Site,
         username: &str,
         data: Option<serde_json::Value>,
+        verification_key: Option<String>,
     ) -> Result<Self, Error> {
+        let verified_at = verification_key.is_none().then(chrono::Utc::now);
+
         let id = sqlx::query_file!(
             "queries/linked_account/create.sql",
             user_id,
             source_site.to_string(),
             username,
-            data
+            data,
+            verification_key,
+            verified_at
         )
         .map(|row| LinkedAccount {
             id: row.id,
@@ -1174,6 +1181,8 @@ impl LinkedAccount {
                 .loading_state
                 .and_then(|loading_state| serde_json::from_value(loading_state).ok()),
             data: row.data,
+            verification_key: row.verification_key,
+            verified_at: row.verified_at,
         })
         .fetch_one(conn)
         .await?;
@@ -1193,6 +1202,8 @@ impl LinkedAccount {
                     .loading_state
                     .and_then(|loading_state| serde_json::from_value(loading_state).ok()),
                 data: row.data,
+                verification_key: row.verification_key,
+                verified_at: row.verified_at,
             })
             .fetch_optional(conn)
             .await?;
@@ -1222,6 +1233,8 @@ impl LinkedAccount {
                 .loading_state
                 .and_then(|loading_state| serde_json::from_value(loading_state).ok()),
             data: row.data,
+            verification_key: row.verification_key,
+            verified_at: row.verified_at,
         })
         .fetch_optional(conn)
         .await?;
@@ -1249,6 +1262,8 @@ impl LinkedAccount {
                 .loading_state
                 .and_then(|loading_state| serde_json::from_value(loading_state).ok()),
             data: row.data,
+            verification_key: row.verification_key,
+            verified_at: row.verified_at,
         })
         .fetch_all(conn)
         .await?;
@@ -1297,6 +1312,14 @@ impl LinkedAccount {
                     loading_state: loading_state.message(),
                 })?,
             )
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn verify(conn: &sqlx::PgPool, account_id: Uuid) -> Result<(), Error> {
+        sqlx::query_file!("queries/linked_account/verify.sql", account_id)
+            .execute(conn)
             .await?;
 
         Ok(())
@@ -1364,14 +1387,6 @@ impl LinkedAccount {
         .await?;
 
         Ok(accounts)
-    }
-
-    pub fn verification_key(&self) -> Option<&str> {
-        self.data
-            .as_ref()
-            .and_then(|data| data.as_object())
-            .and_then(|obj| obj.get("verification_key"))
-            .and_then(|key| key.as_str())
     }
 
     pub fn show_twitter_archive_import(&self) -> bool {

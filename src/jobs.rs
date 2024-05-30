@@ -684,7 +684,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                 .await?
                 .ok_or(Error::Missing)?;
 
-            let key = match account.verification_key() {
+            let key = match account.verification_key {
                 Some(key) => key,
                 None => return Err(Error::Missing),
             };
@@ -718,10 +718,10 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                         .map(|elem| elem.text().collect::<String>())
                         .unwrap_or_default();
 
-                    let verifier_found = text.contains(key);
+                    let verifier_found = text.contains(&key);
 
                     if verifier_found {
-                        models::LinkedAccount::update_data(&ctx.conn, account.id, None).await?;
+                        models::LinkedAccount::verify(&ctx.conn, account.id).await?;
                     }
 
                     verifier_found
@@ -745,10 +745,10 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                         .and_then(|profile_text| profile_text.as_str())
                         .ok_or_else(|| Error::unknown_message("Weasyl was missing profile text"))?;
 
-                    let verifier_found = profile_text.contains(key);
+                    let verifier_found = profile_text.contains(&key);
 
                     if verifier_found {
-                        models::LinkedAccount::update_data(&ctx.conn, account.id, None).await?;
+                        models::LinkedAccount::verify(&ctx.conn, account.id).await?;
                     }
 
                     verifier_found

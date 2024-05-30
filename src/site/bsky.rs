@@ -932,6 +932,7 @@ async fn auth_verify(
                         server: form.server.clone(),
                         session: Some(resp),
                     })?),
+                    None,
                 )
                 .await?;
 

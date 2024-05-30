@@ -300,6 +300,7 @@ async fn callback(
                 Site::Patreon,
                 &full_name,
                 Some(serde_json::to_value(saved_data)?),
+                None,
             )
             .await?;
 

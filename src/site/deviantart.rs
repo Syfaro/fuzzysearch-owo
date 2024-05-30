@@ -514,6 +514,7 @@ async fn callback(
                 Site::DeviantArt,
                 &da_user.username,
                 Some(saved_data),
+                None,
             )
             .await?;
 
