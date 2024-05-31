@@ -351,10 +351,10 @@ async fn logout(
     request: actix_web::HttpRequest,
     session: Session,
     conn: web::Data<sqlx::PgPool>,
-    redis: web::Data<redis::aio::ConnectionManager>,
+    nats: web::Data<async_nats::Client>,
 ) -> Result<HttpResponse, Error> {
     if let Ok(Some(token)) = session.get_session_token() {
-        models::UserSession::destroy(&conn, &redis, token.session_id, token.user_id).await?;
+        models::UserSession::destroy(&conn, &nats, token.session_id, token.user_id).await?;
     }
 
     session.purge();
@@ -405,7 +405,7 @@ async fn sessions_remove(
     session: Session,
     user: models::User,
     conn: web::Data<sqlx::PgPool>,
-    redis: web::Data<redis::aio::ConnectionManager>,
+    nats: web::Data<async_nats::Client>,
     form: web::Form<SessionsRemoveForm>,
 ) -> Result<HttpResponse, Error> {
     let session_token = session
@@ -416,7 +416,7 @@ async fn sessions_remove(
         return Err(Error::user_error("You cannot remove the current session."));
     }
 
-    models::UserSession::destroy(&conn, &redis, form.session_id, user.id).await?;
+    models::UserSession::destroy(&conn, &nats, form.session_id, user.id).await?;
 
     Ok(HttpResponse::Found()
         .insert_header((

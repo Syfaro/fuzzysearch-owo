@@ -18,6 +18,9 @@ use crate::{
 /// Maximum permitted download size for an image.
 pub const MAX_DOWNLOAD_SIZE: usize = 50_000_000;
 
+/// Prefix used for all NATS event subjects.
+pub const NATS_PREFIX: &str = "fuzzysearch-owo";
+
 pub type SimilarAndPosted = (SimilarImage, Option<chrono::DateTime<chrono::Utc>>);
 
 /// Search a perceptual hash from all known data sources.
@@ -194,7 +197,7 @@ async fn notify_found(
     let mut buffered = futures::stream::iter(owned_items.iter().map(|item| {
         models::UserEvent::similar_found(
             &ctx.conn,
-            &ctx.redis,
+            &ctx.nats,
             user.id,
             item.id,
             similar.clone(),
@@ -490,7 +493,7 @@ async fn download_image(ctx: &JobContext, url: &str) -> Result<image::DynamicIma
 
 pub async fn handle_multipart_upload(
     pool: &PgPool,
-    redis: &redis::aio::ConnectionManager,
+    nats: &async_nats::Client,
     s3: &rusoto_s3::S3Client,
     faktory: &FaktoryProducer,
     config: &crate::Config,
@@ -566,7 +569,7 @@ pub async fn handle_multipart_upload(
         )
         .await?;
 
-        models::UserEvent::notify(pool, redis, user.id, "Uploaded image.").await?;
+        models::UserEvent::notify(pool, nats, user.id, "Uploaded image.").await?;
 
         ids.push(id);
 
@@ -586,4 +589,25 @@ pub async fn handle_multipart_upload(
     }
 
     Ok(ids)
+}
+
+/// Attempt to publish a user event on the correct subject.
+///
+/// This will not return an error if the publish fails!
+pub async fn send_user_event<D>(
+    user_id: Uuid,
+    nats: &async_nats::Client,
+    data: D,
+) -> Result<(), Error>
+where
+    D: serde::Serialize,
+{
+    let data = serde_json::to_vec(&data)?;
+
+    let subject = format!("{NATS_PREFIX}.user-events.{user_id}");
+    if let Err(err) = nats.publish(subject, data.into()).await {
+        tracing::error!("could not publish nats user event: {err}");
+    }
+
+    Ok(())
 }

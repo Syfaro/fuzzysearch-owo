@@ -293,7 +293,7 @@ async fn events(
 #[allow(clippy::too_many_arguments)]
 async fn single(
     conn: web::Data<sqlx::PgPool>,
-    redis: web::Data<redis::aio::ConnectionManager>,
+    nats: web::Data<async_nats::Client>,
     s3: web::Data<rusoto_s3::S3Client>,
     faktory: web::Data<FaktoryProducer>,
     config: web::Data<crate::Config>,
@@ -303,7 +303,7 @@ async fn single(
     form: actix_multipart::Multipart,
 ) -> Result<HttpResponse, Error> {
     let _ids =
-        common::handle_multipart_upload(&conn, &redis, &s3, &faktory, &config, &user, form).await?;
+        common::handle_multipart_upload(&conn, &nats, &s3, &faktory, &config, &user, form).await?;
 
     session.add_flash(FlashStyle::Success, "Uploaded image.");
 

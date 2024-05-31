@@ -7,7 +7,6 @@ use foxlib::jobs::{
 use futures::{StreamExt, TryStreamExt};
 use itertools::Itertools;
 use lettre::AsyncTransport;
-use redis::AsyncCommands;
 use rusoto_s3::S3;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -655,7 +654,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
 
             models::LinkedAccount::update_loading_state(
                 &ctx.conn,
-                &ctx.redis,
+                &ctx.nats,
                 user_id,
                 account_id,
                 models::LoadingState::DiscoveringItems,
@@ -773,16 +772,15 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
 
             tracing::info!(account_was_verified, "checked verification");
 
-            let mut redis = ctx.redis.clone();
-            redis
-                .publish(
-                    format!("user-events:{user_id}"),
-                    serde_json::to_string(&api::EventMessage::AccountVerified {
-                        account_id,
-                        verified: account_was_verified,
-                    })?,
-                )
-                .await?;
+            common::send_user_event(
+                user_id,
+                &ctx.nats,
+                api::EventMessage::AccountVerified {
+                    account_id,
+                    verified: account_was_verified,
+                },
+            )
+            .await?;
 
             if account_was_verified {
                 ctx.producer
@@ -835,7 +833,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
 
                 models::UserEvent::similar_found(
                     &ctx.conn,
-                    &ctx.redis,
+                    &ctx.nats,
                     user_id,
                     media_id,
                     similar_image,

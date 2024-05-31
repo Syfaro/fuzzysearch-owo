@@ -8,7 +8,7 @@ use redis::AsyncCommands;
 use uuid::Uuid;
 
 use crate::jobs::JobInitiatorExt;
-use crate::Error;
+use crate::{common, Error};
 use crate::{jobs, models};
 
 mod bsky;
@@ -141,6 +141,7 @@ fn get_authenticated_client(
 async fn set_loading_submissions<S, I>(
     conn: &sqlx::PgPool,
     redis: &mut redis::aio::ConnectionManager,
+    nats: &async_nats::Client,
     user_id: Uuid,
     account_id: Uuid,
     ids: I,
@@ -157,7 +158,7 @@ where
 
         models::LinkedAccount::update_loading_state(
             conn,
-            redis,
+            nats,
             user_id,
             account_id,
             models::LoadingState::Complete,
@@ -172,7 +173,7 @@ where
 
         models::LinkedAccount::update_loading_state(
             conn,
-            redis,
+            nats,
             user_id,
             account_id,
             models::LoadingState::LoadingItems { known: len as i32 },
@@ -210,6 +211,7 @@ where
 async fn update_import_progress<S: ToString>(
     conn: &sqlx::PgPool,
     redis: &mut redis::aio::ConnectionManager,
+    nats: &async_nats::Client,
     user_id: Uuid,
     account_id: Uuid,
     site_id: S,
@@ -247,7 +249,7 @@ async fn update_import_progress<S: ToString>(
 
         models::LinkedAccount::update_loading_state(
             conn,
-            redis,
+            nats,
             user_id,
             account_id,
             models::LoadingState::Complete,
@@ -255,16 +257,16 @@ async fn update_import_progress<S: ToString>(
         .await?;
     }
 
-    redis
-        .publish(
-            format!("user-events:{user_id}"),
-            serde_json::to_string(&crate::api::EventMessage::LoadingProgress {
-                account_id,
-                loaded: completed,
-                total: remaining + completed,
-            })?,
-        )
-        .await?;
+    common::send_user_event(
+        user_id,
+        nats,
+        crate::api::EventMessage::LoadingProgress {
+            account_id,
+            loaded: completed,
+            total: remaining + completed,
+        },
+    )
+    .await?;
 
     Ok(())
 }

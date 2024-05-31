@@ -127,7 +127,7 @@ impl CollectedSite for Patreon {
     async fn add_account(&self, ctx: &JobContext, account: LinkedAccount) -> Result<(), Error> {
         models::LinkedAccount::update_loading_state(
             &ctx.conn,
-            &ctx.redis,
+            &ctx.nats,
             account.owner_id,
             account.id,
             models::LoadingState::DiscoveringItems,
@@ -163,7 +163,7 @@ impl CollectedSite for Patreon {
 
         models::LinkedAccount::update_loading_state(
             &ctx.conn,
-            &ctx.redis,
+            &ctx.nats,
             account.owner_id,
             account.id,
             models::LoadingState::Complete,

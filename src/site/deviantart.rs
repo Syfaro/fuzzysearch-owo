@@ -136,7 +136,7 @@ impl CollectedSite for DeviantArt {
     ) -> Result<(), Error> {
         models::LinkedAccount::update_loading_state(
             &ctx.conn,
-            &ctx.redis,
+            &ctx.nats,
             account.owner_id,
             account.id,
             models::LoadingState::DiscoveringItems,
@@ -163,8 +163,15 @@ impl CollectedSite for DeviantArt {
 
         let ids = subs.iter().map(|sub| sub.deviationid);
 
-        super::set_loading_submissions(&ctx.conn, &mut redis, account.owner_id, account.id, ids)
-            .await?;
+        super::set_loading_submissions(
+            &ctx.conn,
+            &mut redis,
+            &ctx.nats,
+            account.owner_id,
+            account.id,
+            ids,
+        )
+        .await?;
 
         super::queue_new_submissions(
             &ctx.producer,
@@ -289,6 +296,7 @@ async fn add_submission_deviantart(
                 super::update_import_progress(
                     &ctx.conn,
                     &mut redis,
+                    &ctx.nats,
                     user_id,
                     account_id,
                     sub.deviationid,
@@ -352,8 +360,15 @@ async fn add_submission_deviantart(
 
     if was_import {
         let mut redis = ctx.redis.clone();
-        super::update_import_progress(&ctx.conn, &mut redis, user_id, account_id, sub.deviationid)
-            .await?;
+        super::update_import_progress(
+            &ctx.conn,
+            &mut redis,
+            &ctx.nats,
+            user_id,
+            account_id,
+            sub.deviationid,
+        )
+        .await?;
     }
 
     Ok(())

@@ -7,7 +7,6 @@ use std::{
 use argonautica::{Hasher, Verifier};
 use futures::{StreamExt, TryStreamExt};
 use image::GenericImageView;
-use redis::AsyncCommands;
 use rusoto_s3::S3;
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
@@ -15,8 +14,8 @@ use sqlx::types::Json;
 use uuid::Uuid;
 use webauthn_rs_proto::CredentialID;
 
-use crate::site::SiteFromConfig;
 use crate::{api, site, Error};
+use crate::{common, site::SiteFromConfig};
 
 pub struct User {
     pub id: Uuid,
@@ -522,7 +521,7 @@ impl UserSession {
 
     pub async fn destroy(
         conn: &sqlx::PgPool,
-        redis: &redis::aio::ConnectionManager,
+        nats: &async_nats::Client,
         id: Uuid,
         user_id: Uuid,
     ) -> Result<(), Error> {
@@ -530,13 +529,12 @@ impl UserSession {
             .execute(conn)
             .await?;
 
-        let mut redis = redis.clone();
-        redis
-            .publish(
-                format!("user-events:{user_id}"),
-                serde_json::to_string(&api::EventMessage::SessionEnded { session_id: id })?,
-            )
-            .await?;
+        common::send_user_event(
+            user_id,
+            nats,
+            api::EventMessage::SessionEnded { session_id: id },
+        )
+        .await?;
 
         Ok(())
     }
@@ -1289,7 +1287,7 @@ impl LinkedAccount {
 
     pub async fn update_loading_state(
         conn: &sqlx::PgPool,
-        redis: &redis::aio::ConnectionManager,
+        nats: &async_nats::Client,
         user_id: Uuid,
         account_id: Uuid,
         loading_state: LoadingState,
@@ -1303,16 +1301,15 @@ impl LinkedAccount {
         .execute(conn)
         .await?;
 
-        let mut redis = redis.clone();
-        redis
-            .publish(
-                format!("user-events:{user_id}"),
-                serde_json::to_string(&api::EventMessage::LoadingStateChange {
-                    account_id,
-                    loading_state: loading_state.message(),
-                })?,
-            )
-            .await?;
+        common::send_user_event(
+            user_id,
+            nats,
+            api::EventMessage::LoadingStateChange {
+                account_id,
+                loading_state: loading_state.message(),
+            },
+        )
+        .await?;
 
         Ok(())
     }
@@ -1593,7 +1590,7 @@ pub struct EventAndRelatedMedia {
 impl UserEvent {
     pub async fn notify<M: AsRef<str>>(
         conn: &sqlx::PgPool,
-        redis: &redis::aio::ConnectionManager,
+        nats: &async_nats::Client,
         user_id: Uuid,
         message: M,
     ) -> Result<Uuid, Error> {
@@ -1606,23 +1603,22 @@ impl UserEvent {
         .fetch_one(conn)
         .await?;
 
-        let mut redis = redis.clone();
-        redis
-            .publish(
-                format!("user-events:{user_id}"),
-                serde_json::to_string(&api::EventMessage::SimpleMessage {
-                    id: notification_id,
-                    message: message.as_ref().to_string(),
-                })?,
-            )
-            .await?;
+        common::send_user_event(
+            user_id,
+            nats,
+            api::EventMessage::SimpleMessage {
+                id: notification_id,
+                message: message.as_ref().to_string(),
+            },
+        )
+        .await?;
 
         Ok(notification_id)
     }
 
     pub async fn similar_found(
         conn: &sqlx::PgPool,
-        redis: &redis::aio::ConnectionManager,
+        nats: &async_nats::Client,
         user_id: Uuid,
         media_id: Uuid,
         similar_image: SimilarImage,
@@ -1644,13 +1640,12 @@ impl UserEvent {
         .await?;
 
         if created_at.is_none() {
-            let mut redis = redis.clone();
-            redis
-                .publish(
-                    format!("user-events:{user_id}"),
-                    serde_json::to_string(&api::EventMessage::SimilarImage { media_id, link })?,
-                )
-                .await?;
+            common::send_user_event(
+                user_id,
+                nats,
+                api::EventMessage::SimilarImage { media_id, link },
+            )
+            .await?;
         }
 
         Ok(notification_id)
