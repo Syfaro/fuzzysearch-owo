@@ -1003,6 +1003,21 @@
           "name": "disabled",
           "ordinal": 7,
           "type_info": "Bool"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 8,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "verification_key",
+          "ordinal": 9,
+          "type_info": "Text"
+        },
+        {
+          "name": "verified_at",
+          "ordinal": 10,
+          "type_info": "Timestamptz"
         }
       ],
       "nullable": [
@@ -1013,7 +1028,10 @@
         true,
         true,
         true,
-        false
+        false,
+        false,
+        true,
+        true
       ],
       "parameters": {
         "Left": [
@@ -1044,6 +1062,91 @@
       }
     },
     "query": "SELECT\n    value\nFROM\n    user_setting\nWHERE\n    owner_id = $1\n    AND setting = $2;\n"
+  },
+  "3c62545c92caafe3484068f197dbc3f6c50759b4d32371a5747f39fa35171634": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "owner_id",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "source_site",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "username",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "last_update",
+          "ordinal": 4,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "loading_state",
+          "ordinal": 5,
+          "type_info": "Jsonb"
+        },
+        {
+          "name": "data",
+          "ordinal": 6,
+          "type_info": "Jsonb"
+        },
+        {
+          "name": "disabled",
+          "ordinal": 7,
+          "type_info": "Bool"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 8,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "verification_key",
+          "ordinal": 9,
+          "type_info": "Text"
+        },
+        {
+          "name": "verified_at",
+          "ordinal": 10,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        true,
+        true,
+        true,
+        false,
+        false,
+        true,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text",
+          "Text",
+          "Jsonb",
+          "Text",
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    linked_account (\n        owner_id,\n        source_site,\n        username,\n        data,\n        verification_key,\n        verified_at\n    )\nVALUES\n    ($1, $2, $3, $4, $5, $6) RETURNING *;\n"
   },
   "3cfa31c0b605317c1fedadaf0399ed2012b2f6573b1421b53cfb14a80316a35b": {
     "describe": {
@@ -1209,6 +1312,21 @@
           "name": "disabled",
           "ordinal": 7,
           "type_info": "Bool"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 8,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "verification_key",
+          "ordinal": 9,
+          "type_info": "Text"
+        },
+        {
+          "name": "verified_at",
+          "ordinal": 10,
+          "type_info": "Timestamptz"
         }
       ],
       "nullable": [
@@ -1219,7 +1337,10 @@
         true,
         true,
         true,
-        false
+        false,
+        false,
+        true,
+        true
       ],
       "parameters": {
         "Left": [
@@ -2073,6 +2194,21 @@
           "name": "disabled",
           "ordinal": 7,
           "type_info": "Bool"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 8,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "verification_key",
+          "ordinal": 9,
+          "type_info": "Text"
+        },
+        {
+          "name": "verified_at",
+          "ordinal": 10,
+          "type_info": "Timestamptz"
         }
       ],
       "nullable": [
@@ -2083,7 +2219,10 @@
         true,
         true,
         true,
-        false
+        false,
+        false,
+        true,
+        true
       ],
       "parameters": {
         "Left": [
@@ -2581,71 +2720,6 @@
     },
     "query": "UPDATE linked_account SET disabled = $2 WHERE source_site = $1"
   },
-  "930ae63c1ef71a87799036a706f5ce4a5522872ba7c1aad2f2c8ad68b2d4f883": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "owner_id",
-          "ordinal": 1,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "source_site",
-          "ordinal": 2,
-          "type_info": "Text"
-        },
-        {
-          "name": "username",
-          "ordinal": 3,
-          "type_info": "Text"
-        },
-        {
-          "name": "last_update",
-          "ordinal": 4,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "loading_state",
-          "ordinal": 5,
-          "type_info": "Jsonb"
-        },
-        {
-          "name": "data",
-          "ordinal": 6,
-          "type_info": "Jsonb"
-        },
-        {
-          "name": "disabled",
-          "ordinal": 7,
-          "type_info": "Bool"
-        }
-      ],
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        true,
-        true,
-        true,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Text",
-          "Text",
-          "Jsonb"
-        ]
-      }
-    },
-    "query": "INSERT INTO\n    linked_account (\n        owner_id,\n        source_site,\n        username,\n        data\n    )\nVALUES\n    ($1, $2, $3, $4) RETURNING *;\n"
-  },
   "9499afaf61b5a24ace5360d39e21234c56d9c8daaf4ae6e2bb1fd10f30718802": {
     "describe": {
       "columns": [
@@ -2729,6 +2803,18 @@
       }
     },
     "query": "SELECT\n    *\nFROM\n    user_event\nWHERE\n    owner_id = $1\n    AND related_to_media_item_id = $2\nORDER BY\n    created_at DESC\nLIMIT\n    50;\n"
+  },
+  "96d74507c6b542a7ba43a098a3545db48ccf5a35e1689f672c470e9d36c1d5e0": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "UPDATE\n    linked_account\nSET\n    verification_key = NULL,\n    verified_at = current_timestamp\nWHERE\n    id = $1;\n"
   },
   "993d20c56e9eb4083f21d653c3c113649c4c646dc077c46f464dd787d778c6fa": {
     "describe": {

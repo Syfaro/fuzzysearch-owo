@@ -504,23 +504,42 @@ async fn account_link_post(
         }
     }
 
-    let username = form.username.as_deref().ok_or(Error::Missing)?;
+    let username = form.username.as_deref().ok_or(Error::Missing)?.trim();
 
-    let token: String = rand::thread_rng()
-        .sample_iter(&rand::distributions::Alphanumeric)
-        .take(12)
-        .map(char::from)
-        .collect();
-
-    let data = match form.site {
-        Site::FurAffinity => Some(serde_json::json!({ "verification_key": token })),
-        Site::Weasyl => Some(serde_json::json!({ "verification_key": token })),
-        _ => None,
+    let had_error = if username.is_empty() {
+        session.add_flash(FlashStyle::Error, "Username must not be empty.");
+        true
+    } else if username.starts_with("http:") || username.starts_with("https:") {
+        session.add_flash(
+            FlashStyle::Error,
+            "Please only enter the username, not the URL.",
+        );
+        true
+    } else {
+        false
     };
 
-    let account = models::LinkedAccount::create(&conn, user.id, form.site, username, data).await?;
+    if had_error {
+        let body = AccountLink.wrap(&request, Some(&user)).await.render()?;
+        return Ok(HttpResponse::Ok().content_type("text/html").body(body));
+    }
 
-    let (style, message) = if account.verification_key().is_some() {
+    let token = if matches!(form.site, Site::FurAffinity | Site::Weasyl) {
+        Some(
+            rand::thread_rng()
+                .sample_iter(&rand::distributions::Alphanumeric)
+                .take(12)
+                .map(char::from)
+                .collect(),
+        )
+    } else {
+        None
+    };
+
+    let account =
+        models::LinkedAccount::create(&conn, user.id, form.site, username, None, token).await?;
+
+    let (style, message) = if account.verification_key.is_some() {
         (
             FlashStyle::Warning,
             "Added account, please verify it to import submissions.",

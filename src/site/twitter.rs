@@ -310,6 +310,7 @@ async fn callback(
                 models::Site::Twitter,
                 &username,
                 Some(saved_data),
+                None,
             )
             .await?;
 

@@ -3,7 +3,9 @@ INSERT INTO
         owner_id,
         source_site,
         username,
-        data
+        data,
+        verification_key,
+        verified_at
     )
 VALUES
-    ($1, $2, $3, $4) RETURNING *;
+    ($1, $2, $3, $4, $5, $6) RETURNING *;

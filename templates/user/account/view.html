@@ -41,7 +41,7 @@
       </div>
     </div>
 
-    {% match account.verification_key() %}
+    {% match account.verification_key %}
     {% when Some with (verification_key) %}
     <div class="columns is-centered">
       <div class="column is-one-third">
@@ -58,7 +58,7 @@
               </p>
 
               <p class="block">
-                <code id="verification-key">{{ verification_key }}</code>
+                <code id="verification-key" class="click-copy">{{ verification_key }}</code>
               </p>
 
               <div class="block">
