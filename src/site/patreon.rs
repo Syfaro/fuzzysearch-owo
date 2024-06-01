@@ -59,12 +59,11 @@ impl Patreon {
     async fn refresh_credentials(
         &self,
         conn: &sqlx::PgPool,
-        redlock: &redlock::RedLock,
         data: &types::SavedPatreonData,
         account_id: Uuid,
     ) -> Result<AccessToken, Error> {
         super::refresh_credentials(
-            redlock,
+            conn,
             account_id,
             data,
             || self.get_oauth_client(),
@@ -75,17 +74,17 @@ impl Patreon {
                     item.credentials.expires_after,
                 ))
             },
-            || async {
-                let account = models::LinkedAccount::lookup_by_id(conn, account_id)
+            |mut tx| async move {
+                let account = models::LinkedAccount::lookup_by_id_for_update(&mut tx, account_id)
                     .await?
                     .ok_or(Error::Missing)?;
 
                 let data = account.data.ok_or(Error::Missing)?;
                 let data: types::SavedPatreonData = serde_json::from_value(data)?;
 
-                Ok(data)
+                Ok((data, tx))
             },
-            |data, access_token, refresh_token, expires_after| async move {
+            |mut tx, data, access_token, refresh_token, expires_after| async move {
                 let data = serde_json::to_value(types::SavedPatreonData {
                     credentials: types::PatreonCredentials {
                         access_token,
@@ -95,9 +94,9 @@ impl Patreon {
                     ..data
                 })?;
 
-                models::LinkedAccount::update_data(conn, account_id, Some(data)).await?;
+                models::LinkedAccount::update_data(&mut tx, account_id, Some(data)).await?;
 
-                Ok(())
+                Ok(tx)
             },
         )
         .await
@@ -138,7 +137,7 @@ impl CollectedSite for Patreon {
             serde_json::from_value(account.data.ok_or(Error::Missing)?)?;
 
         let token = self
-            .refresh_credentials(&ctx.conn, &ctx.redlock, &data, account.id)
+            .refresh_credentials(&ctx.conn, &data, account.id)
             .await?;
         let client = super::get_authenticated_client(&ctx.config, &token)?;
 
@@ -388,7 +387,7 @@ async fn callback(
         tracing::warn!("database had outdated webhook information");
 
         models::LinkedAccount::update_data(
-            &conn,
+            &**conn,
             linked_account.id,
             Some(serde_json::to_value(types::SavedPatreonData {
                 site_id: patreon_campaign_id.to_string(),

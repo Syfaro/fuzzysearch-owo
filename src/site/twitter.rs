@@ -299,7 +299,7 @@ async fn callback(
                 Some(Err(err)) => return Err(err.into()),
                 None => saved_data,
             };
-            models::LinkedAccount::update_data(&conn, account.id, Some(saved_data)).await?;
+            models::LinkedAccount::update_data(&**conn, account.id, Some(saved_data)).await?;
 
             account.id
         }
@@ -386,7 +386,7 @@ async fn archive_post(
         ..data
     })?;
 
-    models::LinkedAccount::update_data(&conn, account.id, Some(data)).await?;
+    models::LinkedAccount::update_data(&**conn, account.id, Some(data)).await?;
     models::LinkedAccount::update_loading_state(
         &conn,
         &nats,

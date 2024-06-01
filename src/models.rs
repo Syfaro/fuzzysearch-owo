@@ -1209,6 +1209,30 @@ impl LinkedAccount {
         Ok(account)
     }
 
+    pub async fn lookup_by_id_for_update(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        id: Uuid,
+    ) -> Result<Option<Self>, Error> {
+        let account = sqlx::query_file!("queries/linked_account/lookup_by_id_for_update.sql", id)
+            .map(|row| LinkedAccount {
+                id: row.id,
+                owner_id: row.owner_id,
+                source_site: row.source_site.parse().expect("unknown site in database"),
+                username: row.username,
+                last_update: row.last_update,
+                loading_state: row
+                    .loading_state
+                    .and_then(|loading_state| serde_json::from_value(loading_state).ok()),
+                data: row.data,
+                verification_key: row.verification_key,
+                verified_at: row.verified_at,
+            })
+            .fetch_optional(tx)
+            .await?;
+
+        Ok(account)
+    }
+
     pub async fn lookup_by_site_id(
         conn: &sqlx::PgPool,
         user_id: Uuid,
@@ -1322,13 +1346,16 @@ impl LinkedAccount {
         Ok(())
     }
 
-    pub async fn update_data(
-        conn: &sqlx::PgPool,
+    pub async fn update_data<'a, E>(
+        executor: E,
         account_id: Uuid,
         data: Option<serde_json::Value>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    where
+        E: sqlx::Executor<'a, Database = sqlx::Postgres>,
+    {
         sqlx::query_file!("queries/linked_account/update_data.sql", account_id, data)
-            .execute(conn)
+            .execute(executor)
             .await?;
 
         Ok(())

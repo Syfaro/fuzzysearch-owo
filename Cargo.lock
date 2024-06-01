@@ -2465,8 +2465,7 @@ dependencies = [
  "prometheus",
  "radix_fmt",
  "rand 0.8.5",
- "redis 0.25.4",
- "redlock",
+ "redis",
  "regex",
  "reqwest 0.11.27",
  "roux",
@@ -4758,26 +4757,6 @@ dependencies = [
 
 [[package]]
 name = "redis"
-version = "0.22.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa8455fa3621f6b41c514946de66ea0531f57ca017b2e6c7cc368035ea5b46df"
-dependencies = [
- "async-trait",
- "bytes",
- "combine",
- "futures-util",
- "itoa 1.0.10",
- "percent-encoding",
- "pin-project-lite",
- "ryu",
- "sha1_smol",
- "tokio",
- "tokio-util",
- "url",
-]
-
-[[package]]
-name = "redis"
 version = "0.25.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0d7a6955c7511f60f3ba9e86c6d02b3c3f144f8c24b288d1f4e18074ab8bbec"
@@ -4798,16 +4777,6 @@ dependencies = [
  "tokio-retry",
  "tokio-util",
  "url",
-]
-
-[[package]]
-name = "redlock"
-version = "1.1.0"
-source = "git+https://github.com/Syfaro/redlock-rs.git#ffbad68893194e11a43c6b0e1e6b82aaebd2b56f"
-dependencies = [
- "rand 0.8.5",
- "redis 0.22.3",
- "tokio",
 ]
 
 [[package]]

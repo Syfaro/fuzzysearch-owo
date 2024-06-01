@@ -610,8 +610,6 @@ async fn main() {
         .await
         .expect("could not create redis connection manager");
 
-    let redlock = redlock::RedLock::new(vec![config.redis_dsn.as_ref()]);
-
     let fuzzysearch = fuzzysearch::FuzzySearch::new_with_opts(fuzzysearch::FuzzySearchOpts {
         endpoint: Some(config.fuzzysearch_host.clone()),
         api_key: config.fuzzysearch_api_key.clone(),
@@ -677,7 +675,6 @@ async fn main() {
                 producer,
                 conn: pool,
                 redis: redis_manager,
-                redlock: std::sync::Arc::new(redlock),
                 s3,
                 fuzzysearch: std::sync::Arc::new(fuzzysearch),
                 mailer,

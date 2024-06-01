@@ -924,7 +924,7 @@ async fn auth_verify(
                     session: None,
                 })?;
 
-                models::LinkedAccount::update_data(&conn, account.id, Some(data.clone())).await?;
+                models::LinkedAccount::update_data(&**conn, account.id, Some(data.clone())).await?;
                 account.data = Some(data);
                 account
             }

@@ -271,9 +271,11 @@ async fn update_import_progress<S: ToString>(
     Ok(())
 }
 
-#[tracing::instrument(skip(redlock, data, client_fn, extract_fn, data_fn, update_fn))]
+type Tx = sqlx::Transaction<'static, sqlx::Postgres>;
+
+#[tracing::instrument(skip(data, client_fn, extract_fn, data_fn, update_fn))]
 async fn refresh_credentials<C, E, D, DFut, Item, U, UFut>(
-    redlock: &redlock::RedLock,
+    conn: &sqlx::PgPool,
     account_id: Uuid,
     data: &Item,
     client_fn: C,
@@ -284,10 +286,10 @@ async fn refresh_credentials<C, E, D, DFut, Item, U, UFut>(
 where
     C: FnOnce() -> oauth2::basic::BasicClient,
     E: Fn(&Item) -> Option<(String, String, chrono::DateTime<chrono::Utc>)>,
-    D: FnOnce() -> DFut,
-    DFut: Future<Output = Result<Item, Error>>,
-    U: FnOnce(Item, String, String, chrono::DateTime<chrono::Utc>) -> UFut,
-    UFut: Future<Output = Result<(), Error>>,
+    D: FnOnce(Tx) -> DFut,
+    DFut: Future<Output = Result<(Item, Tx), Error>>,
+    U: FnOnce(Tx, Item, String, String, chrono::DateTime<chrono::Utc>) -> UFut,
+    UFut: Future<Output = Result<Tx, Error>>,
 {
     tracing::debug!("checking oauth credentials");
 
@@ -299,22 +301,14 @@ where
         return Ok(AccessToken::new(initial_access_token));
     }
 
-    let lock_key = format!("refresh-credentials:{account_id}");
-    let lock_key = lock_key.as_bytes();
-    let lock = loop {
-        if let Some(lock) = redlock.lock(lock_key, 10 * 1000).await {
-            tracing::trace!("locked credentials for update");
-            break lock;
-        }
-    };
+    let tx = conn.begin().await?;
 
-    let current_data = data_fn().await?;
+    let (current_data, tx) = data_fn(tx).await?;
     let (current_access_token, current_refresh_token, current_expires_at) =
         extract_fn(&current_data).ok_or(Error::Missing)?;
 
     if current_expires_at >= chrono::Utc::now() {
         tracing::debug!("credentials were already updated");
-        redlock.unlock(&lock).await;
         return Ok(AccessToken::new(current_access_token));
     }
 
@@ -342,8 +336,9 @@ where
             .and_then(|dur| chrono::Duration::from_std(dur).ok())
             .unwrap_or_else(|| chrono::Duration::try_seconds(3600).unwrap());
 
-    update_fn(current_data, access_token, refresh_token, expires_at).await?;
-    redlock.unlock(&lock).await;
+    let tx = update_fn(tx, current_data, access_token, refresh_token, expires_at).await?;
+
+    tx.commit().await?;
 
     tracing::info!("credential refresh complete");
 

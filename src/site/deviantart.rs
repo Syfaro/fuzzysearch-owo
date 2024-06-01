@@ -63,12 +63,11 @@ impl DeviantArt {
     async fn refresh_credentials(
         &self,
         conn: &sqlx::PgPool,
-        redlock: &redlock::RedLock,
         data: &types::DeviantArtData,
         account_id: Uuid,
     ) -> Result<AccessToken, Error> {
         super::refresh_credentials(
-            redlock,
+            conn,
             account_id,
             data,
             || self.get_oauth_client(),
@@ -79,26 +78,26 @@ impl DeviantArt {
                     item.expires_after,
                 ))
             },
-            || async {
-                let account = models::LinkedAccount::lookup_by_id(conn, account_id)
+            |mut tx| async move {
+                let account = models::LinkedAccount::lookup_by_id_for_update(&mut tx, account_id)
                     .await?
                     .ok_or(Error::Missing)?;
 
                 let data = account.data.ok_or(Error::Missing)?;
                 let data: types::DeviantArtData = serde_json::from_value(data)?;
 
-                Ok(data)
+                Ok((data, tx))
             },
-            |_data, access_token, refresh_token, expires_after| async move {
+            |mut tx, _data, access_token, refresh_token, expires_after| async move {
                 let data = serde_json::to_value(types::DeviantArtData {
                     access_token,
                     refresh_token,
                     expires_after,
                 })?;
 
-                models::LinkedAccount::update_data(conn, account_id, Some(data)).await?;
+                models::LinkedAccount::update_data(&mut tx, account_id, Some(data)).await?;
 
-                Ok(())
+                Ok(tx)
             },
         )
         .await
@@ -150,7 +149,7 @@ impl CollectedSite for DeviantArt {
         )?;
 
         let token = self
-            .refresh_credentials(&ctx.conn, &ctx.redlock, &data, account.id)
+            .refresh_credentials(&ctx.conn, &data, account.id)
             .await?;
         let client = super::get_authenticated_client(&ctx.config, &token)?;
 
@@ -399,9 +398,7 @@ async fn update_account(ctx: JobContext, _job: FaktoryJob, account_id: Uuid) -> 
 
     let da = DeviantArt::site_from_config(&ctx.config).await?;
 
-    let token = da
-        .refresh_credentials(&ctx.conn, &ctx.redlock, &data, account.id)
-        .await?;
+    let token = da.refresh_credentials(&ctx.conn, &data, account.id).await?;
     let client = super::get_authenticated_client(&ctx.config, &token)?;
 
     let subs = collect_gallery_items(&client, &account.username).await?;
@@ -517,7 +514,7 @@ async fn callback(
     let id = match account {
         Some(account) => {
             tracing::info!("got existing account");
-            models::LinkedAccount::update_data(&conn, account.id, Some(saved_data)).await?;
+            models::LinkedAccount::update_data(&**conn, account.id, Some(saved_data)).await?;
 
             account.id
         }
