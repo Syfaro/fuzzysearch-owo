@@ -8,15 +8,12 @@ services:
     environment:
       - "RUST_LOG=info"
       - "DATABASE_URL=postgres://postgres:postgres@postgres/postgres?sslmode=disable"
-      - "REDIS_DSN=redis://redis:6379"
       - "FAKTORY_HOST=tcp://faktory:7419"
       - "METRICS_HOST=0.0.0.0:8081"
       - "JAEGER_COLLECTOR=localhost:6831"
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_started
       faktory:
         condition: service_started
 
@@ -27,7 +24,6 @@ services:
     environment:
       - "RUST_LOG=info"
       - "DATABASE_URL=postgres://postgres:postgres@postgres/postgres?sslmode=disable"
-      - "REDIS_DSN=redis://redis:6379"
       - "FAKTORY_HOST=tcp://faktory:7419"
       - "FAKTORY_QUEUES=core,outgoing,outgoing-bulk"
       - "METRICS_HOST=0.0.0.0:8082"
@@ -35,8 +31,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_started
       faktory:
         condition: service_started
 
@@ -48,9 +42,6 @@ services:
       - "POSTGRES_PASSWORD=postgres"
     healthcheck:
       test: pg_isready -U postgres
-
-  redis:
-    image: redis
 
   faktory:
     image: contribsys/faktory

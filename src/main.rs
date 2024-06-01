@@ -121,10 +121,6 @@ pub struct Config {
     #[clap(long, env("S3_CDN_PREFIX"))]
     pub s3_cdn_prefix: String,
 
-    /// Redis DSN, in the format `redis://host/`.
-    #[clap(long, env("REDIS_DSN"))]
-    pub redis_dsn: String,
-
     /// NATS hosts.
     #[clap(
         long,
