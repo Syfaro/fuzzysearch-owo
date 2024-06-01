@@ -1,0 +1,47 @@
+<div class="block">
+  <h2 class="subtitle is-4">Latest Account Imports</h2>
+
+  <div class="table-container">
+    <table class="table is-fullwidth">
+      <thead>
+        <tr>
+          <th>Site</th>
+          <th>Started</th>
+          <th>Completed</th>
+          <th>Expected Count</th>
+          <th>Loaded Count</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for account_import in imports %}
+          <tr>
+            <th>
+              {{ account_import.source_site }}
+            </th>
+            <td>
+              <span class="relative-time" data-timestamp="{{ account_import.started_at.timestamp() }}">
+                {{ account_import.started_at }}
+              </span>
+            </td>
+            <td>
+              {% match account_import.completed_at %}
+              {% when Some with (completed_at) %}
+                <span class="relative-time" data-timestamp="{{ completed_at.timestamp() }}">
+                  {{ completed_at }}
+                </span>
+              {% else %}
+                <span class="has-text-grey">&ndash;</span>
+              {% endmatch %}
+            </td>
+            <td>
+              {{ account_import.expected_count }}
+            </td>
+            <td>
+              {{ account_import.loaded_count }}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

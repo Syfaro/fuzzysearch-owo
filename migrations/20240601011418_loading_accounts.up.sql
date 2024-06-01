@@ -6,3 +6,5 @@ CREATE TABLE linked_account_import (
     expected_ids text[] NOT NULL,
     loaded_ids text[] NOT NULL DEFAULT array[]::text[]
 );
+
+CREATE INDEX linked_account_import_started_at_idx ON linked_account_import (started_at DESC);

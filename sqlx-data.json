@@ -2543,6 +2543,54 @@
     },
     "query": "SELECT\n    id \"id!\",\n    owner_id \"owner_id!\",\n    perceptual_hash,\n    sha256_hash \"sha256_hash!: Sha256Hash\",\n    last_modified \"last_modified!\",\n    content_url,\n    content_size,\n    thumb_url,\n    event_count \"event_count!\",\n    last_event,\n    accounts \"accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>\"\nFROM\n    owned_media_item_accounts\nWHERE\n    owner_id = $1\n    AND (\n        $4::uuid IS NULL\n        OR exists(\n            SELECT\n                1\n            FROM\n                owned_media_item_account\n            WHERE\n                owned_media_item_account.owned_media_item_id = owned_media_item_accounts.id\n                AND account_id = $4\n        )\n    )\nORDER BY\n    last_event DESC NULLS LAST,\n    last_modified DESC\nLIMIT\n    $2 OFFSET ($3::integer * $2::integer);\n"
   },
+  "84a7fbb33b578275eb259a0ae3667ff57805aebfa48e2bc3c8a8e5a029a0d253": {
+    "describe": {
+      "columns": [
+        {
+          "name": "linked_account_id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "source_site",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "started_at",
+          "ordinal": 2,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "completed_at",
+          "ordinal": 3,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "expected_count",
+          "ordinal": 4,
+          "type_info": "Int4"
+        },
+        {
+          "name": "loaded_count",
+          "ordinal": 5,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        true,
+        false,
+        null
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "SELECT\n    linked_account_id,\n    linked_account.source_site,\n    started_at,\n    completed_at,\n    expected_count,\n    cardinality(loaded_ids) loaded_count\nFROM\n    linked_account_import\n    JOIN linked_account ON linked_account.id = linked_account_import.linked_account_id\nORDER BY\n    started_at DESC\nLIMIT\n    100;\n"
+  },
   "88bacfdae0ff1060188b606680fd60eac3e41ee8f11fc101f88885d6fd0cb420": {
     "describe": {
       "columns": [

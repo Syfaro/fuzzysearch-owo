@@ -1431,11 +1431,11 @@ impl LinkedAccount {
 #[derive(Debug)]
 pub struct LinkedAccountImport {
     pub linked_account_id: Uuid,
+    pub source_site: Site,
     pub started_at: chrono::DateTime<chrono::Utc>,
     pub completed_at: Option<chrono::DateTime<chrono::Utc>>,
     pub expected_count: i32,
-    pub expected_ids: Vec<String>,
-    pub loaded_ids: Vec<String>,
+    pub loaded_count: i32,
 }
 
 impl LinkedAccountImport {
@@ -1474,6 +1474,21 @@ impl LinkedAccountImport {
             .await?;
 
         Ok(())
+    }
+
+    pub async fn admin_list(conn: &sqlx::PgPool) -> Result<Vec<Self>, Error> {
+        sqlx::query_file!("queries/linked_account_import/admin_list.sql")
+            .map(|row| LinkedAccountImport {
+                linked_account_id: row.linked_account_id,
+                source_site: row.source_site.parse().expect("unknown site in database"),
+                started_at: row.started_at,
+                completed_at: row.completed_at,
+                expected_count: row.expected_count,
+                loaded_count: row.loaded_count.unwrap_or(0),
+            })
+            .fetch_all(conn)
+            .await
+            .map_err(Into::into)
     }
 }
 
