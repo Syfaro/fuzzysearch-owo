@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.19.3 — May 31st, 2024
+
+* Fixed an issue where click to copy did not work as expected.
+
 ## v0.19.2 — May 31st, 2024
 
 * Internal updates.
