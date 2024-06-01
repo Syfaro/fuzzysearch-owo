@@ -193,7 +193,19 @@ async function performChunkedUpload(
 
 document.querySelectorAll<HTMLInputElement>(".click-copy").forEach((elem) => {
   elem.addEventListener("click", () => {
-    navigator.clipboard.writeText(elem.value);
+    let contents = null;
+
+    if (elem.value) {
+      contents = elem.value;
+    } else if (elem.textContent) {
+      contents = elem.textContent.trim();
+    }
+
+    if (!contents) {
+      return;
+    }
+
+    navigator.clipboard.writeText(contents);
 
     toast({
       message: "Copied value.",
