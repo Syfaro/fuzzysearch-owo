@@ -675,7 +675,6 @@ struct MediaView<'a> {
     similar_image_events: &'a [(chrono::DateTime<chrono::Utc>, models::SimilarImage)],
     other_events: &'a [models::UserEvent],
     allowlisted_users: HashMap<(Site, String), Uuid>,
-    merge_enabled: bool,
     similar_media: Vec<models::OwnedMediaItem>,
 }
 
@@ -683,7 +682,6 @@ struct MediaView<'a> {
 async fn media_view(
     request: actix_web::HttpRequest,
     conn: web::Data<sqlx::PgPool>,
-    unleash: web::Data<crate::Unleash>,
     path: web::Path<(UrlUuid,)>,
     user: models::User,
 ) -> Result<HttpResponse, Error> {
@@ -735,7 +733,6 @@ async fn media_view(
         similar_image_events: &similar_events,
         other_events: &other_events,
         allowlisted_users,
-        merge_enabled: unleash.is_enabled(Features::MergeMedia, Some(&user.context()), false),
         similar_media,
     }
     .wrap(&request, Some(&user))
@@ -749,19 +746,12 @@ async fn media_view(
 async fn media_merge(
     conn: web::Data<sqlx::PgPool>,
     s3: web::Data<rusoto_s3::S3Client>,
-    unleash: web::Data<crate::Unleash>,
     config: web::Data<crate::Config>,
     request: actix_web::HttpRequest,
     session: actix_session::Session,
     user: models::User,
     form: web::Form<Vec<(String, String)>>,
 ) -> Result<HttpResponse, Error> {
-    if !unleash.is_enabled(Features::MergeMedia, Some(&user.context()), false) {
-        return Ok(HttpResponse::Found()
-            .insert_header(("Location", request.url_for_static("user_home")?.as_str()))
-            .finish());
-    }
-
     let mut kvs: HashMap<String, Vec<Uuid>> = HashMap::new();
     for (name, value) in form.0 {
         if let Ok(value_id) = value.parse() {

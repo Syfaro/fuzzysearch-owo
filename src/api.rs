@@ -282,19 +282,10 @@ async fn events(
 
 #[get("/ingest/stats")]
 async fn ingest_stats(
-    unleash: web::Data<crate::Unleash>,
     user: models::User,
     nats: web::Data<async_nats::Client>,
 ) -> impl actix_web::Responder {
     if !user.is_admin {
-        return Err(Error::Unauthorized);
-    }
-
-    if !unleash.is_enabled(
-        crate::Features::AdminIngestRate,
-        Some(&user.context()),
-        false,
-    ) {
         return Err(Error::Unauthorized);
     }
 

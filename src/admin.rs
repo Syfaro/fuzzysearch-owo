@@ -69,13 +69,10 @@ struct AdminOverview {
     linked_accounts: i64,
     total_filesize: i64,
     recent_media: i64,
-
-    ingest_rate_graph: bool,
 }
 
 #[get("", name = "admin_overview")]
 async fn admin_overview(
-    unleash: web::Data<crate::Unleash>,
     conn: web::Data<sqlx::PgPool>,
     request: actix_web::HttpRequest,
     user: models::User,
@@ -94,11 +91,6 @@ async fn admin_overview(
         linked_accounts: stats.linked_accounts,
         total_filesize: stats.total_filesize,
         recent_media: stats.recent_media,
-        ingest_rate_graph: unleash.is_enabled(
-            crate::Features::AdminIngestRate,
-            Some(&user.context()),
-            false,
-        ),
     }
     .wrap_admin(&request, &user)
     .await

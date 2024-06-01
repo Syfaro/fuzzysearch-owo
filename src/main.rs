@@ -346,12 +346,8 @@ impl<'de> Deserialize<'de> for UrlUuid {
 
 #[derive(Clone, Debug, Serialize, Deserialize, enum_map::Enum)]
 enum Features {
-    #[serde(rename = "fuzzysearch.owo.merge-media")]
-    MergeMedia,
     #[serde(rename = "fuzzysearch.owo.webauthn")]
     Webauthn,
-    #[serde(rename = "fuzzysearch.owo.admin-ingest-rate")]
-    AdminIngestRate,
 }
 
 type Unleash = foxlib::flags::Unleash<Features>;
