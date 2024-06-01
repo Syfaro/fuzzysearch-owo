@@ -128,11 +128,8 @@ impl CollectedSite for Weasyl {
         let known = subs.len() as i32;
         tracing::info!("discovered {} submissions", known);
 
-        let mut redis = ctx.redis.clone();
-
         super::set_loading_submissions(
             &ctx.conn,
-            &mut redis,
             &ctx.nats,
             account.owner_id,
             account.id,
@@ -211,11 +208,7 @@ async fn add_submission_weasyl(
     }
 
     if was_import {
-        let mut redis = ctx.redis.clone();
-        super::update_import_progress(
-            &ctx.conn, &mut redis, &ctx.nats, user_id, account_id, sub_id,
-        )
-        .await?;
+        super::update_import_progress(&ctx.conn, &ctx.nats, user_id, account_id, sub_id).await?;
     }
 
     Ok(())

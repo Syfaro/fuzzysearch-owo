@@ -147,11 +147,8 @@ impl CollectedSite for Twitter {
 
         models::LinkedAccount::update_data(&ctx.conn, account.id, Some(data)).await?;
 
-        let mut redis = ctx.redis.clone();
-
         super::set_loading_submissions(
             &ctx.conn,
-            &mut redis,
             &ctx.nats,
             account.owner_id,
             account.id,
@@ -524,11 +521,7 @@ async fn add_submission_twitter(
     }
 
     if was_import {
-        let mut redis = ctx.redis.clone();
-        super::update_import_progress(
-            &ctx.conn, &mut redis, &ctx.nats, user_id, account_id, tweet.id,
-        )
-        .await?;
+        super::update_import_progress(&ctx.conn, &ctx.nats, user_id, account_id, tweet.id).await?;
     }
 
     Ok(())

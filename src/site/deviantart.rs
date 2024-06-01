@@ -158,19 +158,10 @@ impl CollectedSite for DeviantArt {
         let known = subs.len() as i32;
         tracing::info!("discovered {} submissions", known);
 
-        let mut redis = ctx.redis.clone();
-
         let ids = subs.iter().map(|sub| sub.deviationid);
 
-        super::set_loading_submissions(
-            &ctx.conn,
-            &mut redis,
-            &ctx.nats,
-            account.owner_id,
-            account.id,
-            ids,
-        )
-        .await?;
+        super::set_loading_submissions(&ctx.conn, &ctx.nats, account.owner_id, account.id, ids)
+            .await?;
 
         super::queue_new_submissions(
             &ctx.producer,
@@ -291,10 +282,8 @@ async fn add_submission_deviantart(
             tracing::info!("submission had no content");
 
             if was_import {
-                let mut redis = ctx.redis.clone();
                 super::update_import_progress(
                     &ctx.conn,
-                    &mut redis,
                     &ctx.nats,
                     user_id,
                     account_id,
@@ -358,16 +347,8 @@ async fn add_submission_deviantart(
     }
 
     if was_import {
-        let mut redis = ctx.redis.clone();
-        super::update_import_progress(
-            &ctx.conn,
-            &mut redis,
-            &ctx.nats,
-            user_id,
-            account_id,
-            sub.deviationid,
-        )
-        .await?;
+        super::update_import_progress(&ctx.conn, &ctx.nats, user_id, account_id, sub.deviationid)
+            .await?;
     }
 
     Ok(())

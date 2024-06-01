@@ -1,10 +1,8 @@
-use std::collections::HashSet;
 use std::future::Future;
 
 use async_trait::async_trait;
 use foxlib::jobs::{FaktoryForge, FaktoryProducer, Job};
 use oauth2::{AccessToken, RefreshToken, TokenResponse};
-use redis::AsyncCommands;
 use uuid::Uuid;
 
 use crate::jobs::JobInitiatorExt;
@@ -140,7 +138,6 @@ fn get_authenticated_client(
 /// to the user.
 async fn set_loading_submissions<S, I>(
     conn: &sqlx::PgPool,
-    redis: &mut redis::aio::ConnectionManager,
     nats: &async_nats::Client,
     user_id: Uuid,
     account_id: Uuid,
@@ -150,7 +147,7 @@ where
     S: ToString,
     I: Iterator<Item = S>,
 {
-    let ids: HashSet<String> = ids.into_iter().map(|item| item.to_string()).collect();
+    let ids: Vec<String> = ids.into_iter().map(|item| item.to_string()).collect();
     let len = ids.len();
 
     if len == 0 {
@@ -167,9 +164,7 @@ where
     } else {
         tracing::info!("user has {} submissions to load", len);
 
-        let key = format!("account-import-ids:loading:{account_id}");
-        redis.sadd::<_, _, ()>(&key, ids).await?;
-        redis.expire::<_, ()>(key, 60 * 60 * 24 * 7).await?;
+        models::LinkedAccountImport::start(conn, account_id, &ids).await?;
 
         models::LinkedAccount::update_loading_state(
             conn,
@@ -210,42 +205,20 @@ where
 
 async fn update_import_progress<S: ToString>(
     conn: &sqlx::PgPool,
-    redis: &mut redis::aio::ConnectionManager,
     nats: &async_nats::Client,
     user_id: Uuid,
     account_id: Uuid,
     site_id: S,
 ) -> Result<(), Error> {
-    let loading_key = format!("account-import-ids:loading:{account_id}");
-    let completed_key = format!("account-import-ids:completed:{account_id}");
+    let (loaded, expected) =
+        models::LinkedAccountImport::loaded(conn, account_id, &site_id.to_string()).await?;
 
-    let site_id = site_id.to_string();
+    tracing::debug!("submission was part of import, loaded {loaded} out of {expected} items");
 
-    redis
-        .smove::<_, _, _, ()>(&loading_key, &completed_key, &site_id)
-        .await?;
-
-    redis
-        .expire::<_, ()>(&loading_key, 60 * 60 * 24 * 7)
-        .await?;
-    redis
-        .expire::<_, ()>(&completed_key, 60 * 60 * 24 * 7)
-        .await?;
-
-    let (remaining, completed): (i32, i32) = redis::pipe()
-        .atomic()
-        .scard(loading_key)
-        .scard(completed_key)
-        .query_async(redis)
-        .await?;
-
-    tracing::debug!(
-        "submission was part of import, {} items remaining",
-        remaining
-    );
-
-    if remaining == 0 {
+    if expected - loaded == 0 {
         tracing::info!("marking account import complete");
+
+        models::LinkedAccountImport::complete(conn, account_id).await?;
 
         models::LinkedAccount::update_loading_state(
             conn,
@@ -262,8 +235,8 @@ async fn update_import_progress<S: ToString>(
         nats,
         crate::api::EventMessage::LoadingProgress {
             account_id,
-            loaded: completed,
-            total: remaining + completed,
+            loaded,
+            total: expected,
         },
     )
     .await?;

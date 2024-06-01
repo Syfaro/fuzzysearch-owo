@@ -508,7 +508,6 @@ impl Display for JobInitiator {
 pub struct JobContext {
     pub producer: FaktoryProducer,
     pub conn: sqlx::PgPool,
-    pub redis: redis::aio::ConnectionManager,
     pub s3: rusoto_s3::S3Client,
     pub fuzzysearch: Arc<fuzzysearch::FuzzySearch>,
     pub mailer: crate::Mailer,

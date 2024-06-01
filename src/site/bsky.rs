@@ -186,11 +186,7 @@ async fn import_submission(
         }
     }
 
-    let mut redis = ctx.redis.clone();
-    super::update_import_progress(
-        &ctx.conn, &mut redis, &ctx.nats, user_id, account_id, post.uri,
-    )
-    .await?;
+    super::update_import_progress(&ctx.conn, &ctx.nats, user_id, account_id, post.uri).await?;
 
     Ok(())
 }
@@ -270,17 +266,8 @@ impl CollectedSite for BSky {
         tracing::info!("discovered {} submissions", posts.len());
         let ids = posts.iter().map(|post| &post.uri);
 
-        let mut redis = ctx.redis.clone();
-
-        super::set_loading_submissions(
-            &ctx.conn,
-            &mut redis,
-            &ctx.nats,
-            account.owner_id,
-            account.id,
-            ids,
-        )
-        .await?;
+        super::set_loading_submissions(&ctx.conn, &ctx.nats, account.owner_id, account.id, ids)
+            .await?;
 
         super::queue_new_submissions(
             &ctx.producer,

@@ -44,10 +44,9 @@ up and running.
 It has a few software dependencies to run:
 
 * PostgreSQL with the [bktree] extension as the primary backing datastore
-* Redis to send events about user actions
+* NATS for pubsub and distributing events
 * [Faktory] for managing background tasks
 * [faktory-cron] to run scheduled jobs (provided in jobs.yaml)
-* NATS for publishing information on newly discovered public images
 
 It also requires credentials or app tokens for the following sites:
 
@@ -60,7 +59,6 @@ It also requires credentials or app tokens for the following sites:
 * S3-like (endpoint, region, bucket, access, and secret key)
 * SMTP (host, username, and password)
 * Telegram (token and domain)
-* Twitter (API token and secret)
 
 [bktree]: https://github.com/fake-name/pg-spgist_hamming
 [faktory]: https://github.com/contribsys/faktory

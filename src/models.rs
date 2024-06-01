@@ -1428,6 +1428,55 @@ impl LinkedAccount {
     }
 }
 
+#[derive(Debug)]
+pub struct LinkedAccountImport {
+    pub linked_account_id: Uuid,
+    pub started_at: chrono::DateTime<chrono::Utc>,
+    pub completed_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub expected_count: i32,
+    pub expected_ids: Vec<String>,
+    pub loaded_ids: Vec<String>,
+}
+
+impl LinkedAccountImport {
+    pub async fn start(
+        conn: &sqlx::PgPool,
+        account_id: Uuid,
+        expected_ids: &[String],
+    ) -> Result<(), Error> {
+        sqlx::query_file!(
+            "queries/linked_account_import/start.sql",
+            account_id,
+            expected_ids.len() as i32,
+            expected_ids
+        )
+        .execute(conn)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn loaded(
+        conn: &sqlx::PgPool,
+        account_id: Uuid,
+        id: &str,
+    ) -> Result<(i32, i32), Error> {
+        let row = sqlx::query_file!("queries/linked_account_import/loaded.sql", account_id, id)
+            .fetch_one(conn)
+            .await?;
+
+        Ok((row.loaded_count.unwrap_or(0), row.expected_count))
+    }
+
+    pub async fn complete(conn: &sqlx::PgPool, account_id: Uuid) -> Result<(), Error> {
+        sqlx::query_file!("queries/linked_account_import/complete.sql", account_id)
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Copy, DeserializeFromStr, SerializeDisplay, PartialEq, Eq, Hash)]
 pub enum Site {
     FurAffinity,
