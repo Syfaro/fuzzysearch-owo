@@ -20,7 +20,7 @@ use uuid::Uuid;
 
 use crate::{
     auth::FuzzySearchSessionToken,
-    common,
+    common::{self, NATS_PREFIX},
     jobs::{JobInitiator, JobInitiatorExt, NewSubmissionJob},
     models, Error, UrlUuid,
 };
@@ -104,16 +104,16 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for UnauthorizedWsEve
 struct WsEventSession {
     user_id: Uuid,
     session_id: Uuid,
-    redis: redis::Client,
+    nats: async_nats::Client,
     hb: Instant,
 }
 
 impl WsEventSession {
-    fn new(user_id: Uuid, session_id: Uuid, redis: redis::Client) -> Self {
+    fn new(user_id: Uuid, session_id: Uuid, nats: async_nats::Client) -> Self {
         Self {
             user_id,
             session_id,
-            redis,
+            nats,
             hb: Instant::now(),
         }
     }
@@ -133,12 +133,9 @@ impl WsEventSession {
     }
 
     fn keep_connected_to_events(&mut self) -> LocalBoxActorFuture<Self, ()> {
-        Box::pin(self.attempt_redis_connection().then(|res, this, _| {
+        Box::pin(self.attempt_nats_connection().then(|res, this, _| {
             if let Err(err) = res {
-                tracing::warn!(
-                    "could not connect to redis pubsub for user events: {:?}",
-                    err
-                );
+                tracing::warn!("could not connect to pubsub for user events: {:?}", err);
 
                 futures::future::Either::Left(
                     tokio::time::sleep(Duration::from_secs(1))
@@ -151,29 +148,26 @@ impl WsEventSession {
         }))
     }
 
-    fn attempt_redis_connection(
-        &mut self,
-    ) -> LocalBoxActorFuture<Self, Result<(), redis::RedisError>> {
-        let redis = self.redis.clone();
+    fn attempt_nats_connection(&mut self) -> LocalBoxActorFuture<Self, Result<(), Error>> {
+        let nats = self.nats.clone();
         let user_id = self.user_id;
 
-        let (tx, rx) = futures::channel::mpsc::unbounded();
+        let (mut tx, rx) = futures::channel::mpsc::channel::<Vec<u8>>(32);
 
         Box::pin(
             async move {
-                let mut pubsub = redis.get_async_pubsub().await?;
-                pubsub.subscribe(format!("user-events:{user_id}")).await?;
-
-                Ok(pubsub)
+                let sub = nats
+                    .subscribe(format!("{NATS_PREFIX}.user-events.{user_id}"))
+                    .await
+                    .map_err(Error::from_displayable)?;
+                Ok(sub)
             }
             .into_actor(self)
-            .map_ok(|mut pubsub, this, ctx| {
+            .map_ok(|mut sub, this, ctx| {
                 ctx.spawn(
                     async move {
-                        let mut stream = pubsub.on_message();
-
-                        while let Some(msg) = stream.next().await {
-                            if let Err(err) = tx.unbounded_send(msg) {
+                        while let Some(msg) = sub.next().await {
+                            if let Err(err) = tx.try_send(msg.payload.to_vec()) {
                                 tracing::error!("could not send pubsub event: {:?}", err);
                                 break;
                             }
@@ -229,13 +223,12 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsEventSession {
     }
 }
 
-impl StreamHandler<redis::Msg> for WsEventSession {
-    fn handle(&mut self, item: redis::Msg, ctx: &mut Self::Context) {
-        tracing::debug!("got redis message for session");
+impl StreamHandler<Vec<u8>> for WsEventSession {
+    fn handle(&mut self, item: Vec<u8>, ctx: &mut Self::Context) {
+        tracing::debug!("got message for session");
 
-        let payload = item.get_payload_bytes();
         let event: EventMessage =
-            serde_json::from_slice(payload).expect("got invalid data from redis");
+            serde_json::from_slice(&item).expect("got invalid data from user events");
 
         ctx.notify(event);
     }
@@ -268,7 +261,7 @@ async fn events(
     session: Session,
     req: HttpRequest,
     stream: web::Payload,
-    redis: web::Data<redis::Client>,
+    nats: web::Data<async_nats::Client>,
 ) -> Result<HttpResponse, Error> {
     if let Some(user) = user {
         let session_token = session
@@ -278,7 +271,7 @@ async fn events(
         let session = WsEventSession::new(
             user.id,
             session_token.session_id,
-            (*redis.into_inner()).clone(),
+            (*nats.into_inner()).clone(),
         );
 
         ws::start(session, &req, stream).map_err(Into::into)
@@ -372,7 +365,7 @@ async fn ingest_stats(
 #[post("/upload")]
 async fn upload(
     pool: web::Data<PgPool>,
-    redis: web::Data<redis::aio::ConnectionManager>,
+    nats: web::Data<async_nats::Client>,
     s3: web::Data<rusoto_s3::S3Client>,
     faktory: web::Data<FaktoryProducer>,
     config: web::Data<crate::Config>,
@@ -397,7 +390,7 @@ async fn upload(
         };
 
     let ids =
-        common::handle_multipart_upload(&pool, &redis, &s3, &faktory, &config, &user, form).await?;
+        common::handle_multipart_upload(&pool, &nats, &s3, &faktory, &config, &user, form).await?;
 
     Ok(web::Json(ids))
 }

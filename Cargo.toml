@@ -54,8 +54,6 @@ percent-encoding = "2.2"
 prometheus = { version = "0.13", features = ["process"] }
 radix_fmt = "1"
 rand = "0.8"
-redis = { version = "0.25.4", features = ["tokio-comp", "aio", "connection-manager"] }
-redlock = { git = "https://github.com/Syfaro/redlock-rs.git" }
 regex = "1"
 reqwest = { version = "0.11", features = ["json", "cookies"] }
 roux = "2"

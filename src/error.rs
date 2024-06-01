@@ -20,8 +20,6 @@ pub enum Error {
     Database(#[from] sqlx::Error),
     #[error("template error: {0}")]
     Template(#[from] askama::Error),
-    #[error("redis error: {0}")]
-    Redis(#[from] redis::RedisError),
     #[error("job error: {0}")]
     Job(#[from] foxlib::jobs::Error),
     #[error("actix error: {0}")]

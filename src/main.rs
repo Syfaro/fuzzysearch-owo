@@ -604,14 +604,6 @@ async fn main() {
     );
     let s3 = rusoto_s3::S3Client::new_with(client, provider, region);
 
-    let redis_client =
-        redis::Client::open(config.redis_dsn.clone()).expect("could not create redis client");
-    let redis_manager = redis::aio::ConnectionManager::new(redis_client.clone())
-        .await
-        .expect("could not create redis connection manager");
-
-    let redlock = redlock::RedLock::new(vec![config.redis_dsn.as_ref()]);
-
     let fuzzysearch = fuzzysearch::FuzzySearch::new_with_opts(fuzzysearch::FuzzySearchOpts {
         endpoint: Some(config.fuzzysearch_host.clone()),
         api_key: config.fuzzysearch_api_key.clone(),
@@ -676,8 +668,6 @@ async fn main() {
             let ctx = jobs::JobContext {
                 producer,
                 conn: pool,
-                redis: redis_manager,
-                redlock: std::sync::Arc::new(redlock),
                 s3,
                 fuzzysearch: std::sync::Arc::new(fuzzysearch),
                 mailer,
@@ -748,8 +738,6 @@ async fn main() {
                     .wrap(actix_web::middleware::Compress::default())
                     .app_data(web::Data::new(pool.clone()))
                     .app_data(web::Data::new(s3.clone()))
-                    .app_data(web::Data::new(redis_client.clone()))
-                    .app_data(web::Data::new(redis_manager.clone()))
                     .app_data(web::Data::new(config.clone()))
                     .app_data(web::Data::new(telegram_login.clone()))
                     .app_data(web::Data::new(producer.clone()))

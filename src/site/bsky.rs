@@ -7,7 +7,6 @@ use askama::Template;
 use async_trait::async_trait;
 use foxlib::jobs::{FaktoryForge, FaktoryJob, FaktoryProducer, Job, JobExtra};
 use futures::TryStreamExt;
-use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
 use url::Url;
@@ -15,6 +14,7 @@ use uuid::Uuid;
 
 use crate::{
     api::ResolvedDidResult,
+    common,
     jobs::{
         self, JobContext, JobInitiator, JobInitiatorExt, NatsNewImage, NewSubmissionJob, Queue,
         SearchExistingSubmissionsJob,
@@ -186,8 +186,7 @@ async fn import_submission(
         }
     }
 
-    let mut redis = ctx.redis.clone();
-    super::update_import_progress(&ctx.conn, &mut redis, user_id, account_id, post.uri).await?;
+    super::update_import_progress(&ctx.conn, &ctx.nats, user_id, account_id, post.uri).await?;
 
     Ok(())
 }
@@ -267,9 +266,7 @@ impl CollectedSite for BSky {
         tracing::info!("discovered {} submissions", posts.len());
         let ids = posts.iter().map(|post| &post.uri);
 
-        let mut redis = ctx.redis.clone();
-
-        super::set_loading_submissions(&ctx.conn, &mut redis, account.owner_id, account.id, ids)
+        super::set_loading_submissions(&ctx.conn, &ctx.nats, account.owner_id, account.id, ids)
             .await?;
 
         super::queue_new_submissions(
@@ -365,13 +362,12 @@ async fn resolve_did_impl(
         .await
         .map_err(|message| ResolvedDidResult::Error { message });
 
-    let mut redis = ctx.redis.clone();
-    redis
-        .publish(
-            format!("user-events:{user_id}"),
-            serde_json::to_string(&crate::api::EventMessage::ResolvedDid { did, result: event })?,
-        )
-        .await?;
+    common::send_user_event(
+        user_id,
+        &ctx.nats,
+        crate::api::EventMessage::ResolvedDid { did, result: event },
+    )
+    .await?;
 
     Ok(())
 }
@@ -915,7 +911,7 @@ async fn auth_verify(
                     session: None,
                 })?;
 
-                models::LinkedAccount::update_data(&conn, account.id, Some(data.clone())).await?;
+                models::LinkedAccount::update_data(&**conn, account.id, Some(data.clone())).await?;
                 account.data = Some(data);
                 account
             }

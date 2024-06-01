@@ -18,6 +18,7 @@ pub fn service() -> Scope {
     web::scope("/admin").service(services![
         admin_overview,
         admin_inject,
+        admin_imports,
         admin_sites_reddit,
         admin_sites_flist,
         inject_post,
@@ -120,6 +121,32 @@ async fn admin_inject(
     }
 
     let body = AdminInject.wrap_admin(&request, &user).await.render()?;
+
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[derive(Template)]
+#[template(path = "admin/imports.html")]
+struct AdminImports {
+    imports: Vec<models::LinkedAccountImport>,
+}
+
+#[get("/imports", name = "admin_imports")]
+async fn admin_imports(
+    request: actix_web::HttpRequest,
+    user: models::User,
+    conn: web::Data<sqlx::PgPool>,
+) -> Result<HttpResponse, Error> {
+    if !user.is_admin {
+        return Err(actix_web::error::ErrorUnauthorized("Unauthorized").into());
+    }
+
+    let imports = models::LinkedAccountImport::admin_list(&conn).await?;
+
+    let body = AdminImports { imports }
+        .wrap_admin(&request, &user)
+        .await
+        .render()?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }

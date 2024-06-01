@@ -7,7 +7,6 @@ use std::{
 use argonautica::{Hasher, Verifier};
 use futures::{StreamExt, TryStreamExt};
 use image::GenericImageView;
-use redis::AsyncCommands;
 use rusoto_s3::S3;
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
@@ -15,8 +14,8 @@ use sqlx::types::Json;
 use uuid::Uuid;
 use webauthn_rs_proto::CredentialID;
 
-use crate::site::SiteFromConfig;
 use crate::{api, site, Error};
+use crate::{common, site::SiteFromConfig};
 
 pub struct User {
     pub id: Uuid,
@@ -522,7 +521,7 @@ impl UserSession {
 
     pub async fn destroy(
         conn: &sqlx::PgPool,
-        redis: &redis::aio::ConnectionManager,
+        nats: &async_nats::Client,
         id: Uuid,
         user_id: Uuid,
     ) -> Result<(), Error> {
@@ -530,13 +529,12 @@ impl UserSession {
             .execute(conn)
             .await?;
 
-        let mut redis = redis.clone();
-        redis
-            .publish(
-                format!("user-events:{user_id}"),
-                serde_json::to_string(&api::EventMessage::SessionEnded { session_id: id })?,
-            )
-            .await?;
+        common::send_user_event(
+            user_id,
+            nats,
+            api::EventMessage::SessionEnded { session_id: id },
+        )
+        .await?;
 
         Ok(())
     }
@@ -1211,6 +1209,30 @@ impl LinkedAccount {
         Ok(account)
     }
 
+    pub async fn lookup_by_id_for_update(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        id: Uuid,
+    ) -> Result<Option<Self>, Error> {
+        let account = sqlx::query_file!("queries/linked_account/lookup_by_id_for_update.sql", id)
+            .map(|row| LinkedAccount {
+                id: row.id,
+                owner_id: row.owner_id,
+                source_site: row.source_site.parse().expect("unknown site in database"),
+                username: row.username,
+                last_update: row.last_update,
+                loading_state: row
+                    .loading_state
+                    .and_then(|loading_state| serde_json::from_value(loading_state).ok()),
+                data: row.data,
+                verification_key: row.verification_key,
+                verified_at: row.verified_at,
+            })
+            .fetch_optional(tx)
+            .await?;
+
+        Ok(account)
+    }
+
     pub async fn lookup_by_site_id(
         conn: &sqlx::PgPool,
         user_id: Uuid,
@@ -1289,7 +1311,7 @@ impl LinkedAccount {
 
     pub async fn update_loading_state(
         conn: &sqlx::PgPool,
-        redis: &redis::aio::ConnectionManager,
+        nats: &async_nats::Client,
         user_id: Uuid,
         account_id: Uuid,
         loading_state: LoadingState,
@@ -1303,16 +1325,15 @@ impl LinkedAccount {
         .execute(conn)
         .await?;
 
-        let mut redis = redis.clone();
-        redis
-            .publish(
-                format!("user-events:{user_id}"),
-                serde_json::to_string(&api::EventMessage::LoadingStateChange {
-                    account_id,
-                    loading_state: loading_state.message(),
-                })?,
-            )
-            .await?;
+        common::send_user_event(
+            user_id,
+            nats,
+            api::EventMessage::LoadingStateChange {
+                account_id,
+                loading_state: loading_state.message(),
+            },
+        )
+        .await?;
 
         Ok(())
     }
@@ -1325,13 +1346,16 @@ impl LinkedAccount {
         Ok(())
     }
 
-    pub async fn update_data(
-        conn: &sqlx::PgPool,
+    pub async fn update_data<'a, E>(
+        executor: E,
         account_id: Uuid,
         data: Option<serde_json::Value>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    where
+        E: sqlx::Executor<'a, Database = sqlx::Postgres>,
+    {
         sqlx::query_file!("queries/linked_account/update_data.sql", account_id, data)
-            .execute(conn)
+            .execute(executor)
             .await?;
 
         Ok(())
@@ -1401,6 +1425,70 @@ impl LinkedAccount {
             .and_then(|obj| obj.get("has_imported_archive"))
             .and_then(|has| has.as_bool())
             .unwrap_or(false)
+    }
+}
+
+#[derive(Debug)]
+pub struct LinkedAccountImport {
+    pub linked_account_id: Uuid,
+    pub source_site: Site,
+    pub started_at: chrono::DateTime<chrono::Utc>,
+    pub completed_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub expected_count: i32,
+    pub loaded_count: i32,
+}
+
+impl LinkedAccountImport {
+    pub async fn start(
+        conn: &sqlx::PgPool,
+        account_id: Uuid,
+        expected_ids: &[String],
+    ) -> Result<(), Error> {
+        sqlx::query_file!(
+            "queries/linked_account_import/start.sql",
+            account_id,
+            expected_ids.len() as i32,
+            expected_ids
+        )
+        .execute(conn)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn loaded(
+        conn: &sqlx::PgPool,
+        account_id: Uuid,
+        id: &str,
+    ) -> Result<(i32, i32), Error> {
+        let row = sqlx::query_file!("queries/linked_account_import/loaded.sql", account_id, id)
+            .fetch_one(conn)
+            .await?;
+
+        Ok((row.loaded_count.unwrap_or(0), row.expected_count))
+    }
+
+    pub async fn complete(conn: &sqlx::PgPool, account_id: Uuid) -> Result<(), Error> {
+        sqlx::query_file!("queries/linked_account_import/complete.sql", account_id)
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn admin_list(conn: &sqlx::PgPool) -> Result<Vec<Self>, Error> {
+        sqlx::query_file!("queries/linked_account_import/admin_list.sql")
+            .map(|row| LinkedAccountImport {
+                linked_account_id: row.linked_account_id,
+                source_site: row.source_site.parse().expect("unknown site in database"),
+                started_at: row.started_at,
+                completed_at: row.completed_at,
+                expected_count: row.expected_count,
+                loaded_count: row.loaded_count.unwrap_or(0),
+            })
+            .fetch_all(conn)
+            .await
+            .map_err(Into::into)
     }
 }
 
@@ -1593,7 +1681,7 @@ pub struct EventAndRelatedMedia {
 impl UserEvent {
     pub async fn notify<M: AsRef<str>>(
         conn: &sqlx::PgPool,
-        redis: &redis::aio::ConnectionManager,
+        nats: &async_nats::Client,
         user_id: Uuid,
         message: M,
     ) -> Result<Uuid, Error> {
@@ -1606,23 +1694,22 @@ impl UserEvent {
         .fetch_one(conn)
         .await?;
 
-        let mut redis = redis.clone();
-        redis
-            .publish(
-                format!("user-events:{user_id}"),
-                serde_json::to_string(&api::EventMessage::SimpleMessage {
-                    id: notification_id,
-                    message: message.as_ref().to_string(),
-                })?,
-            )
-            .await?;
+        common::send_user_event(
+            user_id,
+            nats,
+            api::EventMessage::SimpleMessage {
+                id: notification_id,
+                message: message.as_ref().to_string(),
+            },
+        )
+        .await?;
 
         Ok(notification_id)
     }
 
     pub async fn similar_found(
         conn: &sqlx::PgPool,
-        redis: &redis::aio::ConnectionManager,
+        nats: &async_nats::Client,
         user_id: Uuid,
         media_id: Uuid,
         similar_image: SimilarImage,
@@ -1644,13 +1731,12 @@ impl UserEvent {
         .await?;
 
         if created_at.is_none() {
-            let mut redis = redis.clone();
-            redis
-                .publish(
-                    format!("user-events:{user_id}"),
-                    serde_json::to_string(&api::EventMessage::SimilarImage { media_id, link })?,
-                )
-                .await?;
+            common::send_user_event(
+                user_id,
+                nats,
+                api::EventMessage::SimilarImage { media_id, link },
+            )
+            .await?;
         }
 
         Ok(notification_id)

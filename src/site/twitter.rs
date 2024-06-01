@@ -58,7 +58,7 @@ impl CollectedSite for Twitter {
     ) -> Result<(), Error> {
         models::LinkedAccount::update_loading_state(
             &ctx.conn,
-            &ctx.redis,
+            &ctx.nats,
             account.owner_id,
             account.id,
             models::LoadingState::DiscoveringItems,
@@ -147,11 +147,9 @@ impl CollectedSite for Twitter {
 
         models::LinkedAccount::update_data(&ctx.conn, account.id, Some(data)).await?;
 
-        let mut redis = ctx.redis.clone();
-
         super::set_loading_submissions(
             &ctx.conn,
-            &mut redis,
+            &ctx.nats,
             account.owner_id,
             account.id,
             tweets.iter().map(|tweet| tweet.id.clone()),
@@ -298,7 +296,7 @@ async fn callback(
                 Some(Err(err)) => return Err(err.into()),
                 None => saved_data,
             };
-            models::LinkedAccount::update_data(&conn, account.id, Some(saved_data)).await?;
+            models::LinkedAccount::update_data(&**conn, account.id, Some(saved_data)).await?;
 
             account.id
         }
@@ -345,7 +343,7 @@ struct TwitterArchiveForm {
 #[post("/archive")]
 async fn archive_post(
     conn: web::Data<sqlx::PgPool>,
-    redis: web::Data<redis::aio::ConnectionManager>,
+    nats: web::Data<async_nats::Client>,
     faktory: web::Data<FaktoryProducer>,
     request: actix_web::HttpRequest,
     session: actix_session::Session,
@@ -385,10 +383,10 @@ async fn archive_post(
         ..data
     })?;
 
-    models::LinkedAccount::update_data(&conn, account.id, Some(data)).await?;
+    models::LinkedAccount::update_data(&**conn, account.id, Some(data)).await?;
     models::LinkedAccount::update_loading_state(
         &conn,
-        &redis,
+        &nats,
         user.id,
         account.id,
         models::LoadingState::Custom {
@@ -523,8 +521,7 @@ async fn add_submission_twitter(
     }
 
     if was_import {
-        let mut redis = ctx.redis.clone();
-        super::update_import_progress(&ctx.conn, &mut redis, user_id, account_id, tweet.id).await?;
+        super::update_import_progress(&ctx.conn, &ctx.nats, user_id, account_id, tweet.id).await?;
     }
 
     Ok(())
@@ -902,7 +899,7 @@ async fn load_archive(
 
     models::LinkedAccount::update_loading_state(
         &ctx.conn,
-        &ctx.redis,
+        &ctx.nats,
         user_id,
         account_id,
         models::LoadingState::Complete,

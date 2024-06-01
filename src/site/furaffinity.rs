@@ -123,7 +123,7 @@ impl CollectedSite for FurAffinity {
     async fn add_account(&self, ctx: &JobContext, account: LinkedAccount) -> Result<(), Error> {
         models::LinkedAccount::update_loading_state(
             &ctx.conn,
-            &ctx.redis,
+            &ctx.nats,
             account.owner_id,
             account.id,
             models::LoadingState::DiscoveringItems,
@@ -135,11 +135,9 @@ impl CollectedSite for FurAffinity {
         let known = ids.len() as i32;
         tracing::info!("discovered {} submissions", known);
 
-        let mut redis = ctx.redis.clone();
-
         super::set_loading_submissions(
             &ctx.conn,
-            &mut redis,
+            &ctx.nats,
             account.owner_id,
             account.id,
             ids.iter(),
@@ -222,8 +220,7 @@ async fn add_submission_furaffinity(
     }
 
     if was_import {
-        let mut redis = ctx.redis.clone();
-        super::update_import_progress(&ctx.conn, &mut redis, user_id, account_id, sub_id).await?;
+        super::update_import_progress(&ctx.conn, &ctx.nats, user_id, account_id, sub_id).await?;
     }
 
     Ok(())

@@ -1,14 +1,12 @@
-use std::collections::HashSet;
 use std::future::Future;
 
 use async_trait::async_trait;
 use foxlib::jobs::{FaktoryForge, FaktoryProducer, Job};
 use oauth2::{AccessToken, RefreshToken, TokenResponse};
-use redis::AsyncCommands;
 use uuid::Uuid;
 
 use crate::jobs::JobInitiatorExt;
-use crate::Error;
+use crate::{common, Error};
 use crate::{jobs, models};
 
 mod bsky;
@@ -140,7 +138,7 @@ fn get_authenticated_client(
 /// to the user.
 async fn set_loading_submissions<S, I>(
     conn: &sqlx::PgPool,
-    redis: &mut redis::aio::ConnectionManager,
+    nats: &async_nats::Client,
     user_id: Uuid,
     account_id: Uuid,
     ids: I,
@@ -149,7 +147,7 @@ where
     S: ToString,
     I: Iterator<Item = S>,
 {
-    let ids: HashSet<String> = ids.into_iter().map(|item| item.to_string()).collect();
+    let ids: Vec<String> = ids.into_iter().map(|item| item.to_string()).collect();
     let len = ids.len();
 
     if len == 0 {
@@ -157,7 +155,7 @@ where
 
         models::LinkedAccount::update_loading_state(
             conn,
-            redis,
+            nats,
             user_id,
             account_id,
             models::LoadingState::Complete,
@@ -166,13 +164,11 @@ where
     } else {
         tracing::info!("user has {} submissions to load", len);
 
-        let key = format!("account-import-ids:loading:{account_id}");
-        redis.sadd::<_, _, ()>(&key, ids).await?;
-        redis.expire::<_, ()>(key, 60 * 60 * 24 * 7).await?;
+        models::LinkedAccountImport::start(conn, account_id, &ids).await?;
 
         models::LinkedAccount::update_loading_state(
             conn,
-            redis,
+            nats,
             user_id,
             account_id,
             models::LoadingState::LoadingItems { known: len as i32 },
@@ -209,45 +205,24 @@ where
 
 async fn update_import_progress<S: ToString>(
     conn: &sqlx::PgPool,
-    redis: &mut redis::aio::ConnectionManager,
+    nats: &async_nats::Client,
     user_id: Uuid,
     account_id: Uuid,
     site_id: S,
 ) -> Result<(), Error> {
-    let loading_key = format!("account-import-ids:loading:{account_id}");
-    let completed_key = format!("account-import-ids:completed:{account_id}");
+    let (loaded, expected) =
+        models::LinkedAccountImport::loaded(conn, account_id, &site_id.to_string()).await?;
 
-    let site_id = site_id.to_string();
+    tracing::debug!("submission was part of import, loaded {loaded} out of {expected} items");
 
-    redis
-        .smove::<_, _, _, ()>(&loading_key, &completed_key, &site_id)
-        .await?;
-
-    redis
-        .expire::<_, ()>(&loading_key, 60 * 60 * 24 * 7)
-        .await?;
-    redis
-        .expire::<_, ()>(&completed_key, 60 * 60 * 24 * 7)
-        .await?;
-
-    let (remaining, completed): (i32, i32) = redis::pipe()
-        .atomic()
-        .scard(loading_key)
-        .scard(completed_key)
-        .query_async(redis)
-        .await?;
-
-    tracing::debug!(
-        "submission was part of import, {} items remaining",
-        remaining
-    );
-
-    if remaining == 0 {
+    if expected - loaded == 0 {
         tracing::info!("marking account import complete");
+
+        models::LinkedAccountImport::complete(conn, account_id).await?;
 
         models::LinkedAccount::update_loading_state(
             conn,
-            redis,
+            nats,
             user_id,
             account_id,
             models::LoadingState::Complete,
@@ -255,23 +230,25 @@ async fn update_import_progress<S: ToString>(
         .await?;
     }
 
-    redis
-        .publish(
-            format!("user-events:{user_id}"),
-            serde_json::to_string(&crate::api::EventMessage::LoadingProgress {
-                account_id,
-                loaded: completed,
-                total: remaining + completed,
-            })?,
-        )
-        .await?;
+    common::send_user_event(
+        user_id,
+        nats,
+        crate::api::EventMessage::LoadingProgress {
+            account_id,
+            loaded,
+            total: expected,
+        },
+    )
+    .await?;
 
     Ok(())
 }
 
-#[tracing::instrument(skip(redlock, data, client_fn, extract_fn, data_fn, update_fn))]
+type Tx = sqlx::Transaction<'static, sqlx::Postgres>;
+
+#[tracing::instrument(skip(data, client_fn, extract_fn, data_fn, update_fn))]
 async fn refresh_credentials<C, E, D, DFut, Item, U, UFut>(
-    redlock: &redlock::RedLock,
+    conn: &sqlx::PgPool,
     account_id: Uuid,
     data: &Item,
     client_fn: C,
@@ -282,10 +259,10 @@ async fn refresh_credentials<C, E, D, DFut, Item, U, UFut>(
 where
     C: FnOnce() -> oauth2::basic::BasicClient,
     E: Fn(&Item) -> Option<(String, String, chrono::DateTime<chrono::Utc>)>,
-    D: FnOnce() -> DFut,
-    DFut: Future<Output = Result<Item, Error>>,
-    U: FnOnce(Item, String, String, chrono::DateTime<chrono::Utc>) -> UFut,
-    UFut: Future<Output = Result<(), Error>>,
+    D: FnOnce(Tx) -> DFut,
+    DFut: Future<Output = Result<(Item, Tx), Error>>,
+    U: FnOnce(Tx, Item, String, String, chrono::DateTime<chrono::Utc>) -> UFut,
+    UFut: Future<Output = Result<Tx, Error>>,
 {
     tracing::debug!("checking oauth credentials");
 
@@ -297,22 +274,14 @@ where
         return Ok(AccessToken::new(initial_access_token));
     }
 
-    let lock_key = format!("refresh-credentials:{account_id}");
-    let lock_key = lock_key.as_bytes();
-    let lock = loop {
-        if let Some(lock) = redlock.lock(lock_key, 10 * 1000).await {
-            tracing::trace!("locked credentials for update");
-            break lock;
-        }
-    };
+    let tx = conn.begin().await?;
 
-    let current_data = data_fn().await?;
+    let (current_data, tx) = data_fn(tx).await?;
     let (current_access_token, current_refresh_token, current_expires_at) =
         extract_fn(&current_data).ok_or(Error::Missing)?;
 
     if current_expires_at >= chrono::Utc::now() {
         tracing::debug!("credentials were already updated");
-        redlock.unlock(&lock).await;
         return Ok(AccessToken::new(current_access_token));
     }
 
@@ -340,8 +309,9 @@ where
             .and_then(|dur| chrono::Duration::from_std(dur).ok())
             .unwrap_or_else(|| chrono::Duration::try_seconds(3600).unwrap());
 
-    update_fn(current_data, access_token, refresh_token, expires_at).await?;
-    redlock.unlock(&lock).await;
+    let tx = update_fn(tx, current_data, access_token, refresh_token, expires_at).await?;
+
+    tx.commit().await?;
 
     tracing::info!("credential refresh complete");
 
