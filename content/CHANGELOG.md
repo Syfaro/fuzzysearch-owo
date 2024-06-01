@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.19.2 — May 31st, 2024
+
+* Internal updates.
+
 ## v0.19.1 — May 30th, 2024
 
 * Fixed an issue preventing account verification.
