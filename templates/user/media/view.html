@@ -47,7 +47,7 @@
                 <a href="/user/media/view/{{ media.id.as_url() }}">
                   {% match media.thumb_url %}
                   {% when Some with (thumb_url) %}
-                  <figure class="image is-128x128 is-inline-block" style="overflow: hidden;">
+                  <figure class="image is-128x128 is-inline-block overflow-hidden">
                     <img src="{{ thumb_url }}" alt="{{ media.alt_text() }}">
                   </figure>
                   {% else %}
