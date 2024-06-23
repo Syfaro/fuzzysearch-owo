@@ -374,6 +374,7 @@ impl User {
     }
 }
 
+#[allow(dead_code)]
 pub struct WebauthnCredential {
     pub credential_id: Vec<u8>,
     pub name: String,
@@ -467,6 +468,7 @@ impl UserSessionSource {
     }
 }
 
+#[allow(dead_code)]
 pub struct UserSession {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -1428,6 +1430,7 @@ impl LinkedAccount {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct LinkedAccountImport {
     pub linked_account_id: Uuid,
@@ -2170,6 +2173,7 @@ impl BlueskyPost {
     }
 }
 
+#[allow(dead_code)]
 pub struct BlueskyImage {
     pub repo: String,
     pub post_rkey: String,
@@ -2226,6 +2230,7 @@ impl BlueskyImage {
     }
 }
 
+#[allow(dead_code)]
 pub struct RedditImage {
     pub post: RedditPost,
 
@@ -2284,6 +2289,7 @@ impl RedditImage {
     }
 }
 
+#[allow(dead_code)]
 pub struct UserAllowlist {
     pub id: Uuid,
     pub owner_id: Uuid,
@@ -2388,6 +2394,7 @@ impl UserAllowlist {
     }
 }
 
+#[allow(dead_code)]
 pub struct PendingNotification {
     pub id: Uuid,
     pub owner_id: Uuid,
@@ -2439,6 +2446,7 @@ impl PendingNotification {
     }
 }
 
+#[allow(dead_code)]
 pub struct TwitterAuth {
     pub owner_id: Uuid,
     pub request_key: String,

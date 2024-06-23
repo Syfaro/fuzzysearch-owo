@@ -1,18 +1,18 @@
-use std::{borrow::Cow, collections::HashMap, fmt::Display, sync::Arc};
+use std::{borrow::Cow, fmt::Display, sync::Arc};
 
-use askama::Template;
 use foxlib::jobs::{
     FaktoryForge, FaktoryForgeMiddleware, FaktoryProducer, Job, JobExtra, JobQueue,
 };
 use futures::{StreamExt, TryStreamExt};
 use itertools::Itertools;
-use lettre::AsyncTransport;
 use rusoto_s3::S3;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use uuid::Uuid;
 
-use crate::{api, common, models, site, AsUrl, Error};
+use crate::{api, common, models, site, Error};
+
+pub(crate) mod email;
 
 #[derive(Clone, Debug, clap::ValueEnum)]
 pub enum Queue {
@@ -131,33 +131,6 @@ impl<J: Job> Job for InitiatedJob<J> {
     }
 }
 
-#[derive(Debug)]
-pub struct EmailVerificationJob {
-    pub user_id: Uuid,
-}
-
-impl Job for EmailVerificationJob {
-    const NAME: &'static str = "email_verification";
-    type Data = Uuid;
-    type Queue = Queue;
-
-    fn queue(&self) -> Self::Queue {
-        Queue::Outgoing
-    }
-
-    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
-        Ok(None)
-    }
-
-    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
-        Ok(vec![serde_json::to_value(self.user_id)?])
-    }
-
-    fn deserialize(mut args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
-        serde_json::from_value(args.remove(0))
-    }
-}
-
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AddAccountJob {
     pub user_id: Uuid,
@@ -259,84 +232,6 @@ impl Job for NewSubmissionJob {
 
     fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
         Ok(vec![serde_json::to_value(self.0)?])
-    }
-
-    fn deserialize(mut args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
-        serde_json::from_value(args.remove(0))
-    }
-}
-
-pub struct CreateEmailDigestsJob(pub models::setting::Frequency);
-
-impl Job for CreateEmailDigestsJob {
-    const NAME: &'static str = "create_email_digests";
-    type Data = models::setting::Frequency;
-    type Queue = Queue;
-
-    fn queue(&self) -> Self::Queue {
-        Queue::Core
-    }
-
-    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
-        Ok(None)
-    }
-
-    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
-        Ok(vec![serde_json::to_value(self.0)?])
-    }
-
-    fn deserialize(mut args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
-        serde_json::from_value(args.remove(0))
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct SendEmailDigestJob {
-    pub user_id: Uuid,
-    pub event_ids: Vec<Uuid>,
-}
-
-impl Job for SendEmailDigestJob {
-    const NAME: &'static str = "send_email_digest";
-    type Data = Self;
-    type Queue = Queue;
-
-    fn queue(&self) -> Self::Queue {
-        Queue::Outgoing
-    }
-
-    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
-        Ok(None)
-    }
-
-    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
-        Ok(vec![serde_json::to_value(self)?])
-    }
-
-    fn deserialize(mut args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
-        serde_json::from_value(args.remove(0))
-    }
-}
-
-pub struct SendPasswordResetEmailJob {
-    pub user_id: Uuid,
-}
-
-impl Job for SendPasswordResetEmailJob {
-    const NAME: &'static str = "send_email_password_reset";
-    type Data = Uuid;
-    type Queue = Queue;
-
-    fn queue(&self) -> Self::Queue {
-        Queue::Outgoing
-    }
-
-    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
-        Ok(None)
-    }
-
-    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
-        Ok(vec![serde_json::to_value(self.user_id)?])
     }
 
     fn deserialize(mut args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
@@ -518,35 +413,6 @@ pub struct JobContext {
     pub nats: async_nats::Client,
 }
 
-#[derive(askama::Template)]
-#[template(path = "email/verify.txt")]
-struct EmailVerify<'a> {
-    username: &'a str,
-    link: &'a str,
-}
-
-struct SimilarItem {
-    source_link: String,
-    site_name: String,
-    posted_by: String,
-    found_link: String,
-}
-
-#[derive(askama::Template)]
-#[template(path = "notification/similar_digest_email.txt")]
-struct SimilarDigestEmail<'a> {
-    username: &'a str,
-    items: &'a [SimilarItem],
-    unsubscribe_link: String,
-}
-
-#[derive(Template)]
-#[template(path = "email/password_reset.txt")]
-struct PasswordResetEmail<'a> {
-    username: &'a str,
-    link: String,
-}
-
 struct LogInitiatorMiddleware;
 
 impl<C, E> FaktoryForgeMiddleware<C, E> for LogInitiatorMiddleware {
@@ -596,47 +462,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
     let mut forge =
         FaktoryForge::new(ctx.clone(), Some(vec![Box::new(LogInitiatorMiddleware)])).await;
     site::register_jobs(&ctx.config, &mut forge).await?;
-
-    EmailVerificationJob::register(&mut forge, |ctx, _job, user_id| async move {
-        let user = models::User::lookup_by_id(&ctx.conn, user_id)
-            .await?
-            .ok_or(Error::Missing)?;
-
-        let email = user
-            .email
-            .as_deref()
-            .ok_or(Error::Missing)?
-            .parse()
-            .map_err(Error::from_displayable)?;
-
-        let verifier = user.email_verifier.ok_or(Error::Missing)?;
-
-        let body = EmailVerify {
-            username: user.display_name(),
-            link: &format!(
-                "{}/user/email/verify?u={}&v={}",
-                ctx.config.host_url,
-                user.id.as_url(),
-                verifier.as_url(),
-            ),
-        }
-        .render()?;
-
-        let email = lettre::Message::builder()
-            .header(lettre::message::header::ContentType::TEXT_PLAIN)
-            .from(ctx.config.smtp_from.clone())
-            .reply_to(ctx.config.smtp_reply_to.clone())
-            .to(lettre::message::Mailbox::new(
-                Some(user.display_name().to_owned()),
-                email,
-            ))
-            .subject("Verify your FuzzySearch OwO account email address")
-            .body(body)?;
-
-        ctx.mailer.send(email).await.unwrap();
-
-        Ok(())
-    });
+    email::register_email_jobs(&mut forge);
 
     AddAccountJob::register(
         &mut forge,
@@ -844,168 +670,9 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
         },
     );
 
-    CreateEmailDigestsJob::register(&mut forge, |ctx, _job, frequency| async move {
-        let mut notifications_by_owner = HashMap::new();
-
-        let pending_notifications =
-            models::PendingNotification::ready(&ctx.conn, frequency).await?;
-
-        for notif in pending_notifications {
-            notifications_by_owner
-                .entry(notif.owner_id)
-                .or_insert_with(Vec::new)
-                .push((notif.id, notif.user_event_id));
-        }
-
-        for (owner_id, ids) in notifications_by_owner {
-            tracing::debug!("found {} events for {}", ids.len(), owner_id);
-
-            let (notification_ids, event_ids): (Vec<_>, Vec<_>) = ids.into_iter().unzip();
-
-            let mut tx = ctx.conn.begin().await?;
-            models::PendingNotification::remove(&mut tx, &notification_ids).await?;
-
-            if let Err(err) = ctx
-                .producer
-                .enqueue_job(
-                    SendEmailDigestJob {
-                        user_id: owner_id,
-                        event_ids,
-                    }
-                    .initiated_by(JobInitiator::Schedule),
-                )
-                .await
-            {
-                tracing::error!("could not enqueue digest email job: {}", err);
-            }
-
-            tx.commit().await?;
-        }
-
-        Ok(())
-    });
-
-    SendEmailDigestJob::register(
-        &mut forge,
-        |ctx, _job, SendEmailDigestJob { user_id, event_ids }| async move {
-            let user = models::User::lookup_by_id(&ctx.conn, user_id)
-                .await?
-                .ok_or(Error::Missing)?;
-
-            let display_name = user.display_name();
-
-            let email = match user.email.as_deref() {
-                Some(email) if user.email_verifier.is_none() => email,
-                _ => return Err(Error::Missing),
-            };
-
-            let events = models::UserEvent::resolve(&ctx.conn, event_ids.iter().copied()).await?;
-            let media = models::OwnedMediaItem::resolve(
-                &ctx.conn,
-                user_id,
-                events
-                    .iter()
-                    .flat_map(|(_event_id, event)| event.related_to_media_item_id),
-            )
-            .await?;
-
-            let items: Vec<_> = event_ids
-                .into_iter()
-                .flat_map(|event_id| events.get(&event_id))
-                .flat_map(|event| match event.data {
-                    Some(models::UserEventData::SimilarImage(ref similar)) => event
-                        .related_to_media_item_id
-                        .map(|media_id| (media_id, similar)),
-                    _ => None,
-                })
-                .flat_map(|(media_id, event)| media.get(&media_id).map(|media| (media, event)))
-                .map(|(media, event)| SimilarItem {
-                    source_link: media
-                        .best_link()
-                        .unwrap_or_else(|| media.content_url.as_deref().unwrap_or("unknown"))
-                        .to_owned(),
-                    site_name: event.site.to_string(),
-                    posted_by: event
-                        .posted_by
-                        .clone()
-                        .unwrap_or_else(|| "unknown".to_string()),
-                    found_link: event.best_link().to_owned(),
-                })
-                .collect();
-
-            let body = SimilarDigestEmail {
-                username: display_name,
-                items: &items,
-                unsubscribe_link: format!(
-                    "{}/user/unsubscribe?u={}&t={}",
-                    ctx.config.host_url,
-                    user.id.as_url(),
-                    user.unsubscribe_token.as_url()
-                ),
-            }
-            .render()?;
-
-            let email = lettre::Message::builder()
-                .header(lettre::message::header::ContentType::TEXT_PLAIN)
-                .from(ctx.config.smtp_from.clone())
-                .reply_to(ctx.config.smtp_reply_to.clone())
-                .to(lettre::message::Mailbox::new(
-                    Some(display_name.to_string()),
-                    email.parse().map_err(Error::from_displayable)?,
-                ))
-                .subject("FuzzySearch OwO match digest")
-                .body(body)?;
-
-            ctx.mailer.send(email).await?;
-
-            Ok(())
-        },
-    );
-
     NewSubmissionJob::register(&mut forge, |ctx, _job, data| async move {
         common::notify_for_incoming(&ctx, &data).await?;
         common::import_from_incoming(&ctx, &data).await?;
-
-        Ok(())
-    });
-
-    SendPasswordResetEmailJob::register(&mut forge, |ctx, _job, user_id| async move {
-        let user = models::User::lookup_by_id(&ctx.conn, user_id)
-            .await?
-            .ok_or(Error::Missing)?;
-
-        let email = match user.email.as_deref() {
-            Some(email) => email,
-            _ => return Err(Error::Missing),
-        };
-
-        let token = user.reset_token.as_deref().ok_or(Error::Missing)?;
-
-        let display_name = user.display_name();
-
-        let body = PasswordResetEmail {
-            username: display_name,
-            link: format!(
-                "{}/auth/forgot/email?u={}&t={}",
-                ctx.config.host_url,
-                user.id.as_url(),
-                token
-            ),
-        }
-        .render()?;
-
-        let email = lettre::Message::builder()
-            .header(lettre::message::header::ContentType::TEXT_PLAIN)
-            .from(ctx.config.smtp_from.clone())
-            .reply_to(ctx.config.smtp_reply_to.clone())
-            .to(lettre::message::Mailbox::new(
-                Some(display_name.to_owned()),
-                email.parse().map_err(Error::from_displayable)?,
-            ))
-            .subject("FuzzySearch OwO password reset")
-            .body(body)?;
-
-        ctx.mailer.send(email).await?;
 
         Ok(())
     });

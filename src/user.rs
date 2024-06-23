@@ -204,7 +204,7 @@ async fn settings_post(
 
                 faktory
                     .enqueue_job(
-                        jobs::EmailVerificationJob { user_id: user.id }
+                        jobs::email::EmailVerificationJob { user_id: user.id }
                             .initiated_by(jobs::JobInitiator::user(user.id)),
                     )
                     .await?;
@@ -1088,7 +1088,7 @@ async fn email_add_post(
 
     faktory
         .enqueue_job(
-            jobs::EmailVerificationJob { user_id: user.id }
+            jobs::email::EmailVerificationJob { user_id: user.id }
                 .initiated_by(jobs::JobInitiator::user(user.id)),
         )
         .await?;
@@ -1224,7 +1224,6 @@ async fn allowlist_remove(
 #[template(path = "user/unsubscribe.html")]
 struct Unsubscribe<'a> {
     user: &'a models::User,
-    verifier: Uuid,
 }
 
 #[derive(Deserialize)]
@@ -1249,13 +1248,10 @@ async fn unsubscribe_get(
         return Err(Error::Missing);
     }
 
-    let body = Unsubscribe {
-        user: &user,
-        verifier: query.verifier.into(),
-    }
-    .wrap(&request, Some(&user))
-    .await
-    .render()?;
+    let body = Unsubscribe { user: &user }
+        .wrap(&request, Some(&user))
+        .await
+        .render()?;
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
@@ -1264,13 +1260,13 @@ async fn unsubscribe_post(
     request: actix_web::HttpRequest,
     session: Session,
     conn: web::Data<sqlx::PgPool>,
-    form: web::Form<UnsubscribeQuery>,
+    query: web::Query<UnsubscribeQuery>,
 ) -> Result<HttpResponse, Error> {
-    let user = models::User::lookup_by_id(&conn, form.user_id.into())
+    let user = models::User::lookup_by_id(&conn, query.user_id.into())
         .await?
         .ok_or(Error::Missing)?;
 
-    if user.unsubscribe_token != form.verifier.into() {
+    if user.unsubscribe_token != query.verifier.into() {
         return Err(Error::Missing);
     }
 

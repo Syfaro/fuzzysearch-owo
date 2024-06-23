@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use askama::Template;
 use foxlib::jobs::FaktoryProducer;
 use futures::{StreamExt, TryFutureExt, TryStreamExt};
-use lettre::AsyncTransport;
 use sha2::Digest;
 use sqlx::PgPool;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
@@ -12,7 +11,7 @@ use uuid::Uuid;
 use crate::{
     jobs::{self, JobContext, JobInitiatorExt},
     models::{self, setting, SimilarImage},
-    AsUrl, Error,
+    Error,
 };
 
 /// Maximum permitted download size for an image.
@@ -250,7 +249,7 @@ async fn notify_found(
 
     match user.email {
         Some(ref email) if user.email_verifier.is_none() => {
-            if let Err(err) = notify_email(
+            if let Err(err) = jobs::email::notify_email(
                 ctx,
                 &user,
                 email_frequency.0,
@@ -277,82 +276,6 @@ async fn notify_found(
         }
         _ => (),
     }
-
-    Ok(())
-}
-
-#[derive(Template)]
-#[template(path = "notification/similar_email.txt")]
-struct SimilarEmailTemplate<'a> {
-    username: &'a str,
-    source_link: &'a str,
-    site_name: &'a str,
-    poster_name: &'a str,
-    similar_link: &'a str,
-    unsubscribe_link: String,
-}
-
-async fn notify_email(
-    ctx: &JobContext,
-    user: &models::User,
-    frequency: models::setting::Frequency,
-    email: &str,
-    event_ids: &[Uuid],
-    sub: &jobs::IncomingSubmission,
-    owned_item: &models::OwnedMediaItem,
-) -> Result<(), Error> {
-    if frequency == models::setting::Frequency::Never {
-        tracing::info!("user does not want emails, skipping");
-
-        return Ok(());
-    }
-
-    if frequency.is_digest() {
-        tracing::info!(
-            "frequency is digest, inserting {} pending notifications",
-            event_ids.len()
-        );
-
-        for event_id in event_ids.iter().copied() {
-            if let Err(err) =
-                models::PendingNotification::create(&ctx.conn, user.id, event_id).await
-            {
-                tracing::error!("could not create pending notification: {}", err);
-            }
-        }
-
-        return Ok(());
-    }
-
-    let body = SimilarEmailTemplate {
-        username: user.display_name(),
-        source_link: owned_item
-            .best_link()
-            .unwrap_or_else(|| owned_item.content_url.as_deref().unwrap_or("unknown")),
-        site_name: &sub.site.to_string(),
-        poster_name: sub.posted_by.as_deref().unwrap_or("unknown"),
-        similar_link: sub.page_url.as_deref().unwrap_or(&sub.content_url),
-        unsubscribe_link: format!(
-            "{}/user/unsubscribe?u={}&t={}",
-            ctx.config.host_url,
-            user.id.as_url(),
-            user.unsubscribe_token.as_url()
-        ),
-    }
-    .render()?;
-
-    let email = lettre::Message::builder()
-        .header(lettre::message::header::ContentType::TEXT_PLAIN)
-        .from(ctx.config.smtp_from.clone())
-        .reply_to(ctx.config.smtp_reply_to.clone())
-        .to(lettre::message::Mailbox::new(
-            Some(user.display_name().to_owned()),
-            email.parse().map_err(Error::from_displayable)?,
-        ))
-        .subject(format!("Similar image found on {}", sub.site))
-        .body(body)?;
-
-    ctx.mailer.send(email).await?;
 
     Ok(())
 }

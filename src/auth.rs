@@ -462,7 +462,7 @@ async fn forgot_post(
 
         faktory
             .enqueue_job(
-                jobs::SendPasswordResetEmailJob { user_id: user.id }
+                jobs::email::SendPasswordResetEmailJob { user_id: user.id }
                     .initiated_by(jobs::JobInitiator::User { user_id: user.id }),
             )
             .await?;
