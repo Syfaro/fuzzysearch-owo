@@ -4,7 +4,10 @@ use askama::Template;
 use foxlib::jobs::{FaktoryForge, Job, JobExtra};
 use itertools::Itertools;
 use lettre::{
-    message::header::{Header, HeaderName, HeaderValue},
+    message::{
+        header::{Header, HeaderName, HeaderValue},
+        MultiPart,
+    },
     Address, AsyncTransport,
 };
 use serde::{Deserialize, Serialize};
@@ -261,15 +264,13 @@ pub fn register_email_jobs(forge: &mut FaktoryForge<jobs::JobContext, Error>) {
             let list_unsubscribe =
                 ListUnsubscribe::parse(&unsubscribe_link).expect("invalid list unsubscribe header");
 
-            let body = SimilarDigestEmail {
+            let template = SimilarDigestTemplate {
                 username: display_name,
                 items: &items,
-                unsubscribe_link,
-            }
-            .render()?;
+                unsubscribe_link: &unsubscribe_link,
+            };
 
             let email = lettre::Message::builder()
-                .header(lettre::message::header::ContentType::TEXT_PLAIN)
                 .from(ctx.config.smtp_from.clone())
                 .reply_to(ctx.config.smtp_reply_to.clone())
                 .to(lettre::message::Mailbox::new(
@@ -283,7 +284,10 @@ pub fn register_email_jobs(forge: &mut FaktoryForge<jobs::JobContext, Error>) {
                         .expect("invalid list unsubscribe post header"),
                 )
                 .header(list_unsubscribe)
-                .body(body)?;
+                .multipart(MultiPart::alternative_plain_html(
+                    template.plain().render()?,
+                    template.html().render()?,
+                ))?;
 
             ctx.mailer.send(email).await?;
 
@@ -375,7 +379,7 @@ pub(crate) async fn notify_email(
     let list_unsubscribe =
         ListUnsubscribe::parse(&unsubscribe_link).expect("invalid list unsubscribe header");
 
-    let body = SimilarEmailTemplate {
+    let template = SimilarEmailTemplate {
         username: user.display_name(),
         source_link: owned_item
             .best_link()
@@ -383,12 +387,10 @@ pub(crate) async fn notify_email(
         site_name: &sub.site.to_string(),
         poster_name: sub.posted_by.as_deref().unwrap_or("unknown"),
         similar_link: sub.page_url.as_deref().unwrap_or(&sub.content_url),
-        unsubscribe_link,
-    }
-    .render()?;
+        unsubscribe_link: &unsubscribe_link,
+    };
 
     let email = lettre::Message::builder()
-        .header(lettre::message::header::ContentType::TEXT_PLAIN)
         .from(ctx.config.smtp_from.clone())
         .reply_to(ctx.config.smtp_reply_to.clone())
         .to(lettre::message::Mailbox::new(
@@ -405,22 +407,45 @@ pub(crate) async fn notify_email(
                 .expect("invalid list unsubscribe post header"),
         )
         .header(list_unsubscribe)
-        .body(body)?;
+        .multipart(MultiPart::alternative_plain_html(
+            template.plain().render()?,
+            template.html().render()?,
+        ))?;
 
     ctx.mailer.send(email).await?;
 
     Ok(())
 }
 
-#[derive(Template)]
-#[template(path = "notification/similar_email.txt")]
 struct SimilarEmailTemplate<'a> {
     username: &'a str,
     source_link: &'a str,
     site_name: &'a str,
     poster_name: &'a str,
     similar_link: &'a str,
-    unsubscribe_link: String,
+    unsubscribe_link: &'a str,
+}
+
+impl SimilarEmailTemplate<'_> {
+    fn plain(&self) -> SimilarEmailTemplatePlain<'_> {
+        SimilarEmailTemplatePlain { content: self }
+    }
+
+    fn html(&self) -> SimilarEmailTemplateHtml<'_> {
+        SimilarEmailTemplateHtml { content: self }
+    }
+}
+
+#[derive(Template)]
+#[template(path = "notification/similar_email.txt")]
+struct SimilarEmailTemplatePlain<'a> {
+    content: &'a SimilarEmailTemplate<'a>,
+}
+
+#[derive(Template)]
+#[template(path = "notification/similar_email.html")]
+struct SimilarEmailTemplateHtml<'a> {
+    content: &'a SimilarEmailTemplate<'a>,
 }
 
 #[derive(Template)]
@@ -437,12 +462,32 @@ struct SimilarItem {
     found_link: String,
 }
 
-#[derive(Template)]
-#[template(path = "notification/similar_digest_email.txt")]
-struct SimilarDigestEmail<'a> {
+struct SimilarDigestTemplate<'a> {
     username: &'a str,
     items: &'a [SimilarItem],
-    unsubscribe_link: String,
+    unsubscribe_link: &'a str,
+}
+
+impl SimilarDigestTemplate<'_> {
+    fn plain(&self) -> SimilarDigestTemplatePlain<'_> {
+        SimilarDigestTemplatePlain { content: self }
+    }
+
+    fn html(&self) -> SimilarDigestTemplateHtml<'_> {
+        SimilarDigestTemplateHtml { content: self }
+    }
+}
+
+#[derive(Template)]
+#[template(path = "notification/similar_digest_email.txt")]
+struct SimilarDigestTemplatePlain<'a> {
+    content: &'a SimilarDigestTemplate<'a>,
+}
+
+#[derive(Template)]
+#[template(path = "notification/similar_digest_email.html")]
+struct SimilarDigestTemplateHtml<'a> {
+    content: &'a SimilarDigestTemplate<'a>,
 }
 
 #[derive(Template)]

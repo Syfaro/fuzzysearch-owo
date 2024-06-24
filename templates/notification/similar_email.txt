@@ -1,9 +1,9 @@
-Hi {{ username }},
+Hi {{ content.username }},
 
-A similar image to this was found: {{ source_link }}
+An image similar to this was found: {{ content.source_link }}
 
-It was posted to {{ site_name }} by {{ poster_name }}. You can see it here: {{ similar_link }}
+It was posted to {{ content.site_name }} by {{ content.poster_name }}. You can see it here: {{ content.similar_link }}
 
 If you have any feedback or concerns about these results, please feel free to reply to this email.
 
-To unsubscribe from future notification emails, please click here: {{ unsubscribe_link }}
+To unsubscribe from future notification emails, please click here: {{ content.unsubscribe_link }}
