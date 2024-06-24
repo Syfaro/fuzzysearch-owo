@@ -5,7 +5,7 @@ use foxlib::jobs::{FaktoryForge, Job, JobExtra};
 use itertools::Itertools;
 use lettre::{
     message::header::{Header, HeaderName, HeaderValue},
-    AsyncTransport,
+    Address, AsyncTransport,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -277,6 +277,7 @@ pub fn register_email_jobs(forge: &mut FaktoryForge<jobs::JobContext, Error>) {
                     email.parse().map_err(Error::from_displayable)?,
                 ))
                 .subject("FuzzySearch OwO match digest")
+                .header(ListId::new("match-digest.owo", &ctx.config.smtp_from.email))
                 .header(
                     ListUnsubscribePost::parse("List-Unsubscribe=One-Click")
                         .expect("invalid list unsubscribe post header"),
@@ -395,6 +396,10 @@ pub(crate) async fn notify_email(
             email.parse().map_err(Error::from_displayable)?,
         ))
         .subject(format!("Similar image found on {}", sub.site))
+        .header(ListId::new(
+            "match-notification.owo",
+            &ctx.config.smtp_from.email,
+        ))
         .header(
             ListUnsubscribePost::parse("List-Unsubscribe=One-Click")
                 .expect("invalid list unsubscribe post header"),
@@ -492,5 +497,35 @@ impl Header for ListUnsubscribe {
                 .map(|value| format!("<{}>", value.as_str()))
                 .join(", "),
         )
+    }
+}
+
+#[derive(Clone)]
+struct ListId {
+    id: String,
+}
+
+impl ListId {
+    fn new<S: ToString>(id: S, list_address: &Address) -> Self {
+        let id = id.to_string();
+        let domain = list_address.domain();
+
+        Self {
+            id: format!("<{id}.{domain}>"),
+        }
+    }
+}
+
+impl Header for ListId {
+    fn name() -> HeaderName {
+        HeaderName::new_from_ascii_str("List-Id")
+    }
+
+    fn parse(s: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Self { id: s.to_string() })
+    }
+
+    fn display(&self) -> HeaderValue {
+        HeaderValue::new(Self::name(), self.id.clone())
     }
 }
