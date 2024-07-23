@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use actix_session::{
     config::{PersistentSession, SessionLifecycle},
@@ -604,6 +604,7 @@ async fn main() {
 
     let client = reqwest::ClientBuilder::default()
         .user_agent(&config.user_agent)
+        .timeout(Duration::from_secs(10))
         .build()
         .expect("could not create http client");
 
