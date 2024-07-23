@@ -1,0 +1,26 @@
+<p>
+    Hi {{ content.username }},
+</p>
+
+<p>
+    {{ content.items.len() }} {% if content.items.len() == 1 %}match was{% else %}matches were{% endif %} found since your last update.
+</p>
+
+<ul>
+    {% for item in content.items %}
+    <li>
+        <a href="{{ item.source_link }}">This</a> image was posted to
+        <a href="{{ item.found_link }}">{{ item.site_name }}</a> by {{ item.posted_by }}
+    </li>
+    {% endfor %}
+</ul>
+
+<p>
+    If you have any feedback or concerns about these results, please feel free to reply to this email.
+</p>
+
+<hr>
+
+<p>
+    To unsubscribe from future notification emails, please <a href="{{ content.unsubscribe_link }}">click here</a>.
+</p>
