@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.19.5 — July 23rd, 2024
+
+* Internal updates.
+
 ## v0.19.4 — July 23rd, 2024
 
 * Improved readability of notification emails.

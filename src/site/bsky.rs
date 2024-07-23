@@ -814,9 +814,15 @@ pub async fn ingest_bsky(ctx: JobContext) {
                     tracing::error!("could not mark post as deleted: {err}");
                 }
 
-                message.ack().await.expect("could not ack message");
+                if let Err(err) = message.ack().await {
+                    tracing::error!("could not ack message: {err:?}");
+                };
             }
-            _ => continue,
+            subject => {
+                if let Err(err) = message.ack().await {
+                    tracing::error!(subject, "could not ack message: {err:?}");
+                };
+            }
         }
     }
 }
