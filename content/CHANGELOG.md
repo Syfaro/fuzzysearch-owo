@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.19.4 — July 23rd, 2024
+
+* Improved readability of notification emails.
+* Internal updates.
+
 ## v0.19.3 — May 31st, 2024
 
 * Fixed an issue where click to copy did not work as expected.
