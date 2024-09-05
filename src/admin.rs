@@ -8,6 +8,7 @@ use futures::TryFutureExt;
 use rand::Rng;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
+use uuid::Uuid;
 
 use crate::{
     jobs::{JobInitiator, JobInitiatorExt, NewSubmissionJob},
@@ -21,11 +22,13 @@ pub fn service() -> Scope {
         admin_imports,
         admin_sites_reddit,
         admin_sites_flist,
+        admin_alerts,
         inject_post,
         job_manual,
         subreddit_add,
         subreddit_state,
-        flist_abort
+        flist_abort,
+        services![alert_create, alert_deactivate]
     ])
 }
 
@@ -458,5 +461,77 @@ async fn job_manual(
 
     Ok(HttpResponse::Found()
         .insert_header(("Location", request.url_for_static("admin_inject")?.as_str()))
+        .finish())
+}
+
+#[derive(Template)]
+#[template(path = "admin/alerts.html")]
+struct AdminAlerts {
+    alerts: Vec<models::SiteAlert>,
+}
+
+#[get("/alerts", name = "admin_alerts")]
+async fn admin_alerts(
+    conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
+    user: models::User,
+) -> Result<HttpResponse, Error> {
+    if !user.is_admin {
+        return Err(actix_web::error::ErrorUnauthorized("Unauthorized").into());
+    }
+
+    let alerts = models::SiteAlert::list(&conn).await?;
+
+    let body = AdminAlerts { alerts }
+        .wrap_admin(&request, &user)
+        .await
+        .render()?;
+
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[derive(Deserialize)]
+struct AlertCreateForm {
+    content: String,
+}
+
+#[post("/alerts/create")]
+async fn alert_create(
+    conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
+    user: models::User,
+    web::Form(form): web::Form<AlertCreateForm>,
+) -> Result<HttpResponse, Error> {
+    if !user.is_admin {
+        return Err(actix_web::error::ErrorUnauthorized("Unauthorized").into());
+    }
+
+    models::SiteAlert::create(&conn, form.content).await?;
+
+    Ok(HttpResponse::Found()
+        .insert_header(("Location", request.url_for_static("admin_alerts")?.as_str()))
+        .finish())
+}
+
+#[derive(Deserialize)]
+struct AlertActionForm {
+    alert_id: Uuid,
+}
+
+#[post("/alerts/deactivate")]
+async fn alert_deactivate(
+    conn: web::Data<sqlx::PgPool>,
+    request: actix_web::HttpRequest,
+    user: models::User,
+    web::Form(form): web::Form<AlertActionForm>,
+) -> Result<HttpResponse, Error> {
+    if !user.is_admin {
+        return Err(actix_web::error::ErrorUnauthorized("Unauthorized").into());
+    }
+
+    models::SiteAlert::deactivate(&conn, form.alert_id).await?;
+
+    Ok(HttpResponse::Found()
+        .insert_header(("Location", request.url_for_static("admin_alerts")?.as_str()))
         .finish())
 }

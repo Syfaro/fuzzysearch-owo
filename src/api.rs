@@ -280,6 +280,22 @@ async fn events(
     }
 }
 
+#[derive(Deserialize)]
+struct AlertDismissForm {
+    alert_id: Uuid,
+}
+
+#[post("/alert/dismiss")]
+async fn alert_dismiss(
+    user: models::User,
+    conn: web::Data<sqlx::PgPool>,
+    web::Form(form): web::Form<AlertDismissForm>,
+) -> Result<HttpResponse, Error> {
+    models::SiteAlert::dismiss(&conn, form.alert_id, user.id).await?;
+
+    Ok(HttpResponse::new(actix_http::StatusCode::NO_CONTENT))
+}
+
 #[get("/ingest/stats")]
 async fn ingest_stats(
     user: models::User,
@@ -483,7 +499,7 @@ async fn flist_lookup(
 
 pub fn service() -> Scope {
     web::scope("/api")
-        .service(services![events, ingest_stats, upload, flist_lookup])
+        .service(services![events, alert_dismiss, ingest_stats, upload, flist_lookup])
         .service(web::scope("/service").service(services![fuzzysearch]))
         .service(web::scope("/chunk").service(services![chunk_add]))
 }

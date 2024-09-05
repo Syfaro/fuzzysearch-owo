@@ -1,0 +1,65 @@
+<div class="block">
+  <h2 class="subtitle is-4">Add Site Alert</h2>
+
+  <form method="POST" action="/admin/alerts/create">
+    <div class="field">
+      <label class="label" for="content">Content</label>
+      <div class="control">
+        <textarea class="textarea" placeholder="Alert Content" name="content" id="content" required></textarea>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="control">
+        <button class="button is-primary">Create</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="block">
+  <h2 class="subtitle is-4">Site Alerts</h2>
+
+  <div class="table-container">
+    <table class="table is-fullwidth">
+      <thead>
+        <tr>
+          <th>Active</th>
+          <th>Created</th>
+          <th>Content</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for alert in alerts %}
+          <tr>
+            <td>
+              {{ alert.active }}
+            </td>
+            <td>
+              <span class="relative-time" data-timestamp="{{ alert.created_at.timestamp() }}">
+                {{ alert.created_at }}
+              </span>
+            </td>
+            <td class="content">
+              {{ alert.content|markdown }}
+            </td>
+            <td>
+              <form method="POST">
+                <input type="hidden" name="alert_id" value="{{ alert.id }}">
+
+                <div class="buttons are-small is-justify-content-center">
+                  {% if alert.active %}
+                    <button class="button is-warning" formaction="/admin/alerts/deactivate">
+                      Deactivate
+                    </button>
+                  {% endif %}
+                </div>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

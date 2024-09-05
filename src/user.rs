@@ -24,6 +24,7 @@ use crate::{
 #[template(path = "user/index.html")]
 struct Home<'a> {
     user: &'a models::User,
+    alerts: Vec<models::SiteAlert>,
 
     item_count: i64,
     total_content_size: i64,
@@ -41,12 +42,14 @@ async fn home(
     let user_item_count = models::OwnedMediaItem::user_item_count(&conn, user.id);
     let recent_media = models::OwnedMediaItem::recent_media(&conn, user.id, None);
     let monitored_accounts = models::LinkedAccount::owned_by_user(&conn, user.id, false);
+    let alerts = models::SiteAlert::active_for_user(&conn, user.id);
 
-    let ((item_count, total_content_size), recent_media, monitored_accounts) =
-        futures::try_join!(user_item_count, recent_media, monitored_accounts)?;
+    let ((item_count, total_content_size), recent_media, monitored_accounts, alerts) =
+        futures::try_join!(user_item_count, recent_media, monitored_accounts, alerts)?;
 
     let body = Home {
         user: &user,
+        alerts,
         item_count,
         total_content_size,
         recent_media,

@@ -2,6 +2,20 @@
   <div class="container">
     <div class="columns is-centered">
       <div class="column is-one-third">
+        {% for alert in alerts %}
+          <div class="notification is-info">
+            <button class="delete site-alert-delete" data-alert-id="{{ alert.id }}"></button>
+
+            <div class="content">
+              {{ alert.content|markdown }}
+            </div>
+
+            <p class="has-text-grey has-text-weight-light has-text-right relative-time" data-timestamp="{{ alert.created_at.timestamp() }}">
+              {{ alert.created_at }}
+            </p>
+          </div>
+        {% endfor %}
+
         <h1 class="title has-text-centered">
           Welcome, {{ user.display_name() }}!
         </h1>

@@ -702,6 +702,55 @@
     },
     "query": "UPDATE\n    reddit_subreddit\nSET\n    disabled = $2\nWHERE\n    name = $1;\n"
   },
+  "2474795278440697bfcc6715d6991ada805326b49c8990ced49cb2e2f6640d13": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    site_alert_dismiss (site_alert_id, user_account_id)\nVALUES\n    ($1, $2) ON CONFLICT DO NOTHING;\n"
+  },
+  "27b076d619fbb181aec8f25683aa93a879cf44b1a420e140d1132c974afefd22": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 1,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "active",
+          "ordinal": 2,
+          "type_info": "Bool"
+        },
+        {
+          "name": "content",
+          "ordinal": 3,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "SELECT\n    id,\n    created_at,\n    active,\n    content\nFROM\n    site_alert\nORDER BY\n    created_at DESC\nLIMIT\n    50;\n"
+  },
   "2aa0ada2357ae99086950c0e5d8dfd750f977e830a031f24f62063c6277933f9": {
     "describe": {
       "columns": [
@@ -3455,6 +3504,18 @@
     },
     "query": "SELECT\n    fullname \"fullname!\",\n    subreddit_name \"subreddit_name!\",\n    posted_at \"posted_at!\",\n    author \"author!\",\n    permalink \"permalink!\",\n    content_link \"content_link!\",\n    id \"id!\",\n    post_fullname \"post_fullname!\",\n    size \"size!\",\n    sha256 \"sha256!\",\n    perceptual_hash\nFROM\n    reddit_image\n    LEFT JOIN reddit_post ON reddit_image.post_fullname = reddit_post.fullname\nWHERE\n    perceptual_hash <@ ($1, $2)\n"
   },
+  "c9d3722f46f68561549ff425b6847b83fcc15f2be9dcc4d9d0820234970a5c8f": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "UPDATE\n    site_alert\nSET\n    active = false\nWHERE\n    id = $1;\n"
+  },
   "cb8dc8dd0529619ea5a22e57af00b3f238e7b7429da8b405217e667c01740f86": {
     "describe": {
       "columns": [
@@ -3664,6 +3725,26 @@
       }
     },
     "query": "UPDATE\n    owned_media_item_account\nSET\n    owned_media_item_id = $2\nWHERE\n    owned_media_item_id = $1;\n"
+  },
+  "dc704be491f1b9c8dbe0c31defb86e59573ca01b99d3edcc8a253d3367ab9be3": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    site_alert (content)\nVALUES\n    ($1) RETURNING id;\n"
   },
   "ddd2f183cb5f6d8da4ad7fc5cdb056427bb0dce4b177d14902e5a75f6e04a82f": {
     "describe": {
@@ -4100,6 +4181,44 @@
       }
     },
     "query": "UPDATE\n    flist_import_run\nSET\n    finished_at = current_timestamp,\n    max_id = $2\nWHERE\n    id = $1;\n"
+  },
+  "ee254af35e9318df4f78bb5377968502439d4b3b2e41ff6f9722d7d8b01274ba": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 1,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "active",
+          "ordinal": 2,
+          "type_info": "Bool"
+        },
+        {
+          "name": "content",
+          "ordinal": 3,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT\n    id,\n    created_at,\n    active,\n    content\nFROM\n    site_alert\n    LEFT JOIN site_alert_dismiss ON site_alert_dismiss.site_alert_id = site_alert.id AND site_alert_dismiss.user_account_id = $1\nWHERE\n    site_alert_dismiss.site_alert_id IS NULL\n    AND active = true\nORDER BY\n    created_at DESC;\n"
   },
   "f34303d1fa62539f48e60fb54a5b666ebf42852a75ce8251c6e4f90894cb46cf": {
     "describe": {

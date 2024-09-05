@@ -2534,6 +2534,52 @@ impl FileUploadChunk {
     }
 }
 
+pub struct SiteAlert {
+    pub id: Uuid,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub active: bool,
+    pub content: String,
+}
+
+impl SiteAlert {
+    pub async fn active_for_user(conn: &sqlx::PgPool, user_id: Uuid) -> Result<Vec<Self>, Error> {
+        sqlx::query_file_as!(Self, "queries/site_alerts/active_for_user.sql", user_id)
+            .fetch_all(conn)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn dismiss(conn: &sqlx::PgPool, alert_id: Uuid, user_id: Uuid) -> Result<(), Error> {
+        sqlx::query_file!("queries/site_alerts/dismiss.sql", alert_id, user_id)
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn list(conn: &sqlx::PgPool) -> Result<Vec<Self>, Error> {
+        sqlx::query_file_as!(Self, "queries/site_alerts/list.sql")
+            .fetch_all(conn)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn create(conn: &sqlx::PgPool, content: String) -> Result<Uuid, Error> {
+        sqlx::query_file_scalar!("queries/site_alerts/create.sql", content)
+            .fetch_one(conn)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn deactivate(conn: &sqlx::PgPool, alert_id: Uuid) -> Result<(), Error> {
+        sqlx::query_file!("queries/site_alerts/deactivate.sql", alert_id)
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
+}
+
 pub trait UserSettingItem:
     Clone + Default + serde::Serialize + serde::de::DeserializeOwned
 {

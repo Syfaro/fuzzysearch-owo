@@ -232,3 +232,29 @@ document.querySelectorAll(".human-number").forEach((elem) => {
   const value = parseInt(elem.textContent?.trim() || "0", 10);
   elem.textContent = numberFormatter.format(value);
 });
+
+document.querySelectorAll(".site-alert-delete").forEach((elem) => {
+  const alertId = (elem as HTMLElement).dataset.alertId;
+  if (!alertId) return;
+
+  elem.addEventListener("click", async () => {
+    const formData = new URLSearchParams();
+    formData.set("alert_id", alertId);
+
+    const resp = await fetch("/api/alert/dismiss", {
+      method: "POST",
+      body: formData,
+      credentials: "same-origin",
+    });
+
+    if (resp.status !== 204) {
+      alert("Error dismissing alert, try again later.");
+      return;
+    }
+
+    const notification = elem.closest(".notification");
+    if (notification) {
+      notification.parentNode?.removeChild(notification);
+    }
+  });
+});
