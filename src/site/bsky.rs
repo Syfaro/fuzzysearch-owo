@@ -639,8 +639,8 @@ async fn load_bluesky_post(
             };
 
             let url = format!(
-                "https://bsky.social/xrpc/com.atproto.sync.getBlob?did={}&cid={image_cid}",
-                payload.repo
+                "https://cdn.bsky.app/img/feed_fullsize/plain/{repo}/{image_cid}@jpeg",
+                repo = payload.repo
             );
 
             let (sha256, data) =
