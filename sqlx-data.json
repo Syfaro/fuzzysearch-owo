@@ -1764,20 +1764,6 @@
     },
     "query": "SELECT\n    owner_id,\n    request_key,\n    request_secret\nFROM\n    twitter_auth\nWHERE\n    request_key = $1;\n"
   },
-  "5922afb966844f33df60aa03f876c1c26c0518ad588024115e2a38f0e2272c1d": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Text",
-          "Text",
-          "Timestamptz"
-        ]
-      }
-    },
-    "query": "INSERT INTO\n    bluesky_post (repo, rkey, created_at)\nVALUES\n    ($1, $2, $3) ON CONFLICT DO NOTHING;\n"
-  },
   "5a31bf2e799fe5b3f6f467576b048326ce1db4ec2392f55470b81d70c38d9d5a": {
     "describe": {
       "columns": [
@@ -2869,6 +2855,28 @@
       }
     },
     "query": "UPDATE linked_account SET disabled = $2 WHERE source_site = $1"
+  },
+  "928d99b173e42f8f4947f9c356641234dc9291e6eaca1ba9add52049b5f17884": {
+    "describe": {
+      "columns": [
+        {
+          "name": "repo",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text",
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    bluesky_post (repo, rkey, created_at)\nVALUES\n    ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING repo;\n"
   },
   "9499afaf61b5a24ace5360d39e21234c56d9c8daaf4ae6e2bb1fd10f30718802": {
     "describe": {

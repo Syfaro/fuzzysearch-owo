@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.19.7 — November 16th, 2024
+
+* Internal updates.
+
 ## v0.19.6 — September 5th, 2024
 
 * Added ability to create site alerts.

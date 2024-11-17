@@ -2158,11 +2158,13 @@ impl BlueskyPost {
         repo: &str,
         rkey: &str,
         created_at: Option<chrono::DateTime<chrono::Utc>>,
-    ) -> Result<(), Error> {
-        sqlx::query_file!("queries/bluesky/create_post.sql", repo, rkey, created_at)
-            .execute(tx)
-            .await?;
-        Ok(())
+    ) -> Result<bool, Error> {
+        let post =
+            sqlx::query_file_scalar!("queries/bluesky/create_post.sql", repo, rkey, created_at)
+                .fetch_optional(tx)
+                .await?;
+
+        Ok(post.is_some())
     }
 
     pub async fn delete_post(conn: &sqlx::PgPool, repo: &str, rkey: &str) -> Result<(), Error> {

@@ -630,7 +630,10 @@ async fn load_bluesky_post(
 
         let created_at = parse_time(&payload.data.created_at);
 
-        models::BlueskyPost::create_post(&mut tx, &payload.repo, rkey, created_at).await?;
+        if !models::BlueskyPost::create_post(&mut tx, &payload.repo, rkey, created_at).await? {
+            tracing::debug!("post already existed, skipping");
+            return Ok(());
+        }
 
         for image in images {
             let image_cid = match image.image {
