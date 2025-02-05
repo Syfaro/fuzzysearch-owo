@@ -358,11 +358,12 @@ async fn collect_accounts(ctx: JobContext, _job: FaktoryJob, _args: ()) -> Resul
     let account_ids = models::LinkedAccount::all_site_accounts(&ctx.conn, Site::DeviantArt).await?;
 
     for account_id in account_ids {
-        if let Err(err) = ctx
-            .producer
-            .enqueue_job(UpdateAccountJob(account_id).initiated_by(JobInitiator::Schedule))
-            .await
-        {
+        let mut job = UpdateAccountJob(account_id)
+            .initiated_by(JobInitiator::Schedule)
+            .job()?;
+        job.retry = Some(0);
+
+        if let Err(err) = ctx.producer.enqueue_existing_job(job).await {
             tracing::error!("could not enqueue deviantart account check: {:?}", err);
         }
     }
