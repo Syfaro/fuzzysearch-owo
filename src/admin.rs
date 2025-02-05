@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use actix_session::Session;
 use actix_web::{get, post, services, web, HttpResponse, Scope};
 use askama::Template;
 use async_trait::async_trait;
@@ -12,22 +13,19 @@ use uuid::Uuid;
 
 use crate::{
     jobs::{JobInitiator, JobInitiatorExt, NewSubmissionJob},
-    models, Error, WrappedTemplate,
+    models, AddFlash, AsUrl, Error, UrlUuid, WrappedTemplate,
 };
 
 pub fn service() -> Scope {
     web::scope("/admin").service(services![
         admin_overview,
         admin_inject,
-        admin_imports,
-        admin_sites_reddit,
-        admin_sites_flist,
-        admin_alerts,
         inject_post,
+        admin_alerts,
+        services![admin_imports, admin_imports_complete],
         job_manual,
-        subreddit_add,
-        subreddit_state,
-        flist_abort,
+        services![admin_sites_reddit, subreddit_add, subreddit_state],
+        services![admin_sites_flist, flist_abort],
         services![alert_create, alert_deactivate]
     ])
 }
@@ -144,6 +142,47 @@ async fn admin_imports(
         .render()?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
+}
+
+#[post("/imports/{id}/complete", name = "admin_imports_complete")]
+async fn admin_imports_complete(
+    request: actix_web::HttpRequest,
+    session: Session,
+    user: models::User,
+    conn: web::Data<sqlx::PgPool>,
+    nats: web::Data<async_nats::Client>,
+    path: web::Path<UrlUuid>,
+) -> Result<HttpResponse, Error> {
+    if !user.is_admin {
+        return Err(actix_web::error::ErrorUnauthorized("Unauthorized").into());
+    }
+
+    let import = models::LinkedAccountImport::get(&conn, path.into_inner().0)
+        .await?
+        .ok_or(Error::Missing)?;
+
+    models::LinkedAccountImport::complete(&conn, import.linked_account_id).await?;
+
+    models::LinkedAccount::update_loading_state(
+        &conn,
+        &nats,
+        import.owner_id,
+        import.linked_account_id,
+        models::LoadingState::Complete,
+    )
+    .await?;
+
+    session.add_flash(
+        crate::FlashStyle::Success,
+        "Account import was marked as completed.",
+    );
+
+    Ok(HttpResponse::Found()
+        .insert_header((
+            "Location",
+            request.url_for_static("admin_imports")?.as_str(),
+        ))
+        .finish())
 }
 
 #[derive(Template)]

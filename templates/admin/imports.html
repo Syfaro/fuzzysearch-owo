@@ -10,6 +10,7 @@
           <th>Completed</th>
           <th>Expected Count</th>
           <th>Loaded Count</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -38,6 +39,19 @@
             </td>
             <td>
               {{ account_import.loaded_count }}
+            </td>
+            <td class="has-text-right">
+              {% match account_import.completed_at %}
+              {% when Some with (_) %}
+              {% else %}
+                <form method="POST">
+                  <div class="buttons are-small is-justify-content-center">
+                    <button class="button is-warning" formaction="/admin/imports/{{ account_import.id.as_url() }}/complete">
+                      Mark Completed
+                    </button>
+                  </div>
+                </form>
+              {% endmatch %}
             </td>
           </tr>
         {% endfor %}

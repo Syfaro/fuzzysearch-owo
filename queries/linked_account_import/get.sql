@@ -10,7 +10,4 @@ SELECT
 FROM
     linked_account_import
     JOIN linked_account ON linked_account.id = linked_account_import.linked_account_id
-ORDER BY
-    started_at DESC
-LIMIT
-    100;
+WHERE id = $1;

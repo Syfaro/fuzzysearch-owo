@@ -1433,6 +1433,8 @@ impl LinkedAccount {
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct LinkedAccountImport {
+    pub id: Uuid,
+    pub owner_id: Uuid,
     pub linked_account_id: Uuid,
     pub source_site: Site,
     pub started_at: chrono::DateTime<chrono::Utc>,
@@ -1482,6 +1484,8 @@ impl LinkedAccountImport {
     pub async fn admin_list(conn: &sqlx::PgPool) -> Result<Vec<Self>, Error> {
         sqlx::query_file!("queries/linked_account_import/admin_list.sql")
             .map(|row| LinkedAccountImport {
+                id: row.id,
+                owner_id: row.owner_id,
                 linked_account_id: row.linked_account_id,
                 source_site: row.source_site.parse().expect("unknown site in database"),
                 started_at: row.started_at,
@@ -1490,6 +1494,23 @@ impl LinkedAccountImport {
                 loaded_count: row.loaded_count.unwrap_or(0),
             })
             .fetch_all(conn)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn get(conn: &sqlx::PgPool, id: Uuid) -> Result<Option<Self>, Error> {
+        sqlx::query_file!("queries/linked_account_import/get.sql", id)
+            .map(|row| LinkedAccountImport {
+                id: row.id,
+                owner_id: row.owner_id,
+                linked_account_id: row.linked_account_id,
+                source_site: row.source_site.parse().expect("unknown site in database"),
+                started_at: row.started_at,
+                completed_at: row.completed_at,
+                expected_count: row.expected_count,
+                loaded_count: row.loaded_count.unwrap_or(0),
+            })
+            .fetch_optional(conn)
             .await
             .map_err(Into::into)
     }
