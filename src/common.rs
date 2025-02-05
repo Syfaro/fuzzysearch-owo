@@ -444,13 +444,13 @@ pub async fn handle_multipart_upload(
 
         let mut size = 0;
         while let Ok(Some(chunk)) = field.try_next().await {
+            size += chunk.len();
             if size > 25_000_000 {
                 return Err(Error::TooLarge(size));
             }
 
             file.write_all(&chunk).await?;
             hasher.update(&chunk);
-            size += chunk.len();
         }
 
         if size == 0 {
