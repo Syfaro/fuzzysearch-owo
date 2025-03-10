@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.19.8 — March 10th, 2025
+
+* Fixed an issue with imports from a changed site layout.
+* Internal updates.
+
 ## v0.19.7 — November 16th, 2024
 
 * Internal updates.
