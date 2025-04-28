@@ -6,7 +6,7 @@ use oauth2::{AccessToken, RefreshToken, TokenResponse};
 use uuid::Uuid;
 
 use crate::jobs::JobInitiatorExt;
-use crate::{common, Error};
+use crate::{Error, common};
 use crate::{jobs, models};
 
 mod bsky;
@@ -18,7 +18,7 @@ mod reddit;
 mod twitter;
 mod weasyl;
 
-pub use bsky::{ingest_bsky, BSky};
+pub use bsky::{BSky, ingest_bsky};
 pub use deviantart::DeviantArt;
 pub use furaffinity::FurAffinity;
 pub use patreon::Patreon;

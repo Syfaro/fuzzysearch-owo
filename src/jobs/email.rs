@@ -4,18 +4,19 @@ use askama::Template;
 use foxlib::jobs::{FaktoryForge, Job, JobExtra};
 use itertools::Itertools;
 use lettre::{
-    message::{
-        header::{Header, HeaderName, HeaderValue},
-        MultiPart,
-    },
     Address, AsyncTransport,
+    message::{
+        MultiPart,
+        header::{Header, HeaderName, HeaderValue},
+    },
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
+    AsUrl, Error,
     jobs::{self, JobContext, JobInitiator, JobInitiatorExt, Queue},
-    models, AsUrl, Error,
+    models,
 };
 
 #[derive(Debug)]

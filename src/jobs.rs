@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use uuid::Uuid;
 
-use crate::{api, common, models, site, Error};
+use crate::{Error, api, common, models, site};
 
 pub(crate) mod email;
 
@@ -579,7 +579,7 @@ pub async fn start_job_processing(ctx: JobContext) -> Result<(), Error> {
                 _ => {
                     return Err(Error::unknown_message(
                         "attempted to verify unsupported account",
-                    ))
+                    ));
                 }
             };
 

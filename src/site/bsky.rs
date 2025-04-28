@@ -2,7 +2,7 @@ use std::{borrow::Cow, num::NonZeroU64};
 
 use actix_http::StatusCode;
 use actix_session::Session;
-use actix_web::{get, post, services, web, HttpResponse};
+use actix_web::{HttpResponse, get, post, services, web};
 use askama::Template;
 use async_trait::async_trait;
 use foxlib::jobs::{FaktoryForge, FaktoryJob, FaktoryProducer, Job, JobExtra};
@@ -13,6 +13,7 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::{
+    AddFlash, AsUrl, Error, WrappedTemplate,
     api::ResolvedDidResult,
     common,
     jobs::{
@@ -21,9 +22,8 @@ use crate::{
     },
     models::{self, LinkedAccount, Site},
     site::{
-        reddit::limited_image_download, CollectedSite, SiteFromConfig, SiteServices, WatchedSite,
+        CollectedSite, SiteFromConfig, SiteServices, WatchedSite, reddit::limited_image_download,
     },
-    AddFlash, AsUrl, Error, WrappedTemplate,
 };
 
 pub struct BSky;

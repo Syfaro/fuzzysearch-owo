@@ -3,7 +3,7 @@ use std::{
     io::{Read, Seek},
 };
 
-use actix_web::{get, post, services, web, HttpResponse};
+use actix_web::{HttpResponse, get, post, services, web};
 use async_trait::async_trait;
 use egg_mode::entities::MediaType;
 use foxlib::jobs::{FaktoryForge, FaktoryJob, FaktoryProducer, Job, JobExtra, JobQueue};
@@ -13,9 +13,9 @@ use sha2::Digest;
 use uuid::Uuid;
 
 use crate::{
+    AddFlash, AsUrl, Config, Error,
     jobs::{self, JobContext, JobInitiator, JobInitiatorExt, Queue, SearchExistingSubmissionsJob},
     models::{self, LinkedAccount},
-    AddFlash, AsUrl, Config, Error,
 };
 
 use super::{CollectedSite, SiteFromConfig, SiteServices};

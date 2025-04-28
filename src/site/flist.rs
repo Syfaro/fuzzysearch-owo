@@ -8,7 +8,7 @@ use crate::jobs::{
     self, JobContext, JobInitiator, JobInitiatorExt, NatsNewImage, NewSubmissionJob, Queue,
 };
 use crate::site::{SiteFromConfig, WatchedSite};
-use crate::{models, Config, Error};
+use crate::{Config, Error, models};
 
 pub struct FList;
 

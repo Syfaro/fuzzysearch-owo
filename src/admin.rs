@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use actix_session::Session;
-use actix_web::{get, post, services, web, HttpResponse, Scope};
+use actix_web::{HttpResponse, Scope, get, post, services, web};
 use askama::Template;
 use async_trait::async_trait;
 use foxlib::jobs::{FaktoryProducer, JobQueue};
@@ -12,8 +12,9 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::{
+    AddFlash, AsUrl, Error, UrlUuid, WrappedTemplate,
     jobs::{JobInitiator, JobInitiatorExt, NewSubmissionJob},
-    models, AddFlash, AsUrl, Error, UrlUuid, WrappedTemplate,
+    models,
 };
 
 pub fn service() -> Scope {

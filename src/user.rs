@@ -1,23 +1,23 @@
 use std::collections::HashMap;
 
 use actix_session::Session;
-use actix_web::{get, post, services, web, HttpResponse, Scope};
+use actix_web::{HttpResponse, Scope, get, post, services, web};
 use askama::Template;
 use base64::Engine;
 use foxlib::jobs::FaktoryProducer;
 use futures::{FutureExt, TryFutureExt, TryStreamExt};
 use rand::Rng;
 use serde::Deserialize;
-use serde_with::{serde_as, NoneAsEmptyString};
+use serde_with::{NoneAsEmptyString, serde_as};
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use uuid::Uuid;
 
 use crate::{
+    AddFlash, AsUrl, ClientIpAddr, Error, Features, FlashStyle, UrlUuid, WrappedTemplate,
     auth::{self, FuzzySearchSessionToken},
     common,
     jobs::{self, JobInitiatorExt},
-    models::{self, setting, Site, UserSettingItem},
-    AddFlash, AsUrl, ClientIpAddr, Error, Features, FlashStyle, UrlUuid, WrappedTemplate,
+    models::{self, Site, UserSettingItem, setting},
 };
 
 #[derive(Template)]
@@ -277,9 +277,9 @@ async fn delete(
     models::User::delete(&conn, user.id).await?;
     session.purge();
 
-    return Ok(HttpResponse::Found()
+    Ok(HttpResponse::Found()
         .insert_header(("Location", request.url_for_static("index")?.as_str()))
-        .finish());
+        .finish())
 }
 
 #[get("/events")]

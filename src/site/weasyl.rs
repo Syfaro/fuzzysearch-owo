@@ -5,10 +5,10 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::{
+    Config, Error,
     jobs::{self, JobContext, JobInitiator, JobInitiatorExt, Queue, SearchExistingSubmissionsJob},
     models::{self, LinkedAccount},
     site::{CollectedSite, SiteFromConfig},
-    Config, Error,
 };
 
 #[derive(Debug, Deserialize, Serialize)]

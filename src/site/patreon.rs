@@ -1,4 +1,4 @@
-use actix_web::{get, post, services, web, HttpRequest, HttpResponse};
+use actix_web::{HttpRequest, HttpResponse, get, post, services, web};
 use async_trait::async_trait;
 use foxlib::jobs::{FaktoryForge, FaktoryProducer};
 use hmac::{Hmac, Mac};
@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::jobs::{JobContext, JobInitiatorExt};
 use crate::models::{LinkedAccount, Site};
 use crate::site::{CollectedSite, SiteFromConfig, SiteServices};
-use crate::{jobs, models, AsUrl, Error};
+use crate::{AsUrl, Error, jobs, models};
 
 pub struct Patreon {
     auth_url: AuthUrl,

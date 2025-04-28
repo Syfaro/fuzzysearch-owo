@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.19.9 — April 28th, 2025
+
+* Fixed an issue where common issues could cause performance issues.
+
 ## v0.19.8 — March 10th, 2025
 
 * Fixed an issue with imports from a changed site layout.

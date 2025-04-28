@@ -1,4 +1,4 @@
-use actix_web::{get, services, web, HttpResponse, Scope};
+use actix_web::{HttpResponse, Scope, get, services, web};
 use async_trait::async_trait;
 use foxlib::jobs::{FaktoryForge, FaktoryJob, FaktoryProducer, Job, JobExtra};
 use oauth2::{
@@ -15,7 +15,7 @@ use crate::jobs::{
 };
 use crate::models::{LinkedAccount, Site};
 use crate::site::{CollectedSite, SiteFromConfig, SiteServices};
-use crate::{models, AsUrl, Config, Error};
+use crate::{AsUrl, Config, Error, models};
 
 pub struct DeviantArt {
     auth_url: AuthUrl,

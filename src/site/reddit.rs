@@ -5,10 +5,11 @@ use sha2::Digest;
 
 use super::{SiteFromConfig, WatchedSite};
 use crate::{
+    Error,
     jobs::{
         self, JobContext, JobInitiator, JobInitiatorExt, NatsNewImage, NewSubmissionJob, Queue,
     },
-    models, Error,
+    models,
 };
 
 pub struct Reddit {}

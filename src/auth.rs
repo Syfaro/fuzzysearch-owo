@@ -6,9 +6,8 @@ use std::{collections::HashMap, future::Future};
 use actix_session::Session;
 use actix_web::web::Form;
 use actix_web::{
-    get, post, services,
+    FromRequest, HttpResponse, Scope, get, post, services,
     web::{self, Json},
-    FromRequest, HttpResponse, Scope,
 };
 use askama::Template;
 use chrono::TimeZone;
@@ -23,8 +22,9 @@ use uuid::Uuid;
 use zxcvbn::zxcvbn;
 
 use crate::{
+    AddFlash, ClientIpAddr, Error, Features, UrlUuid, WrappedTemplate,
     jobs::{self, JobInitiatorExt},
-    models, AddFlash, ClientIpAddr, Error, Features, UrlUuid, WrappedTemplate,
+    models,
 };
 
 pub trait FuzzySearchSessionToken {
@@ -341,9 +341,9 @@ async fn telegram(
     .await?;
     session.set_session_token(user_id, session_id)?;
 
-    return Ok(HttpResponse::Found()
+    Ok(HttpResponse::Found()
         .insert_header(("Location", request.url_for_static("user_home")?.as_str()))
-        .finish());
+        .finish())
 }
 
 #[post("/logout")]

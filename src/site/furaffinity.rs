@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::jobs::{JobContext, JobInitiator, JobInitiatorExt, Queue, SearchExistingSubmissionsJob};
 use crate::models::LinkedAccount;
 use crate::site::{CollectedSite, SiteFromConfig};
-use crate::{jobs, models, Config, Error};
+use crate::{Config, Error, jobs, models};
 
 pub struct FurAffinity {
     client: reqwest::Client,

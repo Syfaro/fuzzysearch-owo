@@ -17,6 +17,12 @@
         {% else %}
         {% endmatch %}
 
+        {% if media.noisy_media == Some(true) %}
+          <div class="notification is-warning">
+            No new notifications will be generated for this media because too many already exist.
+          </div>
+        {% endif %}
+
         <div class="block">
           {% match media.content_url %}
           {% when Some with (content_url) %}

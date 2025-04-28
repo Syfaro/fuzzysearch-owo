@@ -1,12 +1,12 @@
 use std::time::{Duration, Instant};
 
 use actix::{
-    fut::LocalBoxActorFuture, Actor, ActorContext, ActorFutureExt, ActorTryFutureExt, AsyncContext,
-    Handler, Message, StreamHandler, WrapFuture,
+    Actor, ActorContext, ActorFutureExt, ActorTryFutureExt, AsyncContext, Handler, Message,
+    StreamHandler, WrapFuture, fut::LocalBoxActorFuture,
 };
 use actix_http::ws::CloseCode;
 use actix_session::Session;
-use actix_web::{get, post, services, web, HttpRequest, HttpResponse, Scope};
+use actix_web::{HttpRequest, HttpResponse, Scope, get, post, services, web};
 use actix_web_actors::ws;
 use actix_web_httpauth::extractors::basic::BasicAuth;
 use foxlib::jobs::FaktoryProducer;
@@ -19,10 +19,11 @@ use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::{
+    Error, UrlUuid,
     auth::FuzzySearchSessionToken,
     common::{self, NATS_PREFIX},
     jobs::{JobInitiator, JobInitiatorExt, NewSubmissionJob},
-    models, Error, UrlUuid,
+    models,
 };
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
@@ -499,7 +500,13 @@ async fn flist_lookup(
 
 pub fn service() -> Scope {
     web::scope("/api")
-        .service(services![events, alert_dismiss, ingest_stats, upload, flist_lookup])
+        .service(services![
+            events,
+            alert_dismiss,
+            ingest_stats,
+            upload,
+            flist_lookup
+        ])
         .service(web::scope("/service").service(services![fuzzysearch]))
         .service(web::scope("/chunk").service(services![chunk_add]))
 }

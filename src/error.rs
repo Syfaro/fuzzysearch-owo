@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use actix_http::StatusCode;
-use actix_web::{http, HttpResponse, HttpResponseBuilder};
+use actix_web::{HttpResponse, HttpResponseBuilder, http};
 use askama::Template;
 use foxlib::jobs::ForgeError;
 

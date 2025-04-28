@@ -14,7 +14,7 @@ use sqlx::types::Json;
 use uuid::Uuid;
 use webauthn_rs_proto::CredentialID;
 
-use crate::{api, site, Error};
+use crate::{Error, api, site};
 use crate::{common, site::SiteFromConfig};
 
 pub struct User {
@@ -598,6 +598,7 @@ pub struct OwnedMediaItem {
 
     pub event_count: i32,
     pub last_event: Option<chrono::DateTime<chrono::Utc>>,
+    pub noisy_media: Option<bool>,
 
     pub accounts: Option<Json<Vec<OwnedMediaItemAccount>>>,
 }

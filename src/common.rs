@@ -9,9 +9,9 @@ use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use uuid::Uuid;
 
 use crate::{
-    jobs::{self, JobContext, JobInitiatorExt},
-    models::{self, setting, SimilarImage},
     Error,
+    jobs::{self, JobContext, JobInitiatorExt},
+    models::{self, SimilarImage, setting},
 };
 
 /// Maximum permitted download size for an image.

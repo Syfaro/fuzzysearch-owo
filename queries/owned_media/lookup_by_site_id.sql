@@ -9,6 +9,7 @@ SELECT
   thumb_url,
   event_count "event_count!",
   last_event,
+  noisy_media,
   accounts "accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>"
 FROM
   owned_media_item_accounts

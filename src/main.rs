@@ -1,11 +1,11 @@
 use std::{sync::Arc, time::Duration};
 
 use actix_session::{
+    SessionMiddleware,
     config::{PersistentSession, SessionLifecycle},
     storage::CookieSessionStore,
-    SessionMiddleware,
 };
-use actix_web::{cookie::Key, web, App, FromRequest, HttpResponse, HttpServer};
+use actix_web::{App, FromRequest, HttpResponse, HttpServer, cookie::Key, web};
 use askama::Template;
 use async_nats::ServerAddr;
 use async_trait::async_trait;
