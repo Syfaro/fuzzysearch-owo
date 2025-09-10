@@ -1,8 +1,12 @@
 # Changelog
 
+## v0.19.10 — September 10th, 2025
+
+* Fixed an issue preventing FurAffinity submissions from importing.
+
 ## v0.19.9 — April 28th, 2025
 
-* Fixed an issue where common issues could cause performance issues.
+* Fixed an issue where common images could cause performance issues.
 
 ## v0.19.8 — March 10th, 2025
 
