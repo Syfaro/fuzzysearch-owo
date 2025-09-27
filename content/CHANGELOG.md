@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.19.11 — September 26th, 2025
+
+* Fixed an issue preventing FurAffinity submissions from importing.
+
 ## v0.19.10 — September 10th, 2025
 
 * Fixed an issue preventing FurAffinity submissions from importing.
