@@ -2210,7 +2210,7 @@ checksum = "a06f77d526c1a601b7c4cdd98f54b5eaabffc14d5f2f0296febdc7f357c6d3ba"
 [[package]]
 name = "furaffinity-rs"
 version = "0.1.0"
-source = "git+https://github.com/Syfaro/furaffinity-rs.git#ba71e900b0db9d15b3f08fa4e0cb347ee4f316f8"
+source = "git+https://github.com/Syfaro/furaffinity-rs.git#3795efceb8ec7de9e879c50064e6d16f0dba8aea"
 dependencies = [
  "chrono",
  "image",
@@ -3074,7 +3074,7 @@ version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ea4eac6fc4f64ed363d5c210732b747bfa5ddd8a25ac347d887f298c3a70b49"
 dependencies = [
- "base64 0.10.1",
+ "base64 0.13.1",
  "image",
  "rustdct",
  "serde",
