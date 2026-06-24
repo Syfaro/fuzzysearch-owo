@@ -1,6 +1,6 @@
 [package]
 name = "fuzzysearch-owo"
-version = "0.19.13"
+version = "0.19.14"
 edition = "2024"
 authors = ["Syfaro <syfaro@huefox.com>"]
 publish = false
