@@ -1,10 +1,11 @@
-use std::{borrow::Cow, num::NonZeroU64};
+use std::{borrow::Cow, num::NonZeroU64, str::FromStr};
 
 use actix_http::StatusCode;
 use actix_session::Session;
 use actix_web::{HttpResponse, get, post, services, web};
 use askama::Template;
 use async_trait::async_trait;
+use cid::Cid;
 use foxlib::jobs::{FaktoryForge, FaktoryJob, FaktoryProducer, Job, JobExtra};
 use futures::TryStreamExt;
 use serde::{Deserialize, Serialize};
@@ -630,7 +631,9 @@ async fn load_bluesky_post(
 
         let created_at = parse_time(&payload.data.created_at);
 
-        if !models::BlueskyPost::create_post(&mut tx, &payload.repo, rkey, created_at).await? {
+        let repo_id = models::BlueskyRepo::get_or_create(&mut tx, &payload.repo).await?;
+
+        if !models::BlueskyPost::create_post(&mut tx, repo_id, rkey, created_at).await? {
             tracing::debug!("post already existed, skipping");
             return Ok(());
         }
@@ -639,6 +642,14 @@ async fn load_bluesky_post(
             let image_cid = match image.image {
                 File::Blob { link, .. } => link.link,
                 File::Cid { cid, .. } => cid,
+            };
+
+            let blob_cid = match Cid::from_str(&image_cid) {
+                Ok(cid) => cid.to_bytes(),
+                Err(err) => {
+                    tracing::warn!("could not parse bluesky cid {image_cid}: {err:?}");
+                    continue;
+                }
             };
 
             let url = format!(
@@ -672,9 +683,9 @@ async fn load_bluesky_post(
 
             models::BlueskyImage::create_image(
                 &mut tx,
-                &payload.repo,
+                repo_id,
                 rkey,
-                &image_cid,
+                &blob_cid,
                 data.len() as i64,
                 &sha256,
                 hash.map(i64::from_be_bytes),

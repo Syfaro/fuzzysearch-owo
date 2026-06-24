@@ -34,42 +34,6 @@
     },
     "query": "UPDATE\n    user_account\nSET\n    reset_token = $2\nWHERE\n    id = $1;\n"
   },
-  "0122e45e4ee1370147704d1367e18caf126428fcca031b534d9d12f54dd6129c": {
-    "describe": {
-      "columns": [
-        {
-          "name": "name",
-          "ordinal": 0,
-          "type_info": "Text"
-        },
-        {
-          "name": "last_updated",
-          "ordinal": 1,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "last_page",
-          "ordinal": 2,
-          "type_info": "Text"
-        },
-        {
-          "name": "disabled",
-          "ordinal": 3,
-          "type_info": "Bool"
-        }
-      ],
-      "nullable": [
-        false,
-        true,
-        true,
-        false
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "SELECT\n    *\nFROM\n    reddit_subreddit\nORDER BY\n    disabled ASC,\n    last_updated ASC NULLS FIRST;\n"
-  },
   "02112718f91a47dc651bd0dee83be59b04afb8704651b863b717bf44f9b90ab0": {
     "describe": {
       "columns": [
@@ -255,19 +219,6 @@
     },
     "query": "SELECT\n    id \"id!\",\n    owner_id \"owner_id!\",\n    perceptual_hash,\n    sha256_hash \"sha256_hash!: Sha256Hash\",\n    last_modified \"last_modified!\",\n    content_url,\n    content_size,\n    thumb_url,\n    event_count \"event_count!\",\n    last_event,\n    noisy_media,\n    accounts \"accounts: sqlx::types::Json<Vec<OwnedMediaItemAccount>>\"\nFROM\n    owned_media_item_accounts\nWHERE\n    perceptual_hash <@ ($1, $2)\n    AND noisy_media IS NOT TRUE;\n"
   },
-  "03625e2a838681ba176381cb2e22e605ff90d34b93e12fd0424a27a867d16c2f": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Text",
-          "Text"
-        ]
-      }
-    },
-    "query": "INSERT INTO\n    bluesky_post (repo, rkey, deleted_at)\nVALUES\n    ($1, $2, current_timestamp) ON CONFLICT (repo, rkey) DO\nUPDATE\nSET\n    deleted_at = current_timestamp\n"
-  },
   "03876c0d60e8b248fdb0fa80069f3303eed779cde1c5d3398b997107955a0241": {
     "describe": {
       "columns": [
@@ -437,7 +388,76 @@
     },
     "query": "SELECT\n    id,\n    linked_account.owner_id,\n    linked_account_id,\n    linked_account.source_site,\n    started_at,\n    completed_at,\n    expected_count,\n    cardinality(loaded_ids) loaded_count\nFROM\n    linked_account_import\n    JOIN linked_account ON linked_account.id = linked_account_import.linked_account_id\nWHERE id = $1;\n"
   },
-  "07deca709df2815ed2052b0669a11d589d5133a8d499cc1aef576b0f2b708972": {
+  "0827cd1e9894f83105cc7b5f26bc62d310719cef4b0b734fe8bd8d13c3008434": {
+    "describe": {
+      "columns": [
+        {
+          "name": "name",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "last_updated",
+          "ordinal": 1,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "last_page",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "disabled",
+          "ordinal": 3,
+          "type_info": "Bool"
+        }
+      ],
+      "nullable": [
+        false,
+        true,
+        true,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "SELECT\n    name,\n    last_updated,\n    last_page,\n    disabled\nFROM\n    reddit_subreddit\nWHERE\n    name = $1;\n"
+  },
+  "08f447094f7b532619e63958cdec809f9459c4dd4d83f96abe9b2585f6d28627": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text",
+          "Text"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    twitter_auth (owner_id, request_key, request_secret)\nVALUES\n    ($1, $2, $3);\n"
+  },
+  "0a66e34b51fa3c4017e42b82db5ce24d1b892e682a133495f0f383d52ac44c32": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4",
+          "Text",
+          "Bytea",
+          "Int8",
+          "Bytea",
+          "Int8"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    bluesky_image (\n        repo_id,\n        post_rkey,\n        blob_cid,\n        size,\n        sha256,\n        perceptual_hash\n    )\nVALUES\n    ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING;\n"
+  },
+  "0abb8a06bd46438d1cc05d9307ee7bd299283f70c8230436b94845c6edaf9929": {
     "describe": {
       "columns": [
         {
@@ -471,21 +491,7 @@
         "Left": []
       }
     },
-    "query": "SELECT\n    *\nFROM\n    reddit_subreddit\nWHERE\n    disabled = false\n    AND (\n        last_updated IS NULL\n        OR last_updated < now() + interval '15 minutes'\n    );\n"
-  },
-  "08f447094f7b532619e63958cdec809f9459c4dd4d83f96abe9b2585f6d28627": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Text",
-          "Text"
-        ]
-      }
-    },
-    "query": "INSERT INTO\n    twitter_auth (owner_id, request_key, request_secret)\nVALUES\n    ($1, $2, $3);\n"
+    "query": "SELECT\n    name,\n    last_updated,\n    last_page,\n    disabled\nFROM\n    reddit_subreddit\nWHERE\n    disabled = false\n    AND (\n        last_updated IS NULL\n        OR last_updated < now() + interval '15 minutes'\n    );\n"
   },
   "0af8022e9c61ba897ed78301a4eeb1d0ac5908fa0e26837d6aa881f90304aff8": {
     "describe": {
@@ -869,6 +875,42 @@
       }
     },
     "query": "INSERT INTO\n    site_alert_dismiss (site_alert_id, user_account_id)\nVALUES\n    ($1, $2) ON CONFLICT DO NOTHING;\n"
+  },
+  "25a9dcebcc46a474eec9abdd968843e8a9bbf17408897e404a5674c98147d393": {
+    "describe": {
+      "columns": [
+        {
+          "name": "name",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "last_updated",
+          "ordinal": 1,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "last_page",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "disabled",
+          "ordinal": 3,
+          "type_info": "Bool"
+        }
+      ],
+      "nullable": [
+        false,
+        true,
+        true,
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "SELECT\n    name,\n    last_updated,\n    last_page,\n    disabled\nFROM\n    reddit_subreddit\nORDER BY\n    disabled ASC,\n    last_updated ASC NULLS FIRST;\n"
   },
   "27b076d619fbb181aec8f25683aa93a879cf44b1a420e140d1132c974afefd22": {
     "describe": {
@@ -1476,6 +1518,63 @@
     },
     "query": "SELECT\n    *\nFROM\n    user_account\nWHERE\n    id = $1\n    AND rss_token = $2;\n"
   },
+  "4b8d2478887a8167657be7815990e8f580dd166eef7b5a07d06c19fa559bee6f": {
+    "describe": {
+      "columns": [
+        {
+          "name": "created_at",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "repo!",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "post_rkey",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "blob_cid",
+          "ordinal": 3,
+          "type_info": "Bytea"
+        },
+        {
+          "name": "size",
+          "ordinal": 4,
+          "type_info": "Int8"
+        },
+        {
+          "name": "sha256",
+          "ordinal": 5,
+          "type_info": "Bytea"
+        },
+        {
+          "name": "perceptual_hash",
+          "ordinal": 6,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Int8",
+          "Int8"
+        ]
+      }
+    },
+    "query": "SELECT\n    bluesky_post.created_at,\n    bluesky_repo.did AS \"repo!\",\n    bluesky_image.post_rkey,\n    bluesky_image.blob_cid,\n    bluesky_image.size,\n    bluesky_image.sha256,\n    bluesky_image.perceptual_hash\nFROM\n    bluesky_image\n    JOIN bluesky_repo ON bluesky_repo.id = bluesky_image.repo_id\n    JOIN bluesky_post ON bluesky_post.repo_id = bluesky_image.repo_id\n    AND bluesky_post.rkey = bluesky_image.post_rkey\nWHERE\n    perceptual_hash <@ ($1, $2)\n    AND deleted_at IS NULL;\n"
+  },
   "4fd43722b12b39fe11f17e233fee524ea0eec6b865ae9ab7e4abb75897bd64d1": {
     "describe": {
       "columns": [
@@ -1798,63 +1897,6 @@
     },
     "query": "DELETE FROM\n    user_session\nWHERE\n    last_used < current_timestamp - interval '30 days';\n"
   },
-  "61379e0464f4576a6958754033b3997dc844d8e3932f7f2c0d83fb6d7c45a913": {
-    "describe": {
-      "columns": [
-        {
-          "name": "created_at",
-          "ordinal": 0,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "repo",
-          "ordinal": 1,
-          "type_info": "Text"
-        },
-        {
-          "name": "post_rkey",
-          "ordinal": 2,
-          "type_info": "Text"
-        },
-        {
-          "name": "blob_cid",
-          "ordinal": 3,
-          "type_info": "Text"
-        },
-        {
-          "name": "size",
-          "ordinal": 4,
-          "type_info": "Int8"
-        },
-        {
-          "name": "sha256",
-          "ordinal": 5,
-          "type_info": "Bytea"
-        },
-        {
-          "name": "perceptual_hash",
-          "ordinal": 6,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        true,
-        false,
-        false,
-        false,
-        false,
-        false,
-        true
-      ],
-      "parameters": {
-        "Left": [
-          "Int8",
-          "Int8"
-        ]
-      }
-    },
-    "query": "SELECT\n    bluesky_post.created_at,\n    bluesky_image.*\nFROM\n    bluesky_image\n    JOIN bluesky_post ON bluesky_post.repo = bluesky_image.repo\n    AND bluesky_post.rkey = bluesky_image.post_rkey\nWHERE\n    perceptual_hash <@ ($1, $2)\n    AND deleted_at IS NULL;\n"
-  },
   "6290db5d27179ff6aec17e60a11c0ca7210931abf147e5fbcf2dfa17fd2315cf": {
     "describe": {
       "columns": [],
@@ -2016,6 +2058,28 @@
       }
     },
     "query": "SELECT\n    *\nFROM\n    user_account\nWHERE\n    id = $1\n    AND api_token = $2;\n"
+  },
+  "6c2668e38dbec5179913d29584fbf782e9b3eca285260e87a17a2347092c0f91": {
+    "describe": {
+      "columns": [
+        {
+          "name": "repo_id",
+          "ordinal": 0,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Int4",
+          "Text",
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    bluesky_post (repo_id, rkey, created_at)\nVALUES\n    ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING repo_id;\n"
   },
   "747de7a40d550eff40fab9a7fc525f356b0544119de416fb50be2d838d0c2adc": {
     "describe": {
@@ -2595,61 +2659,6 @@
     },
     "query": "UPDATE\n    user_session\nSET\n    last_used = current_timestamp\nWHERE\n    user_id = $1\n    AND id = $2 RETURNING user_id;\n"
   },
-  "8bc70522b20fac68bb26aa42e5f8f7bf9da678ddfcedf9dfdf416df61ca3be38": {
-    "describe": {
-      "columns": [
-        {
-          "name": "name",
-          "ordinal": 0,
-          "type_info": "Text"
-        },
-        {
-          "name": "last_updated",
-          "ordinal": 1,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "last_page",
-          "ordinal": 2,
-          "type_info": "Text"
-        },
-        {
-          "name": "disabled",
-          "ordinal": 3,
-          "type_info": "Bool"
-        }
-      ],
-      "nullable": [
-        false,
-        true,
-        true,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      }
-    },
-    "query": "SELECT\n    *\nFROM\n    reddit_subreddit\nWHERE\n    name = $1;\n"
-  },
-  "8e92b26285704defe89be67c7a7c236f01d7beb5ee9ffad0863755795ce2009e": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Text",
-          "Text",
-          "Text",
-          "Int8",
-          "Bytea",
-          "Int8"
-        ]
-      }
-    },
-    "query": "INSERT INTO\n    bluesky_image (\n        repo,\n        post_rkey,\n        blob_cid,\n        size,\n        sha256,\n        perceptual_hash\n    )\nVALUES\n    ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING;\n"
-  },
   "8e9aeaeccff5b95e066c33392f85c22522109215ebdd2f5fefcc35b26121f795": {
     "describe": {
       "columns": [],
@@ -2741,28 +2750,6 @@
       }
     },
     "query": "UPDATE linked_account SET disabled = $2 WHERE source_site = $1"
-  },
-  "928d99b173e42f8f4947f9c356641234dc9291e6eaca1ba9add52049b5f17884": {
-    "describe": {
-      "columns": [
-        {
-          "name": "repo",
-          "ordinal": 0,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Text",
-          "Text",
-          "Timestamptz"
-        ]
-      }
-    },
-    "query": "INSERT INTO\n    bluesky_post (repo, rkey, created_at)\nVALUES\n    ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING repo;\n"
   },
   "9499afaf61b5a24ace5360d39e21234c56d9c8daaf4ae6e2bb1fd10f30718802": {
     "describe": {
@@ -3243,6 +3230,19 @@
     },
     "query": "SELECT\n    exists(\n        SELECT\n            1\n        FROM\n            reddit_post\n        WHERE\n            fullname = $1\n    ) \"exists!\";\n"
   },
+  "b1d5fe70d1aff024e26de37bedb220686ac9d75867e0bee1abc642507f2701a2": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4",
+          "Text"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    bluesky_post (repo_id, rkey, deleted_at)\nVALUES\n    ($1, $2, current_timestamp) ON CONFLICT (repo_id, rkey) DO\nUPDATE\nSET\n    deleted_at = current_timestamp\n"
+  },
   "b3d64bd76da855257520083ad5c97123dabc1a96eed4f9c05fb69cd0539a49f9": {
     "describe": {
       "columns": [
@@ -3260,6 +3260,26 @@
       }
     },
     "query": "SELECT id FROM linked_account;\n"
+  },
+  "b54e9801301b3fb8698906258d439224580cb75cabddcd30573011faa4d49213": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id!",
+          "ordinal": 0,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "WITH inserted AS (\n    INSERT INTO\n        bluesky_repo (did)\n    SELECT\n        $1\n    WHERE\n        NOT EXISTS (\n            SELECT\n                1\n            FROM\n                bluesky_repo\n            WHERE\n                did = $1\n        ) ON CONFLICT (did) DO NOTHING RETURNING id\n)\nSELECT\n    id AS \"id!\"\nFROM\n    inserted\nUNION ALL\nSELECT\n    id\nFROM\n    bluesky_repo\nWHERE\n    did = $1\nLIMIT\n    1;\n"
   },
   "b5850dfd13305aebe88fd1f4ef69dd59cf831dfc96c228ee2bfed7139f5d9307": {
     "describe": {

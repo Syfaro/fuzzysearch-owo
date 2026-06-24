@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.19.14 — June 24th, 2026
+
+* Internal updates.
+
 ## v0.19.13 — May 24th, 2026
 
 * Fixed an issue preventing FurAffinity submissions from importing.

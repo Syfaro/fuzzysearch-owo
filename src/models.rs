@@ -5,6 +5,7 @@ use std::{
 };
 
 use argonautica::{Hasher, Verifier};
+use cid::Cid;
 use futures::{StreamExt, TryStreamExt};
 use image::GenericImageView;
 use rusoto_s3::S3;
@@ -2172,17 +2173,32 @@ impl RedditPost {
     }
 }
 
+pub struct BlueskyRepo;
+
+impl BlueskyRepo {
+    pub async fn get_or_create<'a, E>(executor: E, did: &str) -> Result<i32, Error>
+    where
+        E: sqlx::Executor<'a, Database = sqlx::Postgres>,
+    {
+        let id = sqlx::query_file_scalar!("queries/bluesky/get_or_create_repo.sql", did)
+            .fetch_one(executor)
+            .await?;
+
+        Ok(id)
+    }
+}
+
 pub struct BlueskyPost;
 
 impl BlueskyPost {
     pub async fn create_post(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-        repo: &str,
+        repo_id: i32,
         rkey: &str,
         created_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<bool, Error> {
         let post =
-            sqlx::query_file_scalar!("queries/bluesky/create_post.sql", repo, rkey, created_at)
+            sqlx::query_file_scalar!("queries/bluesky/create_post.sql", repo_id, rkey, created_at)
                 .fetch_optional(tx)
                 .await?;
 
@@ -2190,7 +2206,8 @@ impl BlueskyPost {
     }
 
     pub async fn delete_post(conn: &sqlx::PgPool, repo: &str, rkey: &str) -> Result<(), Error> {
-        sqlx::query_file!("queries/bluesky/delete_post.sql", repo, rkey)
+        let repo_id = BlueskyRepo::get_or_create(conn, repo).await?;
+        sqlx::query_file!("queries/bluesky/delete_post.sql", repo_id, rkey)
             .execute(conn)
             .await?;
         Ok(())
@@ -2212,18 +2229,18 @@ pub struct BlueskyImage {
 impl BlueskyImage {
     pub async fn create_image(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-        repo: &str,
+        repo_id: i32,
         rkey: &str,
-        file_cid: &str,
+        blob_cid: &[u8],
         size: i64,
         sha256: &[u8],
         perceptual_gradient: Option<i64>,
     ) -> Result<(), Error> {
         sqlx::query_file!(
             "queries/bluesky/create_image.sql",
-            repo,
+            repo_id,
             rkey,
-            file_cid,
+            blob_cid,
             size,
             sha256,
             perceptual_gradient
@@ -2241,7 +2258,12 @@ impl BlueskyImage {
             .map(|row| Self {
                 repo: row.repo,
                 post_rkey: row.post_rkey,
-                blob_cid: row.blob_cid,
+                blob_cid: Cid::try_from(row.blob_cid.as_slice())
+                    .map(|cid| cid.to_string())
+                    .unwrap_or_else(|err| {
+                        tracing::warn!("invalid blob_cid bytes in db: {err:?}");
+                        String::new()
+                    }),
                 created_at: row.created_at,
                 size: row.size,
                 sha256: row.sha256.try_into().expect("sha256 was wrong length"),

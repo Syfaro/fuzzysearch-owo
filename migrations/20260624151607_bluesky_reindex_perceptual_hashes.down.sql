@@ -1,0 +1,1 @@
+DROP INDEX bluesky_image_perceptual_hash_idx;
