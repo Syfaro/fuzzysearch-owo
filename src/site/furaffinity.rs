@@ -38,20 +38,25 @@ impl FurAffinity {
         Ok(Self { client })
     }
 
-    async fn discover_submissions(&self, username: &str) -> Result<HashSet<i32>, Error> {
-        let (gallery_ids, scrap_ids) = tokio::try_join!(
-            self.discover_submissions_page(username, "gallery"),
-            self.discover_submissions_page(username, "scraps")
-        )?;
+    async fn discover_submissions(
+        &self,
+        ctx: &JobContext,
+        username: &str,
+    ) -> Result<HashSet<i32>, Error> {
+        let mut ids = self
+            .discover_submissions_page(ctx, username, "gallery")
+            .await?;
+        ids.extend(
+            self.discover_submissions_page(ctx, username, "scraps")
+                .await?,
+        );
 
-        Ok(gallery_ids
-            .into_iter()
-            .chain(scrap_ids.into_iter())
-            .collect())
+        Ok(ids)
     }
 
     async fn discover_submissions_page(
         &self,
+        ctx: &JobContext,
         username: &str,
         collection: &str,
     ) -> Result<HashSet<i32>, Error> {
@@ -64,6 +69,7 @@ impl FurAffinity {
         loop {
             tracing::info!(collection, page, "loading page");
 
+            ctx.fa_limiter.until_ready().await;
             let body = self
                 .client
                 .get(format!(
@@ -116,6 +122,7 @@ impl CollectedSite for FurAffinity {
 
     fn register_jobs(&self, forge: &mut FaktoryForge<jobs::JobContext, Error>) {
         AddSubmissionFurAffinityJob::register(forge, add_submission_furaffinity);
+        DiscoverFurAffinityJob::register(forge, discover_furaffinity);
         RefreshFurAffinityJob::register(forge, refresh_furaffinity);
     }
 
@@ -130,36 +137,86 @@ impl CollectedSite for FurAffinity {
         )
         .await?;
 
-        let ids = self.discover_submissions(&account.username).await?;
-
-        let known = ids.len() as i32;
-        tracing::info!("discovered {} submissions", known);
-
-        super::set_loading_submissions(
-            &ctx.conn,
-            &ctx.nats,
-            account.owner_id,
-            account.id,
-            ids.iter(),
-        )
-        .await?;
-
-        super::queue_new_submissions(
-            &ctx.producer,
-            account.owner_id,
-            account.id,
-            ids,
-            |user_id, account_id, id| AddSubmissionFurAffinityJob {
-                user_id,
-                account_id,
-                sub_id: id,
-                was_import: true,
-            },
-        )
-        .await?;
+        ctx.producer
+            .enqueue_job(
+                DiscoverFurAffinityJob {
+                    account_id: account.id,
+                }
+                .initiated_by(JobInitiator::user(account.owner_id)),
+            )
+            .await?;
 
         Ok(())
     }
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct DiscoverFurAffinityJob {
+    pub account_id: Uuid,
+}
+
+impl Job for DiscoverFurAffinityJob {
+    const NAME: &'static str = "discover_furaffinity";
+    type Data = Self;
+    type Queue = Queue;
+
+    fn queue(&self) -> Self::Queue {
+        Queue::FurAffinity
+    }
+
+    fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
+        Ok(None)
+    }
+
+    fn args(self) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+        Ok(vec![serde_json::to_value(self)?])
+    }
+
+    fn deserialize(mut args: Vec<serde_json::Value>) -> Result<Self::Data, serde_json::Error> {
+        serde_json::from_value(args.remove(0))
+    }
+}
+
+#[tracing::instrument(skip(ctx, job), fields(job_id = job.id()))]
+async fn discover_furaffinity(
+    ctx: JobContext,
+    job: FaktoryJob,
+    DiscoverFurAffinityJob { account_id }: DiscoverFurAffinityJob,
+) -> Result<(), Error> {
+    let account = match models::LinkedAccount::lookup_by_id(&ctx.conn, account_id).await? {
+        Some(account) => account,
+        None => return Err(Error::Missing),
+    };
+
+    let fa = FurAffinity::site_from_config(&ctx.config).await?;
+    let ids = fa.discover_submissions(&ctx, &account.username).await?;
+
+    tracing::info!("discovered {} submissions", ids.len());
+
+    super::set_loading_submissions(
+        &ctx.conn,
+        &ctx.nats,
+        account.owner_id,
+        account.id,
+        ids.iter(),
+    )
+    .await?;
+
+    super::queue_new_submissions(
+        &ctx.producer,
+        account.owner_id,
+        account.id,
+        ids,
+        |user_id, account_id, id| AddSubmissionFurAffinityJob {
+            user_id,
+            account_id,
+            sub_id: id,
+            was_import: true,
+        },
+    )
+    .await?;
+
+    Ok(())
 }
 
 #[derive(Deserialize, Serialize)]
@@ -176,7 +233,7 @@ impl Job for AddSubmissionFurAffinityJob {
     type Queue = Queue;
 
     fn queue(&self) -> Self::Queue {
-        Queue::OutgoingBulk
+        Queue::FurAffinity
     }
 
     fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
@@ -246,6 +303,7 @@ async fn process_submission(
         return Ok(());
     }
 
+    ctx.fa_limiter.until_ready().await;
     let sub = fa
         .get_submission(sub_id)
         .await
@@ -313,7 +371,7 @@ impl Job for RefreshFurAffinityJob {
     type Queue = Queue;
 
     fn queue(&self) -> Self::Queue {
-        Queue::Outgoing
+        Queue::FurAffinity
     }
 
     fn extra(&self) -> Result<Option<JobExtra>, serde_json::Error> {
@@ -346,7 +404,7 @@ async fn refresh_furaffinity(
     }
 
     let fa = FurAffinity::site_from_config(&ctx.config).await?;
-    let submission_ids = fa.discover_submissions(&account.username).await?;
+    let submission_ids = fa.discover_submissions(&ctx, &account.username).await?;
 
     super::queue_new_submissions(
         &ctx.producer,

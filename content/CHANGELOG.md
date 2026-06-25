@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.19.15 — June 25th, 2026
+
+* Internal updates.
+
 ## v0.19.14 — June 24th, 2026
 
 * Internal updates.

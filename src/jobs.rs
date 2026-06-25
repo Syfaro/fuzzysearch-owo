@@ -14,17 +14,20 @@ use crate::{Error, api, common, models, site};
 
 pub(crate) mod email;
 
-#[derive(Clone, Debug, clap::ValueEnum)]
+#[derive(Clone, Copy, Debug, clap::ValueEnum, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Queue {
     Core,
     Outgoing,
     OutgoingBulk,
+    FurAffinity,
 }
 
 impl Queue {
     fn label(&self) -> Option<&'static str> {
         match self {
             Self::Core => None,
+            Self::FurAffinity => Some("furaffinity"),
             Self::Outgoing | Self::OutgoingBulk => Some("outgoing"),
         }
     }
@@ -36,6 +39,7 @@ impl JobQueue for Queue {
             Self::Core => "fuzzysearch_owo_core".into(),
             Self::Outgoing => "fuzzysearch_owo_outgoing".into(),
             Self::OutgoingBulk => "fuzzysearch_owo_bulk".into(),
+            Self::FurAffinity => "fuzzysearch_owo_furaffinity".into(),
         }
     }
 }
@@ -399,6 +403,8 @@ impl Display for JobInitiator {
     }
 }
 
+pub type FaRateLimiter = governor::DefaultDirectRateLimiter;
+
 #[derive(Clone)]
 pub struct JobContext {
     pub producer: FaktoryProducer,
@@ -409,6 +415,7 @@ pub struct JobContext {
     pub config: Arc<crate::Config>,
     pub worker_config: Arc<crate::WorkerConfig>,
     pub client: reqwest::Client,
+    pub fa_limiter: Arc<FaRateLimiter>,
     pub telegram: Arc<tgbotapi::Telegram>,
     pub nats: async_nats::Client,
 }

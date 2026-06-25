@@ -68,6 +68,14 @@ pub struct WorkerConfig {
     /// Queues to fetch jobs from.
     #[clap(long, env("FAKTORY_QUEUES"), value_enum, use_value_delimiter = true)]
     pub faktory_queues: Vec<jobs::Queue>,
+    /// Whether to run the Bluesky ingester on this worker.
+    #[clap(
+        long,
+        env("INGEST_BSKY"),
+        default_value_t = true,
+        action = clap::ArgAction::Set
+    )]
+    pub ingest_bsky: bool,
 }
 
 #[derive(Clone, clap::Subcommand)]
@@ -608,6 +616,10 @@ async fn main() {
         .build()
         .expect("could not create http client");
 
+    let fa_limiter = std::sync::Arc::new(governor::RateLimiter::direct(
+        governor::Quota::per_second(std::num::NonZeroU32::new(1).unwrap()),
+    ));
+
     let producer = FaktoryProducer::connect(Some(config.faktory_host.clone()))
         .await
         .expect("could not connect to faktory");
@@ -667,11 +679,16 @@ async fn main() {
                 config: std::sync::Arc::new(config.clone()),
                 worker_config: std::sync::Arc::new(worker_config.clone()),
                 client,
+                fa_limiter,
                 telegram,
                 nats,
             };
 
-            tokio::spawn(crate::site::ingest_bsky(ctx.clone()));
+            if worker_config.ingest_bsky {
+                tokio::spawn(crate::site::ingest_bsky(ctx.clone()));
+            } else {
+                tracing::info!("bluesky ingester disabled on this worker");
+            }
 
             jobs::start_job_processing(ctx)
                 .await

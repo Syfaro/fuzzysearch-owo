@@ -43,6 +43,20 @@
     </div>
 
     <div class="field">
+      <label class="label" for="job-queue">Queue</label>
+      <div class="control">
+        <div class="select">
+          <select name="queue" id="job-queue">
+            <option value="core">Core</option>
+            <option value="outgoing">Outgoing</option>
+            <option value="outgoing-bulk">Outgoing Bulk</option>
+            <option value="fur-affinity">FurAffinity</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
       <label class="label" for="job-type">Inject Type</label>
       <div class="control">
         <div class="select">

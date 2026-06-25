@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::{
     AddFlash, AsUrl, Error, UrlUuid, WrappedTemplate,
-    jobs::{JobInitiator, JobInitiatorExt, NewSubmissionJob},
+    jobs::{IncomingSubmission, JobInitiator, JobInitiatorExt, NewSubmissionJob, Queue},
     models,
 };
 
@@ -295,7 +295,7 @@ async fn inject_post(
     let hash = hasher.hash_image(&im);
     let hash = hash.as_bytes().try_into().expect("hash was wrong length");
 
-    let sub = crate::jobs::IncomingSubmission {
+    let sub = IncomingSubmission {
         site: models::Site::InternalTesting,
         site_id: generate_id(),
         posted_by: if !form.posted_by.is_empty() {
@@ -416,6 +416,8 @@ struct ManualJobForm {
     job_type: ManualJobType,
     name: String,
     data: String,
+    #[serde(default)]
+    queue: Option<Queue>,
 }
 
 #[post("/jobs/manual", name = "admin_job_manual")]
@@ -486,6 +488,8 @@ async fn job_manual(
     .into_iter()
     .collect();
 
+    let queue = form.queue.unwrap_or(Queue::Core);
+
     for payload in job_payloads {
         let args = match payload {
             Some(payload) => vec![payload],
@@ -493,7 +497,7 @@ async fn job_manual(
         };
 
         let mut job = foxlib::jobs::FaktoryJob::new(form.name.clone(), args);
-        job.queue = crate::jobs::Queue::Core.queue_name().to_string();
+        job.queue = queue.queue_name().to_string();
         job.custom.clone_from(&custom);
 
         faktory.enqueue_existing_job(job).await?;
