@@ -9,6 +9,7 @@ publish = false
 allow-branch = ["main"]
 sign-tag = true
 pre-release-hook = "tools/pre-release-check.sh"
+pre-release-commit-message = "chore: release"
 
 [features]
 env = ["dotenv"]
