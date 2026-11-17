@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.19.16 — November 17th, 2026
+
+* Fixed an issue preventing some Bluesky images from being processed.
+* Fixed an issue preventing F-List data from being updated.
+
 ## v0.19.15 — June 25th, 2026
 
 * Internal updates.
