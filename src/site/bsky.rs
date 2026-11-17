@@ -114,16 +114,8 @@ async fn import_submission(
 
     let (_, rkey) = post.uri.rsplit_once('/').ok_or(Error::Missing)?;
 
-    for image in post
-        .record
-        .embed
-        .and_then(|embed| match embed {
-            PostEmbed::Images { images } => Some(images),
-            _ => None,
-        })
-        .unwrap_or_default()
-    {
-        let image_cid = match image.image {
+    for image in post.record.embed.map(PostEmbed::images).unwrap_or_default() {
+        let image_cid = match image {
             File::Blob { link, .. } => link.link,
             File::Cid { cid, .. } => cid,
         };
@@ -546,6 +538,47 @@ pub struct Post {
 pub enum PostEmbed {
     #[serde(rename = "app.bsky.embed.images")]
     Images { images: Vec<PostImage> },
+    #[serde(rename = "app.bsky.embed.gallery")]
+    Gallery { items: Vec<GalleryItem> },
+    #[serde(rename = "app.bsky.embed.recordWithMedia")]
+    RecordWithMedia { media: Box<PostEmbed> },
+    #[serde(other)]
+    Other,
+}
+
+impl PostEmbed {
+    fn images(self) -> Vec<File> {
+        match self {
+            Self::Images { images } => images.into_iter().map(|image| image.image).collect(),
+            Self::Gallery { items } => items
+                .into_iter()
+                .filter_map(|item| match item {
+                    GalleryItem::Image { image } => Some(image),
+                    GalleryItem::Other => None,
+                })
+                .collect(),
+            Self::RecordWithMedia { media } => media.images(),
+            Self::Other => Vec::new(),
+        }
+    }
+
+    fn has_images(&self) -> bool {
+        match self {
+            Self::Images { images } => !images.is_empty(),
+            Self::Gallery { items } => items
+                .iter()
+                .any(|item| matches!(item, GalleryItem::Image { .. })),
+            Self::RecordWithMedia { media } => media.has_images(),
+            Self::Other => false,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(tag = "$type")]
+pub enum GalleryItem {
+    #[serde(rename = "app.bsky.embed.gallery#image")]
+    Image { image: File },
     #[serde(other)]
     Other,
 }
@@ -622,7 +655,11 @@ async fn load_bluesky_post(
     _job: FaktoryJob,
     LoadBlueskyPostJob(payload): LoadBlueskyPostJob,
 ) -> Result<(), Error> {
-    if let Some(PostEmbed::Images { images }) = payload.data.embed {
+    if let Some(embed) = payload.data.embed {
+        let images = embed.images();
+        if images.is_empty() {
+            return Ok(());
+        }
         tracing::debug!(repo = payload.repo, "got images: {images:?}");
 
         let (_collection, rkey) = payload.path.split_once('/').ok_or(Error::Missing)?;
@@ -639,7 +676,7 @@ async fn load_bluesky_post(
         }
 
         for image in images {
-            let image_cid = match image.image {
+            let image_cid = match image {
                 File::Blob { link, .. } => link.link,
                 File::Cid { cid, .. } => cid,
             };
@@ -775,7 +812,12 @@ pub async fn ingest_bsky(ctx: JobContext) {
                     }
                 };
 
-                if !matches!(payload.data.embed, Some(PostEmbed::Images { .. })) {
+                if !payload
+                    .data
+                    .embed
+                    .as_ref()
+                    .is_some_and(PostEmbed::has_images)
+                {
                     tracing::trace!("post did not contain images, skipping");
                     if let Err(err) = message.ack().await {
                         tracing::error!("could not ack empty message: {err:?}");
