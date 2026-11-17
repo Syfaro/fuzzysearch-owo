@@ -87,7 +87,7 @@ trait FListAuth {
 
 impl FListAuth for reqwest::RequestBuilder {
     fn inject_auth(self, auth: &str) -> Self {
-        self.header("Cookie", format!("FLS={auth}"))
+        self.header("Cookie", format!("__Host-FLS={auth}"))
     }
 }
 
@@ -164,7 +164,7 @@ impl FListClient {
 
         let cookie = resp
             .cookies()
-            .find(|cookie| cookie.name() == "FLS")
+            .find(|cookie| cookie.name() == "__Host-FLS")
             .ok_or_else(|| Error::unknown_message("missing fls cookie"))?;
 
         self.fls_cookie = Some(cookie.value().to_string());
