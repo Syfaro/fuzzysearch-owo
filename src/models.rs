@@ -2176,15 +2176,20 @@ impl RedditPost {
 pub struct BlueskyRepo;
 
 impl BlueskyRepo {
-    pub async fn get_or_create<'a, E>(executor: E, did: &str) -> Result<i32, Error>
-    where
-        E: sqlx::Executor<'a, Database = sqlx::Postgres>,
-    {
-        let id = sqlx::query_file_scalar!("queries/bluesky/get_or_create_repo.sql", did)
-            .fetch_one(executor)
-            .await?;
+    pub async fn get_or_create(conn: &mut sqlx::PgConnection, did: &str) -> Result<i32, Error> {
+        for _ in 0..3 {
+            if let Some(id) =
+                sqlx::query_file_scalar!("queries/bluesky/get_or_create_repo.sql", did)
+                    .fetch_optional(&mut *conn)
+                    .await?
+            {
+                return Ok(id);
+            }
+        }
 
-        Ok(id)
+        Err(Error::UnknownMessage(
+            format!("could not get or create bluesky repo {did}").into(),
+        ))
     }
 }
 
@@ -2206,7 +2211,7 @@ impl BlueskyPost {
     }
 
     pub async fn delete_post(conn: &sqlx::PgPool, repo: &str, rkey: &str) -> Result<(), Error> {
-        let repo_id = BlueskyRepo::get_or_create(conn, repo).await?;
+        let repo_id = BlueskyRepo::get_or_create(&mut *conn.acquire().await?, repo).await?;
         sqlx::query_file!("queries/bluesky/delete_post.sql", repo_id, rkey)
             .execute(conn)
             .await?;
